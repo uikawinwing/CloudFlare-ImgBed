@@ -98,6 +98,14 @@ function mountUploadFlow() {
   const folderContainer = uploadHome?.querySelector('.upload-folder-container');
   if (!uploadHome || !title || !folderContainer) return;
 
+  let controls = uploadHome.querySelector('.legacy-upload-controls');
+  if (!controls) {
+    controls = document.createElement('section');
+    controls.className = 'legacy-upload-controls';
+    controls.setAttribute('aria-label', '上传选项');
+    (title.closest('.header') || title).insertAdjacentElement('afterend', controls);
+  }
+
   let destination = uploadHome.querySelector('.legacy-upload-destination');
   if (!destination) {
     destination = document.createElement('div');
@@ -105,8 +113,9 @@ function mountUploadFlow() {
     destination.setAttribute('role', 'group');
     destination.setAttribute('aria-label', '文件保存位置');
     destination.innerHTML = '<span class="legacy-upload-destination-label">保存到</span><span class="legacy-upload-destination-name" aria-live="polite">默认位置</span>';
-    title.insertAdjacentElement('afterend', destination);
+    controls.append(destination);
   }
+  if (!controls.contains(destination)) controls.append(destination);
   if (!destination.contains(folderContainer)) destination.append(folderContainer);
 
   const folderInput = folderContainer.querySelector('input[placeholder="上传目录"], .upload-folder input, input.inner-folder-input, input');
@@ -132,13 +141,18 @@ function mountUploadFlow() {
     folderTrigger.replaceChildren(Object.assign(document.createElement('span'), { textContent: '更改' }));
   }
 
-  if (!uploadHome.querySelector('.legacy-image-processing')) {
-    const imageProcessing = document.createElement('section');
+  let imageProcessing = uploadHome.querySelector('.legacy-image-processing');
+  if (!imageProcessing) {
+    imageProcessing = document.createElement('section');
     imageProcessing.className = 'legacy-image-processing';
     imageProcessing.innerHTML = `<button class="legacy-image-processing-button" type="button" aria-haspopup="dialog"><span><strong>图片处理选项</strong><small>WebP 转换与上传前压缩</small></span>${icon('chevron')}</button>`;
-    imageProcessing.querySelector('button').addEventListener('click', openLocalImageOptions);
-    destination.insertAdjacentElement('afterend', imageProcessing);
   }
+  const imageProcessingButton = imageProcessing.querySelector('.legacy-image-processing-button');
+  if (imageProcessingButton && !imageProcessingButton.dataset.legacyOptionsBound) {
+    imageProcessingButton.dataset.legacyOptionsBound = 'true';
+    imageProcessingButton.addEventListener('click', openLocalImageOptions);
+  }
+  if (!controls.contains(imageProcessing)) controls.append(imageProcessing);
 }
 
 function bindUtilities(shell) {

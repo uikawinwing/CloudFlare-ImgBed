@@ -50,7 +50,8 @@
 .legacy-shell-active #app .background-container, .legacy-shell-active #app .background-image-container { width: calc(100vw - var(--legacy-shell-width)) !important; left: var(--legacy-shell-width) !important; }
 .legacy-shell-active #app .main-container { margin-left: 0 !important; }
 
-.legacy-shell-active .legacy-upload-destination { display: flex; width: min(100% - 32px, 720px); align-items: center; gap: 10px; margin: 0 auto 10px; padding: 10px 12px; border: 1px solid rgba(153, 166, 255, .2); border-radius: 12px; background: rgba(10, 14, 27, .64); color: var(--legacy-shell-muted); box-sizing: border-box; backdrop-filter: blur(10px); }
+.legacy-shell-active .legacy-upload-controls { display: grid; width: min(100% - 32px, 720px); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin: 0 auto 18px; box-sizing: border-box; }
+.legacy-shell-active .legacy-upload-destination { display: flex; min-width: 0; align-items: center; gap: 10px; margin: 0; padding: 10px 12px; border: 1px solid rgba(153, 166, 255, .2); border-radius: 12px; background: rgba(10, 14, 27, .64); color: var(--legacy-shell-muted); box-sizing: border-box; backdrop-filter: blur(10px); }
 .legacy-shell-active .legacy-upload-destination-label { font-size: 13px; font-weight: 650; }
 .legacy-shell-active .legacy-upload-destination-name { min-width: 0; flex: 1; overflow: hidden; color: var(--legacy-shell-text); font-size: 14px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .legacy-shell-active .legacy-upload-destination .upload-folder-container { position: static !important; z-index: auto !important; display: flex; width: auto; align-items: center; margin: 0; padding: 0; background: transparent; }
@@ -60,7 +61,7 @@
 .legacy-shell-active .legacy-upload-destination .directory-tree-picker { display: block; }
 .legacy-shell-active .legacy-upload-destination .directory-tree-trigger { min-height: 30px; padding: 0 10px; border: 1px solid rgba(153, 166, 255, .28); border-radius: 8px; background: rgba(117, 130, 255, .12); color: #c5cbff; font-size: 13px; font-weight: 650; }
 .legacy-shell-active .legacy-upload-destination .directory-tree-trigger:hover { border-color: rgba(153, 166, 255, .56); background: rgba(117, 130, 255, .2); }
-.legacy-shell-active .legacy-image-processing { width: min(100% - 32px, 720px); margin: 0 auto 18px; box-sizing: border-box; }
+.legacy-shell-active .legacy-image-processing { min-width: 0; margin: 0; box-sizing: border-box; }
 .legacy-shell-active .legacy-image-processing-button { width: 100%; min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 12px; border: 1px solid rgba(153, 166, 255, .18); border-radius: 12px; background: rgba(10, 14, 27, .52); color: var(--legacy-shell-text); font-family: Inter, ui-sans-serif, system-ui, sans-serif; text-align: left; cursor: pointer; }
 .legacy-shell-active .legacy-image-processing-button:hover { border-color: rgba(153, 166, 255, .36); background: rgba(18, 24, 43, .72); }
 .legacy-shell-active .legacy-image-processing-button span, .legacy-shell-active .legacy-image-processing-button strong, .legacy-shell-active .legacy-image-processing-button small { display: block; }
@@ -88,7 +89,7 @@
   .legacy-shell-active #app .container { width: 100vw; }
   .legacy-shell-active #app .background-container, .legacy-shell-active #app .background-image-container { width: 100vw !important; left: 0 !important; }
   .legacy-shell-active .upload-home { padding-top: 56px; }
-  .legacy-shell-active .legacy-upload-destination, .legacy-shell-active .legacy-image-processing { width: min(100% - 24px, 720px); }
+  .legacy-shell-active .legacy-upload-controls { width: min(100% - 24px, 720px); grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
