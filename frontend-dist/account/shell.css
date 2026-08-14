@@ -1,0 +1,75 @@
+:root {
+  --legacy-shell-width: 280px;
+  --legacy-shell-bg: #0b1020;
+  --legacy-shell-surface: rgba(18, 25, 45, .94);
+  --legacy-shell-border: rgba(139, 151, 255, .16);
+  --legacy-shell-text: #f4f6ff;
+  --legacy-shell-muted: #9ba7c6;
+  --legacy-shell-accent: #7582ff;
+  --legacy-shell-accent-soft: rgba(100, 112, 255, .18);
+}
+
+.legacy-shell-root { color: var(--legacy-shell-text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif; }
+.legacy-shell { position: fixed; z-index: 5000; inset: 0 auto 0 0; display: flex; width: var(--legacy-shell-width); flex-direction: column; border-right: 1px solid var(--legacy-shell-border); background: linear-gradient(180deg, rgba(12, 17, 34, .98), rgba(8, 12, 25, .98)); box-shadow: 18px 0 54px rgba(0, 0, 0, .2); }
+.legacy-shell-brand { display: flex; min-height: 76px; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--legacy-shell-border); }
+.legacy-shell-brand a { display: inline-flex; align-items: center; gap: 10px; color: var(--legacy-shell-text); font-size: 17px; font-weight: 720; letter-spacing: -.025em; text-decoration: none; }
+.legacy-shell-brand strong { color: var(--legacy-shell-accent); }
+.legacy-shell-mark { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid rgba(121, 135, 255, .3); border-radius: 11px; color: #adb5ff; background: linear-gradient(145deg, rgba(117,130,255,.28), rgba(117,130,255,.07)); }
+.legacy-shell-mark svg { width: 20px; }
+.legacy-shell nav { min-height: 0; flex: 1; overflow-y: auto; padding: 18px 12px 8px; }
+.legacy-shell-group { margin: 0 0 22px; }
+.legacy-shell-group > p, .legacy-shell-utilities > p { margin: 0 0 8px; padding: 0 12px; color: var(--legacy-shell-muted); font-size: 11px; font-weight: 760; letter-spacing: .09em; text-transform: uppercase; }
+.legacy-shell-nav-item, .legacy-shell-utilities button { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: #c8d0e9; font: 600 14px/1 Inter, ui-sans-serif, system-ui, sans-serif; text-align: left; text-decoration: none; cursor: pointer; transition: background .16s ease, color .16s ease, transform .16s ease; }
+.legacy-shell-nav-item:hover, .legacy-shell-utilities button:hover { color: var(--legacy-shell-text); background: rgba(255,255,255,.055); }
+.legacy-shell-nav-item:focus-visible, .legacy-shell-utilities button:focus-visible, .legacy-shell-account-button:focus-visible, .legacy-shell-account-menu a:focus-visible, .legacy-shell-account-menu button:focus-visible, .legacy-shell-toggle:focus-visible, .legacy-shell-close:focus-visible { outline: 3px solid rgba(165, 159, 255, .78); outline-offset: 2px; }
+.legacy-shell-nav-item.is-active { color: var(--legacy-shell-text); background: linear-gradient(90deg, rgba(112, 125, 255, .3), rgba(92, 104, 233, .1)); box-shadow: inset 2px 0 0 var(--legacy-shell-accent); }
+.legacy-shell-nav-item svg, .legacy-shell-utilities svg, .legacy-shell-account-menu svg { width: 19px; height: 19px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.legacy-shell-nav-item small { margin-left: auto; color: var(--legacy-shell-muted); font-size: 11px; }
+.legacy-shell-utilities { margin: 0 12px 12px; padding: 14px 0 4px; border-top: 1px solid var(--legacy-shell-border); }
+.legacy-shell-utilities > p { padding: 0; }
+.legacy-shell-utilities button { min-height: 37px; padding: 0 10px; color: var(--legacy-shell-muted); font-size: 13px; }
+.legacy-shell-account { position: relative; margin: 0 12px 16px; border: 1px solid var(--legacy-shell-border); border-radius: 14px; background: rgba(255,255,255,.035); }
+.legacy-shell-account-button { width: 100%; min-height: 62px; display: grid; grid-template-columns: 36px 1fr 18px; align-items: center; gap: 10px; padding: 9px; border: 0; border-radius: inherit; background: transparent; color: var(--legacy-shell-text); text-align: left; cursor: pointer; }
+.legacy-shell-account-button:hover { background: rgba(255,255,255,.045); }
+.legacy-shell-avatar { width: 36px; height: 36px; border: 1px solid rgba(180,190,255,.28); border-radius: 50%; background: #273352 center/cover no-repeat; }
+.legacy-shell-account-button strong, .legacy-shell-account-button small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legacy-shell-account-button strong { font-size: 13px; }
+.legacy-shell-account-button small { margin-top: 4px; color: var(--legacy-shell-muted); font-size: 11px; }
+.legacy-shell-account-button > svg { width: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; transform: rotate(90deg); }
+.legacy-shell-account-menu { position: absolute; right: 0; bottom: calc(100% + 8px); left: 0; padding: 6px; border: 1px solid var(--legacy-shell-border); border-radius: 12px; background: #151d33; box-shadow: 0 16px 36px rgba(0,0,0,.32); }
+.legacy-shell-account-menu a, .legacy-shell-account-menu button { width: 100%; min-height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 9px; border: 0; border-radius: 8px; background: transparent; color: var(--legacy-shell-text); font: 600 13px/1 inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.legacy-shell-account-menu a:hover, .legacy-shell-account-menu button:hover { background: rgba(255,255,255,.07); }
+.legacy-shell-account-menu button { color: #ffb7c0; }
+.legacy-shell-toggle, .legacy-shell-close { display: none; }
+.legacy-shell-backdrop { display: none; }
+
+.legacy-shell-active .account-entry, .legacy-shell-active .quick-toolbar, .legacy-shell-active .toggle-dark-button.desktop-only, .legacy-shell-active .more-dropdown.desktop-only, .legacy-shell-active .mobile-more-dropdown, .legacy-shell-active .upload-method-button.desktop-only, .legacy-shell-active .sidebar-container, .legacy-shell-active .tabs:has(.page-switcher) { display: none !important; }
+.legacy-shell-active #app { min-height: 100vh; padding-left: var(--legacy-shell-width); }
+.legacy-shell-active #app .container { width: calc(100vw - var(--legacy-shell-width)); min-width: 0; }
+.legacy-shell-active #app .background-container, .legacy-shell-active #app .background-image-container { width: calc(100vw - var(--legacy-shell-width)) !important; left: var(--legacy-shell-width) !important; }
+.legacy-shell-active .upload-folder-container { z-index: 4900 !important; right: 28px !important; }
+.legacy-shell-active #app .main-container { margin-left: 0 !important; }
+
+@media (max-width: 900px) {
+  :root { --legacy-shell-width: 264px; }
+  .legacy-shell-active #app { padding-left: var(--legacy-shell-width); }
+}
+
+@media (max-width: 720px) {
+  .legacy-shell { width: min(var(--legacy-shell-width), calc(100vw - 38px)); transform: translateX(-105%); transition: transform .22s ease; box-shadow: 18px 0 50px rgba(0,0,0,.42); }
+  .legacy-shell-drawer-open .legacy-shell { transform: translateX(0); }
+  .legacy-shell-backdrop { position: fixed; z-index: 4900; inset: 0; background: rgba(2, 5, 14, .62); backdrop-filter: blur(2px); }
+  .legacy-shell-drawer-open .legacy-shell-backdrop { display: block; }
+  .legacy-shell-toggle { position: fixed; z-index: 4800; top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left)); width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid var(--legacy-shell-border); border-radius: 12px; background: rgba(11, 16, 32, .88); color: var(--legacy-shell-text); box-shadow: 0 8px 28px rgba(0,0,0,.3); backdrop-filter: blur(12px); }
+  .legacy-shell-toggle svg, .legacy-shell-close svg { width: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
+  .legacy-shell-close { width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 9px; background: rgba(255,255,255,.055); color: var(--legacy-shell-text); }
+  .legacy-shell-active #app { padding-left: 0; }
+  .legacy-shell-active #app .container { width: 100vw; }
+  .legacy-shell-active #app .background-container, .legacy-shell-active #app .background-image-container { width: 100vw !important; left: 0 !important; }
+  .legacy-shell-active .upload-folder-container { right: 14px !important; }
+  .legacy-shell-active .upload-home { padding-top: 56px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .legacy-shell, .legacy-shell-nav-item, .legacy-shell-utilities button { transition: none; }
+}

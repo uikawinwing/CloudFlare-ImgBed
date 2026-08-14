@@ -1,3 +1,5 @@
+import { mountLegacyShell } from './shell.js';
+
 const entry = document.querySelector('#accountEntry');
 const root = document.documentElement;
 const loginPath = window.location.pathname === '/login';
@@ -7,12 +9,13 @@ let loginObserver;
 root.classList.add('discord-auth-pending');
 entry.hidden = true;
 
-function showAuthenticatedApp() {
+function showAuthenticatedApp(identity) {
   root.classList.remove('discord-auth-pending', 'discord-login-only');
   loginObserver?.disconnect();
   entry.hidden = false;
-  entry.href = '/my-files';
+  entry.href = '/account/?view=files';
   entry.textContent = '我的文件';
+  if (!loginPath && !legacyAdminLoginPath) mountLegacyShell(identity || {});
 }
 
 function showLegacyApp() {
@@ -76,7 +79,7 @@ fetch('/api/user/me', { credentials: 'same-origin' }).then(async response => {
       window.location.replace('/');
       return;
     }
-    showAuthenticatedApp();
+    showAuthenticatedApp(data.user || data.identity || data);
     return;
   }
   handleSignedOut();

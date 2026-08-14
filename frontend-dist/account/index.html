@@ -6,43 +6,12 @@
   <meta name="theme-color" content="#0d1119">
   <meta name="description" content="管理上传文件与公开图库">
   <link rel="icon" href="/static/media/logo.png">
+  <link rel="stylesheet" href="/account/shell.css">
   <link rel="stylesheet" href="/account/account.css">
   <title>我的文件 · CloudFlare ImgBed</title>
 </head>
 <body>
   <div class="app-shell">
-    <header class="topbar">
-      <a class="brand" href="/" aria-label="返回 CloudFlare ImgBed 首页">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 36 28"><path d="M10.5 23.5h17a6.5 6.5 0 0 0 .5-13 10.5 10.5 0 0 0-20.2 3.6A4.8 4.8 0 0 0 10.5 23.5Z"/><path d="M12 15.5a6.5 6.5 0 0 1 12.3-2.9"/></svg>
-        </span>
-        <span>CloudFlare <strong>ImgBed</strong></span>
-      </a>
-      <button class="account-button" id="accountButton" type="button" aria-haspopup="menu" aria-expanded="false">
-        <span class="avatar" id="accountAvatar" aria-hidden="true"></span>
-        <span class="account-copy"><strong id="accountName">账户</strong><small id="accountRole"></small></span>
-        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7.5 5 5 5-5"/></svg>
-      </button>
-      <div class="account-menu" id="accountMenu" role="menu" hidden>
-        <button type="button" id="logoutButton" role="menuitem">退出登录</button>
-      </div>
-    </header>
-
-    <nav class="sidebar" aria-label="账户功能">
-      <button class="nav-item" type="button" data-view="files">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5h6l2 2h10v9.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 9.5v-3a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2"/></svg>
-        <span>我的文件</span>
-      </button>
-      <button class="nav-item" type="button" data-view="albums">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m6.5 16 4-4 3 3 2-2 2.5 3"/><circle cx="16.5" cy="8.5" r="1.5"/></svg>
-        <span>我的图库</span>
-      </button>
-      <button class="nav-item" id="adminNav" type="button" data-view="admin" hidden>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 7.8 7.5 9.5 4.3-1.7 7.5-4.9 7.5-9.5V6Z"/><path d="m9 12 2 2 4-4"/></svg>
-        <span>管理中心</span>
-      </button>
-    </nav>
-
     <main class="main" id="mainContent" tabindex="-1">
       <div class="loading-state"><span class="spinner" aria-hidden="true"></span><p>正在读取账户内容…</p></div>
     </main>
@@ -50,7 +19,6 @@
 
   <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
   <div id="dialogRoot"></div>
-  <input id="uploadInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif,video/mp4" multiple hidden aria-label="选择要上传的文件">
   <noscript>需要启用 JavaScript 才能管理文件与图库。</noscript>
   <script type="module" src="/account/account.js"></script>
 </body>

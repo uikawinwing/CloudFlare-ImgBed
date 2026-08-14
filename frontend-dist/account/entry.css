@@ -20,6 +20,7 @@
 .account-entry:hover { border-color: #7680ff; background: #252c4b; }
 .account-entry:focus-visible { outline: 3px solid rgba(154,160,255,.65); outline-offset: 3px; }
 .account-entry[hidden] { display: none; }
+.legacy-shell-active .account-entry { display: none; }
 .discord-auth-pending #app { visibility: hidden; }
 .discord-login-only .account-entry { display: none; }
 .discord-login-only .login-container {

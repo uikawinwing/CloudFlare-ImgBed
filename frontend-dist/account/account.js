@@ -1,7 +1,6 @@
-const MAX_BATCH_FILES = 20;
-const MAX_REQUEST_BYTES = 95 * 1024 * 1024;
+import { mountLegacyShell } from './shell.js';
+
 const MEMBER_QUOTA_BYTES = 200 * 1024 * 1024;
-const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'video/mp4']);
 
 const state = {
   user: null,
@@ -9,18 +8,19 @@ const state = {
   albums: [],
   selected: new Set(),
   filter: 'all',
+  fileQuery: '',
+  fileSort: 'newest',
   view: ['albums', 'admin'].includes(new URLSearchParams(location.search).get('view')) ? new URLSearchParams(location.search).get('view') : 'files',
-  adminSection: 'content',
+  adminSection: ['content', 'users', 'audit'].includes(new URLSearchParams(location.search).get('section')) ? new URLSearchParams(location.search).get('section') : 'content',
+  adminStatus: 'all',
+  adminQuery: '',
   adminFiles: [],
   users: [],
   audit: [],
 };
 
 const main = document.querySelector('#mainContent');
-const uploadInput = document.querySelector('#uploadInput');
 const dialogRoot = document.querySelector('#dialogRoot');
-const accountButton = document.querySelector('#accountButton');
-const accountMenu = document.querySelector('#accountMenu');
 
 const icons = {
   upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>',
@@ -74,10 +74,6 @@ function formatDate(value) {
   return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(date);
 }
 
-function roleLabel(role) {
-  return ({ owner: '站主', admin: '管理员', manager: '协管', member: '成员' })[role] || '成员';
-}
-
 function toast(message, type = '') {
   const node = document.createElement('div');
   node.className = `toast ${type}`.trim();
@@ -86,36 +82,36 @@ function toast(message, type = '') {
   setTimeout(() => node.remove(), 3600);
 }
 
-function setAccount(user) {
-  document.querySelector('#accountName').textContent = user.username || 'Discord 账户';
-  document.querySelector('#accountRole').textContent = roleLabel(user.role);
-  const avatar = document.querySelector('#accountAvatar');
-  if (user.avatar) avatar.style.backgroundImage = `url("${String(user.avatar).replace(/["\\]/g, '')}")`;
-}
-
 function syncNavigation() {
-  document.querySelectorAll('[data-view]').forEach(button => {
-    const active = button.dataset.view === state.view;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-current', active ? 'page' : 'false');
+  const activeKey = state.view === 'admin' ? state.adminSection : state.view;
+  document.querySelectorAll('[data-shell-key]').forEach(link => {
+    const active = link.dataset.shellKey === activeKey;
+    link.classList.toggle('is-active', active);
+    if (active) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
   });
   const url = new URL(location.href);
   url.searchParams.set('view', state.view);
+  if (state.view === 'admin') url.searchParams.set('section', state.adminSection);
+  else url.searchParams.delete('section');
   history.replaceState(null, '', url);
-  const titles = { files: '我的文件', albums: '我的图库', admin: '管理中心' };
+  const titles = { files: '我的文件', albums: '我的图库', admin: state.adminSection === 'users' ? '成员管理' : state.adminSection === 'audit' ? '操作记录' : '内容管理' };
   document.title = `${titles[state.view] || titles.files} · CloudFlare ImgBed`;
 }
 
 function showLogin() {
-  document.querySelector('.sidebar').hidden = true;
-  accountButton.hidden = true;
-  main.style.marginLeft = '0';
-  main.innerHTML = `<section class="login-state">
-    <span class="empty-icon">${icons.image}</span>
-    <h1>登录后管理个人文件</h1>
-    <p>使用 Discord 登录。第一阶段仅向目标社区中拥有“已验证”身份组的成员开放上传。</p>
-    <a class="button primary" href="/api/auth/discord">使用 Discord 登录</a>
-  </section>`;
+  location.replace('/login');
+}
+
+async function applyConfiguredWallpaper() {
+  try {
+    const config = await api('/api/userConfig');
+    if (config.wallpaperEnabled === false) return;
+    const configured = state.view === 'admin' ? (config.adminBkImg || config.uploadBkImg) : config.uploadBkImg;
+    const candidate = Array.isArray(configured) ? configured[0] : configured;
+    if (typeof candidate !== 'string' || candidate === 'bing' || !candidate.trim()) return;
+    document.body.style.setProperty('--account-wallpaper', `url(${JSON.stringify(candidate.trim())})`);
+  } catch {}
 }
 
 async function loadFiles() {
@@ -158,35 +154,48 @@ function fileCard(file) {
   </article>`;
 }
 
+function visibleFiles() {
+  const query = state.fileQuery.trim().toLocaleLowerCase('zh-CN');
+  return state.files
+    .filter(file => state.filter === 'all' || (state.filter === 'video' ? file.file_type === 'video/mp4' : file.file_type !== 'video/mp4'))
+    .filter(file => !query || String(file.file_name || file.id).toLocaleLowerCase('zh-CN').includes(query))
+    .sort((a, b) => {
+      if (state.fileSort === 'oldest') return Number(a.timestamp || 0) - Number(b.timestamp || 0);
+      if (state.fileSort === 'name') return String(a.file_name || a.id).localeCompare(String(b.file_name || b.id), 'zh-CN');
+      return Number(b.timestamp || 0) - Number(a.timestamp || 0);
+    });
+}
+
 function renderFiles() {
   syncNavigation();
   const used = state.files.reduce((total, file) => total + (Number(file.file_size_bytes) || 0), 0);
   const quota = state.user.role === 'owner' ? null : MEMBER_QUOTA_BYTES;
-  const filtered = state.files.filter(file => state.filter === 'all' || (state.filter === 'video' ? file.file_type === 'video/mp4' : file.file_type !== 'video/mp4'));
-  main.innerHTML = `<section>
+  const filtered = visibleFiles();
+  main.innerHTML = `<section class="page-section">
     <header class="page-head">
-      <div class="page-title"><h1>我的文件</h1><p>整理上传内容，创建图库，或永久删除不再需要的文件。</p></div>
+      <div class="page-title"><h1>我的文件</h1><p>集中管理上传的图片、动图和 MP4 视频。</p></div>
       <div class="head-actions">
         <div class="quota" aria-label="个人容量">
-          <div class="quota-copy"><span>${quota ? `已使用 ${formatBytes(used)} / 200 MB` : `已使用 ${formatBytes(used)}`}</span><span>${quota ? `${Math.min(100, Math.round(used / quota * 100))}%` : '站主不限额'}</span></div>
+          <div class="quota-copy"><span>${quota ? `已使用 ${formatBytes(used)} / 200 MB` : `已使用 ${formatBytes(used)}`}</span><span>${quota ? `${Math.min(100, Math.round(used / quota * 100))}%` : '所有者不限额'}</span></div>
           <div class="quota-track"><div class="quota-bar" style="width:${quota ? Math.min(100, used / quota * 100) : 0}%"></div></div>
         </div>
-        <button class="button primary" id="uploadButton" type="button">${icons.upload}上传文件</button>
+        <a class="button primary" href="/">${icons.upload}前往上传</a>
       </div>
     </header>
-    <div class="toolbar">
+    <div class="toolbar file-toolbar">
+      <label class="search-control"><span class="sr-only">搜索文件</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg><input id="fileSearch" type="search" value="${escapeHtml(state.fileQuery)}" placeholder="搜索文件名"></label>
       <div class="segmented" aria-label="文件类型">
         <button type="button" data-filter="all" class="${state.filter === 'all' ? 'active' : ''}">全部</button>
         <button type="button" data-filter="image" class="${state.filter === 'image' ? 'active' : ''}">图片</button>
         <button type="button" data-filter="video" class="${state.filter === 'video' ? 'active' : ''}">视频</button>
       </div>
-      <select class="select-control" aria-label="排序"><option>最近上传</option></select>
+      <select class="select-control" id="fileSort" aria-label="排序"><option value="newest" ${state.fileSort === 'newest' ? 'selected' : ''}>最近上传</option><option value="oldest" ${state.fileSort === 'oldest' ? 'selected' : ''}>最早上传</option><option value="name" ${state.fileSort === 'name' ? 'selected' : ''}>按名称</option></select>
     </div>
     ${state.selected.size ? `<div class="selection-bar">
       <div class="selection-copy"><strong>已选择 ${state.selected.size} 项</strong><button class="button ghost" id="clearSelection" type="button">取消选择</button></div>
       <div class="selection-actions"><button class="button" id="addToAlbum" type="button">${icons.folder}加入图库</button><button class="button danger" id="deleteSelected" type="button">${icons.trash}永久删除</button></div>
     </div>` : ''}
-    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有这种类型的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '换一个筛选条件看看。' : '上传 JPG、PNG、GIF、WebP、AVIF 或 MP4，文件会安全归到当前账号。'}</p>${state.files.length ? '' : '<button class="button primary" id="emptyUploadButton" type="button">上传第一个文件</button>'}</div>`}
+    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '试试更换筛选条件或搜索词。' : '从上传页添加 JPG、PNG、GIF、WebP、AVIF 或 MP4。'}</p>${state.files.length ? '' : '<a class="button primary" href="/">上传第一个文件</a>'}</div>`}
   </section>`;
   bindFileEvents();
   observeVideos();
@@ -207,6 +216,7 @@ function albumRow(album) {
       <p class="album-visibility">${album.visibility === 'public' ? '公开 · 可通过分享链接访问' : '不公开 · 已分享的文件链接仍可访问'}</p>
       <div class="album-actions">
         ${canShare ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button><button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制 CharInfo 链接</button>` : ''}
+        <button class="button" type="button" data-manage-album>管理内容</button>
         <button class="button" type="button" data-edit-album>编辑</button>
         <button class="button danger" type="button" data-delete-album>删除图库</button>
       </div>
@@ -216,11 +226,12 @@ function albumRow(album) {
 
 function renderAlbums() {
   syncNavigation();
-  main.innerHTML = `<section>
+  main.innerHTML = `<section class="page-section">
     <header class="page-head">
       <div class="page-title"><h1>我的图库</h1><p>把文件整理成可分享的图库。删除图库只会拆掉收纳盒，原文件仍留在“我的文件”。</p></div>
       <button class="button primary" id="createAlbum" type="button">${icons.plus}新建图库</button>
     </header>
+    ${state.user.publicHandle ? '' : '<div class="notice-panel"><div><strong>准备公开图库？</strong><p>先设置一个用于分享链接的公开名称。它会绑定当前 Discord 账号。</p></div><button class="button" id="setPublicHandle" type="button">设置公开名称</button></div>'}
     ${state.albums.length ? `<div class="album-list">${state.albums.map(albumRow).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.folder}</span><h2>还没有图库</h2><p>创建图库后，可以把同一文件整理进一个或多个图库。</p><button class="button primary" id="emptyCreateAlbum" type="button">新建第一个图库</button></div>`}
   </section>`;
   bindAlbumEvents();
@@ -241,15 +252,21 @@ async function loadAdminData() {
 function moderationRow(file) {
   const isVideo = file.file_type === 'video/mp4';
   const canRestore = ['admin', 'owner'].includes(state.user.role);
+  const status = file.moderation_status === 'quarantined' ? '已撤下' : file.moderation_status === 'deleting' ? '删除处理中' : '正常';
   return `<article class="moderation-row" data-file-id="${escapeHtml(file.id)}">
-    <div class="moderation-thumb">${isVideo ? `<video src="${fileUrl(file)}" muted playsinline preload="metadata"></video>` : `<img src="${fileUrl(file)}" alt="${escapeHtml(file.file_name || file.id)}" loading="lazy">`}</div>
-    <div class="moderation-copy"><strong>${escapeHtml(file.file_name || file.id)}</strong><span>${escapeHtml(file.owner_name || '旧文件 / 未绑定')} · ${formatBytes(file.file_size_bytes)} · ${formatDate(file.timestamp)}</span><small>${file.moderation_status === 'quarantined' ? '已撤下' : file.moderation_status === 'deleting' ? '删除处理中' : '正常'}</small></div>
-    <div class="moderation-actions">${file.moderation_status === 'active' ? '<button class="button danger" type="button" data-quarantine>先撤下</button>' : ''}${file.moderation_status === 'quarantined' && canRestore ? '<button class="button" type="button" data-restore>恢复</button><button class="button danger" type="button" data-hard-delete>永久删除</button>' : ''}</div>
+    <input class="admin-select" type="checkbox" aria-label="选择 ${escapeHtml(file.file_name || file.id)}" disabled>
+    <button class="moderation-thumb" type="button" data-preview-admin aria-label="预览 ${escapeHtml(file.file_name || file.id)}">${isVideo ? `<video src="${fileUrl(file)}" muted playsinline preload="metadata"></video>` : `<img src="${fileUrl(file)}" alt="" loading="lazy">`}</button>
+    <div class="moderation-copy file-column"><strong>${escapeHtml(file.file_name || file.id)}</strong><span>${escapeHtml(file.id)}</span></div>
+    <div class="moderation-copy owner-column"><strong>${escapeHtml(file.owner_name || '未绑定账号')}</strong><span>${escapeHtml(file.owner_id || '旧文件')}</span></div>
+    <div class="moderation-copy type-column"><strong>${isVideo ? '视频 / MP4' : '图片'}</strong><span>${formatBytes(file.file_size_bytes)}</span></div>
+    <time class="moderation-time">${formatDate(file.timestamp)}</time>
+    <span class="status-chip ${file.moderation_status === 'active' ? 'success' : 'danger'}">${status}</span>
+    <div class="moderation-actions">${file.moderation_status === 'active' ? '<button class="button" type="button" data-quarantine>先撤下</button>' : ''}${file.moderation_status === 'quarantined' && canRestore ? '<button class="button" type="button" data-restore>恢复</button><button class="button danger" type="button" data-hard-delete>永久删除</button>' : ''}</div>
   </article>`;
 }
 
 function userRow(user) {
-  if (user.discord_id === state.user.id) return `<article class="user-row"><div class="moderation-copy"><strong>${escapeHtml(user.username)}</strong><span>${escapeHtml(user.discord_id)} · 站主账号</span></div><span class="status-chip">站主权限固定</span></article>`;
+  if (user.discord_id === state.user.id) return `<article class="user-row"><div class="moderation-copy"><strong>${escapeHtml(user.username)}</strong><span>${escapeHtml(user.discord_id)} · 所有者账号</span></div><span class="status-chip">所有者权限固定</span></article>`;
   return `<article class="user-row" data-user-id="${escapeHtml(user.discord_id)}"><div class="moderation-copy"><strong>${escapeHtml(user.username)}</strong><span>${escapeHtml(user.discord_id)} · ${formatBytes(user.used_bytes)}</span></div><select class="select-control" data-user-role aria-label="${escapeHtml(user.username)} 的权限"><option value="member" ${user.role === 'member' ? 'selected' : ''}>成员</option><option value="manager" ${user.role === 'manager' ? 'selected' : ''}>协管</option><option value="admin" ${user.role === 'admin' ? 'selected' : ''}>管理员</option></select><select class="select-control" data-user-status aria-label="${escapeHtml(user.username)} 的状态"><option value="active" ${user.status === 'active' ? 'selected' : ''}>正常</option><option value="suspended" ${user.status === 'suspended' ? 'selected' : ''}>暂停上传</option></select><button class="button" type="button" data-save-user>保存</button></article>`;
 }
 
@@ -260,12 +277,19 @@ function auditRow(entry) {
 function renderAdmin() {
   syncNavigation();
   const owner = state.user.role === 'owner';
-  const sections = `<div class="segmented admin-sections"><button type="button" data-admin-section="content" class="${state.adminSection === 'content' ? 'active' : ''}">内容处理</button>${owner ? `<button type="button" data-admin-section="users" class="${state.adminSection === 'users' ? 'active' : ''}">成员权限</button>` : ''}<button type="button" data-admin-section="audit" class="${state.adminSection === 'audit' ? 'active' : ''}">操作记录</button></div>`;
   let body = '';
-  if (state.adminSection === 'content') body = state.adminFiles.length ? `<div class="moderation-list">${state.adminFiles.map(moderationRow).join('')}</div>` : '<div class="empty-state"><h2>没有需要处理的内容</h2><p>最近文件会在这里出现。</p></div>';
-  if (state.adminSection === 'users') body = `<div class="admin-tools"><button class="button" id="migrateLegacy" type="button">整理未归属的旧文件</button><small>将尚未关联账号的旧文件纳入成员文件列表。</small></div>${state.users.length ? `<div class="user-list">${state.users.map(userRow).join('')}</div>` : '<div class="empty-state"><h2>还没有成员记录</h2></div>'}`;
-  if (state.adminSection === 'audit') body = state.audit.length ? `<div class="audit-list">${state.audit.map(auditRow).join('')}</div>` : '<div class="empty-state"><h2>还没有管理操作</h2></div>';
-  main.innerHTML = `<section><header class="page-head"><div class="page-title"><h1>管理中心</h1><p>协管可以先撤下有问题的内容；管理员和站主负责恢复或永久删除。所有操作都会留下原因。</p></div></header>${sections}${body}</section>`;
+  if (state.adminSection === 'content') {
+    const query = state.adminQuery.trim().toLocaleLowerCase('zh-CN');
+    const files = state.adminFiles.filter(file => (state.adminStatus === 'all' || file.moderation_status === state.adminStatus) && (!query || `${file.file_name || ''} ${file.owner_name || ''} ${file.id || ''}`.toLocaleLowerCase('zh-CN').includes(query)));
+    body = `<div class="admin-tabs segmented"><button type="button" data-admin-status="all" class="${state.adminStatus === 'all' ? 'active' : ''}">全部内容</button><button type="button" data-admin-status="quarantined" class="${state.adminStatus === 'quarantined' ? 'active' : ''}">已撤下</button><button type="button" data-admin-section="audit">操作记录</button></div>
+      <div class="toolbar admin-toolbar"><label class="search-control"><span class="sr-only">搜索文件或所有者</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg><input id="adminSearch" type="search" value="${escapeHtml(state.adminQuery)}" placeholder="搜索文件名、编号或所有者"></label></div>
+      ${files.length ? `<div class="moderation-table"><div class="moderation-head"><span></span><span>文件</span><span>所有者</span><span>类型 / 大小</span><span>上传时间</span><span>状态</span><span>操作</span></div><div class="moderation-list">${files.map(moderationRow).join('')}</div></div>` : '<div class="empty-state"><h2>没有符合条件的内容</h2><p>可以更换筛选条件或搜索词。</p></div>'}`;
+  }
+  if (state.adminSection === 'users') body = `<div class="admin-tools"><div><strong>旧文件归属</strong><small>将尚未关联账号的旧文件纳入成员文件列表。</small></div><button class="button" id="migrateLegacy" type="button">整理未归属的旧文件</button></div>${state.users.length ? `<div class="user-list">${state.users.map(userRow).join('')}</div>` : '<div class="empty-state"><h2>还没有成员记录</h2></div>'}`;
+  if (state.adminSection === 'audit') body = `<div class="admin-tabs segmented"><button type="button" data-admin-section="content">全部内容</button><button type="button" data-admin-section="content" data-set-status="quarantined">已撤下</button><button type="button" class="active">操作记录</button></div>${state.audit.length ? `<div class="audit-list">${state.audit.map(auditRow).join('')}</div>` : '<div class="empty-state"><h2>还没有管理操作</h2><p>撤下、恢复、删除和权限变更会显示在这里。</p></div>'}`;
+  const title = state.adminSection === 'users' ? '成员管理' : state.adminSection === 'audit' ? '操作记录' : '内容管理';
+  const description = state.adminSection === 'users' ? '设置成员权限、暂停上传，并查看个人容量。' : state.adminSection === 'audit' ? '查看管理操作、处理原因和发生时间。' : '查看全站内容、处理问题文件并保留操作记录。';
+  main.innerHTML = `<section class="page-section"><header class="page-head"><div class="page-title"><h1>${title}</h1><p>${description}</p></div>${state.adminSection === 'content' ? '<div class="role-hint">协管可先撤下；管理员和站点所有者可恢复或永久删除。</div>' : ''}</header>${body}</section>`;
   bindAdminEvents();
 }
 
@@ -282,9 +306,13 @@ function askReason(title, explanation, confirmLabel, action, danger = false) {
 }
 
 function bindAdminEvents() {
-  document.querySelectorAll('[data-admin-section]').forEach(button => button.addEventListener('click', () => { state.adminSection = button.dataset.adminSection; renderAdmin(); }));
+  document.querySelectorAll('[data-admin-section]').forEach(button => button.addEventListener('click', () => { state.adminSection = button.dataset.adminSection; if (button.dataset.setStatus) state.adminStatus = button.dataset.setStatus; renderAdmin(); }));
+  document.querySelectorAll('[data-admin-status]').forEach(button => button.addEventListener('click', () => { state.adminStatus = button.dataset.adminStatus; renderAdmin(); }));
+  document.querySelector('#adminSearch')?.addEventListener('change', event => { state.adminQuery = event.target.value; renderAdmin(); });
+  document.querySelector('#adminSearch')?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); state.adminQuery = event.currentTarget.value; renderAdmin(); } });
   document.querySelectorAll('.moderation-row').forEach(row => {
     const fileId = row.dataset.fileId;
+    row.querySelector('[data-preview-admin]')?.addEventListener('click', () => previewFile(state.adminFiles.find(file => file.id === fileId)));
     row.querySelector('[data-quarantine]')?.addEventListener('click', () => askReason('先撤下这个文件？', '直链和公开图库会立即停止显示，等待管理员复核。', '确认撤下', reason => api(`/api/moderation/quarantine/${encodeFilePath(fileId)}`, { method: 'POST', body: JSON.stringify({ reason }) }), true));
     row.querySelector('[data-restore]')?.addEventListener('click', () => askReason('恢复这个文件？', '文件直链会重新可用。', '确认恢复', reason => api(`/api/moderation/restore/${encodeFilePath(fileId)}`, { method: 'POST', body: JSON.stringify({ reason }) })));
     row.querySelector('[data-hard-delete]')?.addEventListener('click', () => askReason('永久删除这个文件？', '文件、上游存储消息和所有图库引用都会永久删除，无法恢复。', '永久删除', reason => api(`/api/moderation/delete/${encodeFilePath(fileId)}`, { method: 'DELETE', body: JSON.stringify({ reason }) }), true));
@@ -321,9 +349,15 @@ function observeVideos() {
 }
 
 function openDialog(content, { closeable = true, wide = false } = {}) {
-  dialogRoot.innerHTML = `<div class="dialog-backdrop" role="presentation"><section class="dialog${wide ? ' wide' : ''}" role="dialog" aria-modal="true">${content}</section></div>`;
+  const previouslyFocused = document.activeElement;
+  dialogRoot.innerHTML = `<div class="dialog-backdrop" role="presentation"><section class="dialog${wide ? ' wide' : ''}" role="dialog" aria-modal="true" aria-label="对话框" tabindex="-1">${content}</section></div>`;
   const backdrop = dialogRoot.firstElementChild;
-  const close = () => { dialogRoot.innerHTML = ''; };
+  const dialog = dialogRoot.querySelector('.dialog');
+  dialog?.focus();
+  const close = () => {
+    dialogRoot.innerHTML = '';
+    if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus();
+  };
   if (closeable) {
     backdrop.addEventListener('click', event => { if (event.target === backdrop) close(); });
     dialogRoot.querySelectorAll('[data-close-dialog]').forEach(button => button.addEventListener('click', close));
@@ -371,9 +405,10 @@ function previewFile(file) {
 }
 
 function bindFileEvents() {
-  document.querySelector('#uploadButton')?.addEventListener('click', () => uploadInput.click());
-  document.querySelector('#emptyUploadButton')?.addEventListener('click', () => uploadInput.click());
   document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => { state.filter = button.dataset.filter; renderFiles(); }));
+  document.querySelector('#fileSearch')?.addEventListener('change', event => { state.fileQuery = event.target.value; renderFiles(); });
+  document.querySelector('#fileSearch')?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); state.fileQuery = event.currentTarget.value; renderFiles(); } });
+  document.querySelector('#fileSort')?.addEventListener('change', event => { state.fileSort = event.target.value; renderFiles(); });
   document.querySelector('#clearSelection')?.addEventListener('click', () => { state.selected.clear(); renderFiles(); });
   document.querySelector('#addToAlbum')?.addEventListener('click', addSelectedToAlbum);
   document.querySelector('#deleteSelected')?.addEventListener('click', confirmDeleteSelected);
@@ -385,33 +420,6 @@ function bindFileEvents() {
     });
     card.querySelector('.media-frame').addEventListener('click', () => previewFile(state.files.find(file => file.id === id)));
   });
-}
-
-async function uploadFiles(fileList) {
-  const files = [...fileList];
-  uploadInput.value = '';
-  if (!files.length) return;
-  if (files.length > MAX_BATCH_FILES) return toast(`一次最多选择 ${MAX_BATCH_FILES} 个文件。`, 'error');
-  const total = files.reduce((sum, file) => sum + file.size, 0);
-  if (total > MAX_REQUEST_BYTES) return toast('这批文件合计不能超过 95MB。', 'error');
-  if (files.some(file => !ALLOWED_TYPES.has(file.type))) return toast('只支持 JPG、PNG、GIF、WebP、AVIF 和 MP4。', 'error');
-  const used = state.files.reduce((sum, file) => sum + (Number(file.file_size_bytes) || 0), 0);
-  if (state.user.role !== 'owner' && used + total > MEMBER_QUOTA_BYTES) return toast('上传后会超过 200MB 个人容量，请先删除不再需要的文件。', 'error');
-  toast(`开始上传 ${files.length} 个文件。`);
-  let uploaded = 0;
-  for (const file of files) {
-    const form = new FormData();
-    form.append('file', file);
-    try {
-      await api('/upload?uploadChannel=discord&returnFormat=full&autoRetry=false', { method: 'POST', body: form });
-      uploaded += 1;
-    } catch (error) {
-      toast(`${file.name} 上传失败：${error.message}`, 'error');
-    }
-  }
-  await loadFiles();
-  renderFiles();
-  if (uploaded) toast(`已上传 ${uploaded} 个文件。`);
 }
 
 async function addSelectedToAlbum() {
@@ -514,10 +522,61 @@ function bindAlbumEvents() {
     await navigator.clipboard.writeText(button.dataset.copy);
     toast('链接已复制。');
   }));
+  document.querySelector('#setPublicHandle')?.addEventListener('click', async () => { await ensurePublicHandle(); renderAlbums(); });
   document.querySelectorAll('.album-row').forEach(row => {
     const album = state.albums.find(item => item.id === row.dataset.albumId);
+    row.querySelector('[data-manage-album]').addEventListener('click', () => manageAlbumItems(album));
     row.querySelector('[data-edit-album]').addEventListener('click', () => albumDialog(album));
     row.querySelector('[data-delete-album]').addEventListener('click', () => confirmDeleteAlbum(album));
+  });
+}
+
+function manageAlbumItems(album) {
+  const items = [...(album.items || [])].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+  const rows = items.map((item, index) => `<article class="album-item-row" data-file-id="${escapeHtml(item.id)}">
+    <div class="album-item-thumb">${item.file_type === 'video/mp4' ? `<video src="${fileUrl(item)}" muted playsinline preload="metadata"></video>` : `<img src="${fileUrl(item)}" alt="${escapeHtml(item.file_name || item.id)}">`}</div>
+    <div class="album-item-copy"><strong>${escapeHtml(item.file_name || item.id)}</strong><span>${formatBytes(item.file_size_bytes)}</span></div>
+    <div class="album-item-actions"><button class="icon-button" type="button" data-move-up aria-label="上移" ${index === 0 ? 'disabled' : ''}>↑</button><button class="icon-button" type="button" data-move-down aria-label="下移" ${index === items.length - 1 ? 'disabled' : ''}>↓</button><button class="button danger" type="button" data-remove-item>移出图库</button></div>
+  </article>`).join('');
+  const content = `<div class="dialog-head"><div><h2>管理“${escapeHtml(album.name)}”的内容</h2><p>${items.length} 个项目</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div><div class="dialog-body">${rows || '<div class="empty-state compact"><h3>图库里还没有文件</h3><p>请从“我的文件”选择内容加入。</p></div>'}</div>`;
+  openDialog(content, { wide: true });
+  dialogRoot.querySelectorAll('.album-item-row').forEach((row, index) => {
+    const fileId = row.dataset.fileId;
+    const mutate = async (method, body = null, suffix = '') => {
+      row.classList.add('busy');
+      try {
+        await api(`/api/user/albums/${encodeURIComponent(album.id)}/items${suffix}`, { method, ...(body ? { body: JSON.stringify(body) } : {}) });
+        await loadAlbums(true);
+        const refreshed = state.albums.find(item => item.id === album.id);
+        manageAlbumItems(refreshed || album);
+      } catch (error) {
+        row.classList.remove('busy');
+        toast(error.message, 'error');
+      }
+    };
+    const reorder = async (otherFile, nextPosition, otherPosition) => {
+      row.classList.add('busy');
+      try {
+        await Promise.all([
+          api(`/api/user/albums/${encodeURIComponent(album.id)}/items`, { method: 'PATCH', body: JSON.stringify({ fileId, position: nextPosition }) }),
+          api(`/api/user/albums/${encodeURIComponent(album.id)}/items`, { method: 'PATCH', body: JSON.stringify({ fileId: otherFile.id, position: otherPosition }) }),
+        ]);
+        await loadAlbums(true);
+        manageAlbumItems(state.albums.find(item => item.id === album.id) || album);
+      } catch (error) {
+        row.classList.remove('busy');
+        toast(error.message, 'error');
+      }
+    };
+    row.querySelector('[data-move-up]')?.addEventListener('click', async () => {
+      const previous = items[index - 1];
+      await reorder(previous, index - 1, index);
+    });
+    row.querySelector('[data-move-down]')?.addEventListener('click', async () => {
+      const next = items[index + 1];
+      await reorder(next, index + 1, index);
+    });
+    row.querySelector('[data-remove-item]')?.addEventListener('click', () => mutate('DELETE', null, `?fileId=${encodeURIComponent(fileId)}`));
   });
 }
 
@@ -561,42 +620,14 @@ async function showView() {
   }
 }
 
-document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', async () => {
-  state.view = button.dataset.view;
-  state.selected.clear();
-  await showView();
-}));
-
-accountButton.addEventListener('click', () => {
-  const expanded = accountButton.getAttribute('aria-expanded') === 'true';
-  accountButton.setAttribute('aria-expanded', String(!expanded));
-  accountMenu.hidden = expanded;
-});
-
-document.addEventListener('click', event => {
-  if (!accountButton.contains(event.target) && !accountMenu.contains(event.target)) {
-    accountButton.setAttribute('aria-expanded', 'false');
-    accountMenu.hidden = true;
-  }
-});
-
-document.querySelector('#logoutButton').addEventListener('click', async () => {
-  await api('/api/auth/logout', { method: 'POST', body: JSON.stringify({ authType: 'user' }) });
-  location.href = '/';
-});
-
-uploadInput.addEventListener('change', () => uploadFiles(uploadInput.files));
-
 async function init() {
   try {
     const data = await api('/api/user/me');
     state.user = data.user;
-    setAccount(state.user);
-    if (['manager', 'admin', 'owner'].includes(state.user.role)) {
-      document.querySelector('#adminNav').hidden = false;
-      document.querySelector('.sidebar').classList.add('staff');
-    } else if (state.view === 'admin') state.view = 'files';
-    await ensurePublicHandle();
+    mountLegacyShell(state.user);
+    if (!['manager', 'admin', 'owner'].includes(state.user.role) && state.view === 'admin') state.view = 'files';
+    if (state.view === 'admin' && state.adminSection === 'users' && state.user.role !== 'owner') state.adminSection = 'content';
+    applyConfiguredWallpaper();
     await showView();
   } catch (error) {
     if (error.status === 401) showLogin();
