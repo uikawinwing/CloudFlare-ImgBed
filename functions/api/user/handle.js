@@ -1,4 +1,4 @@
-import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
+import { getDiscordIdentity } from '../../utils/auth/discordIdentity.js';
 
 export async function onRequestPut({ request, env }) {
     const identity = await getDiscordIdentity(env, request);
