@@ -87,7 +87,7 @@ function openLocalImageOptions() {
     const dialog = document.querySelector('.upload-settings-dialog');
     const title = dialog?.querySelector('.el-dialog__title');
     if (title) title.textContent = '图片处理选项';
-    dialog?.closest('[role="dialog"], .el-dialog')?.setAttribute('aria-label', '图片处理选项');
+    (dialog?.closest('[role="dialog"]') || dialog)?.setAttribute('aria-label', '图片处理选项');
   }, 80);
 }
 
@@ -126,19 +126,36 @@ function mountUploadFlow() {
   };
   if (folderInput && !folderInput.dataset.legacyFolderNameBound) {
     folderInput.dataset.legacyFolderNameBound = 'true';
+    folderInput.setAttribute('aria-label', '保存位置路径');
+    folderInput.setAttribute('placeholder', '输入文件夹路径');
     folderInput.addEventListener('input', syncFolderName);
     folderInput.addEventListener('change', syncFolderName);
   }
   syncFolderName();
 
-  const folderTrigger = folderContainer.querySelector('.directory-tree-trigger');
-  destination.classList.toggle('has-folder-picker', Boolean(folderTrigger));
-  if (!folderTrigger && folderInput) folderInput.setAttribute('aria-label', '保存位置路径');
-  if (folderTrigger && !folderTrigger.dataset.legacyLabelled) {
-    folderTrigger.dataset.legacyLabelled = 'true';
-    folderTrigger.setAttribute('aria-label', '更改保存位置');
-    folderTrigger.setAttribute('title', '更改保存位置');
-    folderTrigger.replaceChildren(Object.assign(document.createElement('span'), { textContent: '更改' }));
+  if (folderInput) {
+    folderContainer.id = 'legacyUploadFolderInput';
+    let changeButton = destination.querySelector('.legacy-destination-change');
+    if (!changeButton) {
+      changeButton = document.createElement('button');
+      changeButton.className = 'legacy-destination-change';
+      changeButton.type = 'button';
+      changeButton.textContent = '更改';
+      changeButton.setAttribute('aria-controls', folderContainer.id);
+      changeButton.setAttribute('aria-expanded', 'false');
+      destination.append(changeButton);
+    }
+    if (!changeButton.dataset.legacyDestinationBound) {
+      changeButton.dataset.legacyDestinationBound = 'true';
+      changeButton.addEventListener('click', () => {
+        const editing = !destination.classList.contains('is-editing');
+        destination.classList.toggle('is-editing', editing);
+        changeButton.textContent = editing ? '完成' : '更改';
+        changeButton.setAttribute('aria-expanded', String(editing));
+        if (editing) folderInput.focus();
+        else syncFolderName();
+      });
+    }
   }
 
   let imageProcessing = uploadHome.querySelector('.legacy-image-processing');

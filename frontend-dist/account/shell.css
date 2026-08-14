@@ -55,12 +55,13 @@
 .legacy-shell-active .legacy-upload-destination-label { font-size: 13px; font-weight: 650; }
 .legacy-shell-active .legacy-upload-destination-name { min-width: 0; flex: 1; overflow: hidden; color: var(--legacy-shell-text); font-size: 14px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .legacy-shell-active .legacy-upload-destination .upload-folder-container { position: static !important; z-index: auto !important; display: flex; width: auto; align-items: center; margin: 0; padding: 0; background: transparent; }
-.legacy-shell-active .legacy-upload-destination.has-folder-picker .upload-folder { display: none !important; }
-.legacy-shell-active .legacy-upload-destination:not(.has-folder-picker) .upload-folder { position: static !important; display: flex; width: auto; min-width: 0; height: 32px; flex: 1 1 auto; }
-.legacy-shell-active .legacy-upload-destination:not(.has-folder-picker) .upload-folder input { width: 100%; min-width: 0; height: 32px; box-sizing: border-box; }
-.legacy-shell-active .legacy-upload-destination .directory-tree-picker { display: block; }
-.legacy-shell-active .legacy-upload-destination .directory-tree-trigger { min-height: 30px; padding: 0 10px; border: 1px solid rgba(153, 166, 255, .28); border-radius: 8px; background: rgba(117, 130, 255, .12); color: #c5cbff; font-size: 13px; font-weight: 650; }
-.legacy-shell-active .legacy-upload-destination .directory-tree-trigger:hover { border-color: rgba(153, 166, 255, .56); background: rgba(117, 130, 255, .2); }
+.legacy-shell-active .legacy-upload-destination .upload-folder { display: none !important; }
+.legacy-shell-active .legacy-upload-destination.is-editing .legacy-upload-destination-name { display: none; }
+.legacy-shell-active .legacy-upload-destination.is-editing .upload-folder { position: static !important; display: flex !important; min-width: 0; height: 32px; flex: 1 1 auto; }
+.legacy-shell-active .legacy-upload-destination.is-editing .upload-folder input { width: 100%; min-width: 0; height: 32px; box-sizing: border-box; }
+.legacy-shell-active .legacy-upload-destination .directory-tree-picker { display: none !important; }
+.legacy-shell-active .legacy-destination-change { min-height: 30px; padding: 0 10px; border: 1px solid rgba(153, 166, 255, .28); border-radius: 8px; background: rgba(117, 130, 255, .12); color: #c5cbff; font: 650 13px/1 Inter, ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
+.legacy-shell-active .legacy-destination-change:hover { border-color: rgba(153, 166, 255, .56); background: rgba(117, 130, 255, .2); }
 .legacy-shell-active .legacy-image-processing { min-width: 0; margin: 0; box-sizing: border-box; }
 .legacy-shell-active .legacy-image-processing-button { width: 100%; min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 12px; border: 1px solid rgba(153, 166, 255, .18); border-radius: 12px; background: rgba(10, 14, 27, .52); color: var(--legacy-shell-text); font-family: Inter, ui-sans-serif, system-ui, sans-serif; text-align: left; cursor: pointer; }
 .legacy-shell-active .legacy-image-processing-button:hover { border-color: rgba(153, 166, 255, .36); background: rgba(18, 24, 43, .72); }
@@ -68,7 +69,7 @@
 .legacy-shell-active .legacy-image-processing-button strong { font-size: 14px; font-weight: 680; }
 .legacy-shell-active .legacy-image-processing-button small { margin-top: 4px; color: var(--legacy-shell-muted); font-size: 12px; font-weight: 500; }
 .legacy-shell-active .legacy-image-processing-button > svg { width: 18px; height: 18px; flex: 0 0 auto; fill: none; stroke: #aeb7df; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.legacy-shell-active .legacy-image-processing-button:focus-visible, .legacy-shell-active .legacy-upload-destination .directory-tree-trigger:focus-visible { outline: 3px solid rgba(165, 159, 255, .78); outline-offset: 2px; }
+.legacy-shell-active .legacy-image-processing-button:focus-visible, .legacy-shell-active .legacy-destination-change:focus-visible, .legacy-shell-active .legacy-upload-destination.is-editing .upload-folder input:focus-visible { outline: 3px solid rgba(165, 159, 255, .78); outline-offset: 2px; }
 .legacy-shell-active .upload-settings-dialog .dialog-section:nth-of-type(1), .legacy-shell-active .upload-settings-dialog .dialog-section:nth-of-type(2), .legacy-shell-active .upload-settings-dialog .dialog-section:nth-of-type(4) { display: none !important; }
 .legacy-shell-active .upload-settings-dialog .dialog-section:nth-of-type(3) { margin-top: 0; }
 
