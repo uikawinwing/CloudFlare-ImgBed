@@ -28,6 +28,20 @@ export class SqliteD1 {
         const db = this.db;
         return new SqliteD1Statement(db, sql);
     }
+
+    /**
+     * 在同一 SQLite 事务中执行一组已绑定的语句，模拟 Cloudflare D1 batch。
+     */
+    async batch(statements) {
+        if (!Array.isArray(statements)) throw new TypeError('batch expects an array of prepared statements');
+        const execute = this.db.transaction((items) => items.map((statement) => {
+            if (!(statement instanceof SqliteD1Statement) || statement._db !== this.db) {
+                throw new TypeError('batch only accepts statements prepared by this database');
+            }
+            return statement._runSync();
+        }));
+        return execute(statements);
+    }
 }
 
 class SqliteD1Statement {
@@ -87,18 +101,22 @@ class SqliteD1Statement {
      */
     async run() {
         try {
-            const stmt = this._db.prepare(this._sql);
-            const result = stmt.run(...this._params);
-            return {
-                success: true,
-                meta: {
-                    changes: result.changes,
-                    last_row_id: result.lastInsertRowid
-                }
-            };
+            return this._runSync();
         } catch (e) {
             console.error('SQLite run() error:', e.message, 'SQL:', this._sql);
             throw e;
         }
+    }
+
+    _runSync() {
+        const stmt = this._db.prepare(this._sql);
+        const result = stmt.run(...this._params);
+        return {
+            success: true,
+            meta: {
+                changes: result.changes,
+                last_row_id: result.lastInsertRowid,
+            },
+        };
     }
 }

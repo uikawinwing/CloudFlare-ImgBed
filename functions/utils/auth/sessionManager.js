@@ -24,16 +24,16 @@ const COOKIE_NAMES = {
  * @param {string} [username] - 用户名（管理员登录时使用）
  * @returns {Promise<{token: string, cookie: string}>}
  */
-export async function createSession(env, authType, username = '') {
+export async function createSession(env, authType, username = '', options = {}) {
     // 读取安全策略配置
     const securityConfig = await fetchSecurityConfig(env);
     const accessConfig = securityConfig.access || {};
-    const secure = accessConfig.sessionSecure ?? false;
+    const secure = options.secure ?? accessConfig.sessionSecure ?? false;
     const rawMaxAgeDays = authType === 'admin'
         ? (accessConfig.adminSessionMaxAge ?? 14)
         : (accessConfig.userSessionMaxAge ?? 14);
     const maxAgeDays = normalizeSessionMaxAgeDays(rawMaxAgeDays);
-    const maxAge = sessionMaxAgeDaysToTtl(maxAgeDays);
+    const maxAge = options.maxAgeSeconds || sessionMaxAgeDaysToTtl(maxAgeDays);
 
     const db = getDatabase(env);
     const token = generateSessionToken();
@@ -43,6 +43,7 @@ export async function createSession(env, authType, username = '') {
         createdAt: Date.now(),
         expiresAt: Date.now() + maxAge * 1000,
     };
+    if (options.identity) sessionData.identity = options.identity;
 
     await db.put(`${SESSION_PREFIX}${token}`, JSON.stringify(sessionData), {
         expirationTtl: maxAge,

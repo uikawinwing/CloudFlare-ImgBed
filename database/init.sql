@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS files (
     file_name TEXT,
     file_type TEXT,
     file_size TEXT,
+    file_size_bytes INTEGER,
     upload_ip TEXT,
     upload_address TEXT,
     list_type TEXT,
@@ -31,6 +32,11 @@ CREATE TABLE IF NOT EXISTS files (
     tg_bot_token TEXT,
     is_chunked BOOLEAN DEFAULT FALSE,
     tags TEXT, 
+    owner_id TEXT,
+    visibility TEXT NOT NULL DEFAULT 'private',
+    moderation_status TEXT NOT NULL DEFAULT 'active',
+    quarantined_by TEXT,
+    quarantined_at INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -73,6 +79,61 @@ CREATE TABLE IF NOT EXISTS other_data (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    discord_id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    avatar TEXT,
+    public_handle TEXT UNIQUE,
+    role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('member', 'manager', 'admin', 'owner')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'suspended')),
+    used_bytes INTEGER NOT NULL DEFAULT 0,
+    last_login_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_roles (
+    discord_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    PRIMARY KEY (discord_id, role),
+    FOREIGN KEY (discord_id) REFERENCES users(discord_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS albums (
+    id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    visibility TEXT NOT NULL DEFAULT 'unlisted',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE(owner_id, slug),
+    FOREIGN KEY (owner_id) REFERENCES users(discord_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS album_items (
+    album_id TEXT NOT NULL,
+    file_id TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (album_id, file_id),
+    FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE,
+    FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    actor_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    reason TEXT,
+    details TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (actor_id) REFERENCES users(discord_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_files_timestamp ON files(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_files_directory ON files(directory);
 CREATE INDEX IF NOT EXISTS idx_files_channel ON files(channel);
@@ -80,6 +141,11 @@ CREATE INDEX IF NOT EXISTS idx_files_file_type ON files(file_type);
 CREATE INDEX IF NOT EXISTS idx_files_upload_ip ON files(upload_ip);
 CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_files_tags ON files(tags);
+CREATE INDEX IF NOT EXISTS idx_files_owner_id ON files(owner_id);
+CREATE INDEX IF NOT EXISTS idx_files_moderation_status ON files(moderation_status);
+CREATE INDEX IF NOT EXISTS idx_users_public_handle ON users(public_handle);
+CREATE INDEX IF NOT EXISTS idx_album_items_album_order ON album_items(album_id, position);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_settings_category ON settings(category);
 

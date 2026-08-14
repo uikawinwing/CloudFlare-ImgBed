@@ -1,6 +1,7 @@
 import { batchRemoveFilesFromIndex } from '../../../utils/indexManager.js';
 import { mapConcurrent, normalizeBatchFileIds } from '../../../utils/deleteBatch.js';
 import { deleteFile } from './[[path]].js';
+import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
 
 const MAX_BATCH_SIZE = 500;
 const DELETE_CONCURRENCY = 10;
@@ -15,6 +16,9 @@ const corsHeaders = {
 export async function onRequest(context) {
     if (context.request.method !== 'POST') {
         return jsonResponse({ success: false, error: 'Method not allowed' }, 405);
+    }
+    if (await getDiscordIdentity(context.env, context.request)) {
+        return jsonResponse({ success: false, error: 'Use the moderated delete endpoint' }, 403);
     }
 
     try {

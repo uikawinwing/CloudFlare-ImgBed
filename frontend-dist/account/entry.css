@@ -1,0 +1,24 @@
+.account-entry {
+  position: fixed;
+  z-index: 9999;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(18px, env(safe-area-inset-right));
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 10px;
+  background: rgba(21,27,37,.9);
+  box-shadow: 0 10px 30px rgba(0,0,0,.24);
+  color: #f4f6fb;
+  font: 650 14px/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+  text-decoration: none;
+  backdrop-filter: blur(12px);
+}
+.account-entry:hover { border-color: #7680ff; background: #252c4b; }
+.account-entry:focus-visible { outline: 3px solid rgba(154,160,255,.65); outline-offset: 3px; }
+@media (max-width: 620px) {
+  .account-entry { top: auto; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); }
+}

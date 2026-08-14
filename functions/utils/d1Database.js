@@ -22,12 +22,19 @@ D1Database.prototype.putFile = function(fileId, value, options) {
     var extractedFields = this.extractMetadataFields(metadata);
     
     var stmt = this.db.prepare(
-        'INSERT OR REPLACE INTO files (' +
-        'id, value, metadata, file_name, file_type, file_size, ' +
+        'INSERT INTO files (' +
+        'id, value, metadata, file_name, file_type, file_size, file_size_bytes, ' +
         'upload_ip, upload_address, list_type, timestamp, ' +
         'label, directory, channel, channel_name, ' +
-        'tg_file_id, tg_chat_id, tg_bot_token, is_chunked' +
-        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'tg_file_id, tg_chat_id, tg_bot_token, is_chunked, owner_id, visibility, moderation_status' +
+        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
+        'ON CONFLICT(id) DO UPDATE SET value = excluded.value, metadata = excluded.metadata, ' +
+        'file_name = excluded.file_name, file_type = excluded.file_type, file_size = excluded.file_size, ' +
+        'file_size_bytes = excluded.file_size_bytes, upload_ip = excluded.upload_ip, upload_address = excluded.upload_address, ' +
+        'list_type = excluded.list_type, timestamp = excluded.timestamp, label = excluded.label, directory = excluded.directory, ' +
+        'channel = excluded.channel, channel_name = excluded.channel_name, tg_file_id = excluded.tg_file_id, ' +
+        'tg_chat_id = excluded.tg_chat_id, tg_bot_token = excluded.tg_bot_token, is_chunked = excluded.is_chunked, ' +
+        'owner_id = excluded.owner_id, visibility = excluded.visibility, moderation_status = excluded.moderation_status'
     );
     
     return stmt.bind(
@@ -37,6 +44,7 @@ D1Database.prototype.putFile = function(fileId, value, options) {
         extractedFields.fileName,
         extractedFields.fileType,
         extractedFields.fileSize,
+        extractedFields.fileSizeBytes,
         extractedFields.uploadIP,
         extractedFields.uploadAddress,
         extractedFields.listType,
@@ -48,7 +56,10 @@ D1Database.prototype.putFile = function(fileId, value, options) {
         extractedFields.tgFileId,
         extractedFields.tgChatId,
         extractedFields.tgBotToken,
-        extractedFields.isChunked
+        extractedFields.isChunked,
+        extractedFields.ownerId,
+        extractedFields.visibility,
+        extractedFields.moderationStatus
     ).run();
 };
 
@@ -177,6 +188,7 @@ D1Database.prototype.listSettings = function(options) {
     options = options || {};
     var prefix = options.prefix || '';
     var limit = options.limit || 1000;
+    var cursor = options.cursor || null;
     
     var query = 'SELECT key, value FROM settings';
     var params = [];
@@ -185,9 +197,15 @@ D1Database.prototype.listSettings = function(options) {
         query += ' WHERE key LIKE ?';
         params.push(prefix + '%');
     }
+
+    if (cursor) {
+        query += prefix ? ' AND' : ' WHERE';
+        query += ' key > ?';
+        params.push(cursor);
+    }
     
     query += ' ORDER BY key LIMIT ?';
-    params.push(limit);
+    params.push(limit + 1);
     
     var stmt = this.db.prepare(query);
     if (params.length > 0) {
@@ -195,6 +213,8 @@ D1Database.prototype.listSettings = function(options) {
     }
     return stmt.all().then(function(response) {
         var results = response.results || [];
+        var hasMore = results.length > limit;
+        if (hasMore) results.pop();
         var keys = results.map(function(row) {
             return {
                 name: row.key,
@@ -202,7 +222,11 @@ D1Database.prototype.listSettings = function(options) {
             };
         });
 
-        return { keys: keys };
+        return {
+            keys: keys,
+            cursor: hasMore && keys.length > 0 ? keys[keys.length - 1].name : null,
+            list_complete: !hasMore,
+        };
     });
 };
 
@@ -295,6 +319,7 @@ D1Database.prototype.extractMetadataFields = function(metadata) {
         fileName: metadata.FileName || null,
         fileType: metadata.FileType || null,
         fileSize: metadata.FileSize || null,
+        fileSizeBytes: metadata.FileSizeBytes || null,
         uploadIP: metadata.UploadIP || null,
         uploadAddress: metadata.UploadAddress || null,
         listType: metadata.ListType || null,
@@ -306,7 +331,10 @@ D1Database.prototype.extractMetadataFields = function(metadata) {
         tgFileId: metadata.TgFileId || null,
         tgChatId: null,
         tgBotToken: null,
-        isChunked: metadata.IsChunked || false
+        isChunked: metadata.IsChunked || false,
+        ownerId: metadata.OwnerId || null,
+        visibility: metadata.Visibility || 'private',
+        moderationStatus: metadata.ModerationStatus || 'active'
     };
 };
 

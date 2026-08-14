@@ -13,10 +13,19 @@ import { HuggingFaceAPI } from "../utils/storage/huggingfaceAPI";
 import { WebDAVAPI } from "../utils/storage/webdavAPI";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getDatabase } from '../utils/databaseAdapter.js';
+import { assertUploadAllowed, getDiscordIdentity, isDiscordAuthConfigured, releaseUploadReservation } from '../utils/auth/discordIdentity.js';
+import { rejectCrossSiteMutation } from '../utils/auth/mutationSecurity.js';
+import { matchesAllowedFileSignature } from '../utils/fileSignature.js';
+import { hasExplicitAutomationCredential } from '../utils/automationCredential.js';
 
 
 export async function onRequest(context) {  // Contents of context object
     const { request, env, params, waitUntil, next, data } = context;
+
+    const declaredLength = Number(request.headers.get('Content-Length') || 0);
+    if (declaredLength > 96 * 1024 * 1024) {
+        return createResponse('Error: Request exceeds the 95MB upload limit', { status: 413 });
+    }
 
     // 解析请求的URL，存入 context
     const url = new URL(request.url);
@@ -33,6 +42,20 @@ export async function onRequest(context) {  // Contents of context object
     const requiredPermission = 'upload';
     if (!await userAuthCheck(env, url, request, requiredPermission)) {
         return UnauthorizedResponse('Unauthorized');
+    }
+
+    if (isDiscordAuthConfigured(env)) {
+        const identity = await getDiscordIdentity(env, request);
+        if (identity) {
+            const originError = rejectCrossSiteMutation(request);
+            if (originError) return originError;
+            context.discordIdentity = identity;
+            if (url.searchParams.get('initChunked') === 'true' || url.searchParams.get('chunked') === 'true') {
+                return createResponse('Error: Chunked uploads are not supported for Discord accounts', { status: 400 });
+            }
+        } else if (!hasExplicitAutomationCredential(request, url)) {
+            return UnauthorizedResponse('Discord sign-in is required');
+        }
     }
 
     // 获得上传IP
@@ -70,7 +93,20 @@ export async function onRequest(context) {  // Contents of context object
     }
 
     // 处理非分块文件上传
-    return await processFileUpload(context);
+    try {
+        const response = await processFileUpload(context);
+        if (context.discordIdentity && context.quotaReservedBytes && !response.ok) {
+            await releaseUploadReservation(env, context.discordIdentity, context.quotaReservedBytes);
+            context.quotaReservedBytes = 0;
+        }
+        return response;
+    } catch (error) {
+        if (context.discordIdentity && context.quotaReservedBytes) {
+            await releaseUploadReservation(env, context.discordIdentity, context.quotaReservedBytes);
+            context.quotaReservedBytes = 0;
+        }
+        throw error;
+    }
 }
 
 
@@ -133,6 +169,9 @@ async function processFileUpload(context, formdata = null) {
     // 获取文件信息
     const time = new Date().getTime();
     const file = formdata.get('file');
+    if (!file) {
+        return createResponse('Error: No file provided', { status: 400 });
+    }
     const fileType = file.type;
     let fileName = file.name;
     const fileSizeBytes = file.size; // 文件大小，单位字节
@@ -141,6 +180,17 @@ async function processFileUpload(context, formdata = null) {
     // 检查fileType和fileName是否存在
     if (fileType === null || fileType === undefined || fileName === null || fileName === undefined) {
         return createResponse('Error: fileType or fileName is wrong, check the integrity of this file!', { status: 400 });
+    }
+
+    if (context.discordIdentity) {
+        try {
+            if (!await matchesAllowedFileSignature(file, fileType)) {
+                return createResponse('Error: File content does not match an allowed format', { status: 400 });
+            }
+            context.quotaReservedBytes = await assertUploadAllowed(context.env, context.discordIdentity, file);
+        } catch (error) {
+            return createResponse(`Error: ${error.message}`, { status: 400 });
+        }
     }
 
     // 提取图片尺寸
@@ -179,6 +229,11 @@ async function processFileUpload(context, formdata = null) {
         Directory: normalizedFolder === '' ? '' : normalizedFolder + '/',
         Tags: []
     };
+    if (context.discordIdentity) {
+        metadata.OwnerId = context.discordIdentity.id;
+        metadata.Visibility = 'private';
+        metadata.ModerationStatus = 'active';
+    }
 
     // 添加图片尺寸信息
     if (imageDimensions) {
@@ -616,12 +671,12 @@ async function uploadFileToDiscord(context, fullId, metadata, returnLink) {
     const fileSize = file.size;
     const fileName = metadata.FileName;
 
-    // Discord 文件大小限制：Nitro 会员 25MB，免费用户 10MB
+    // 账号上传使用已确认的 Level 3 存储服务器（100MB）；站点入口另有 95MB 安全线。
     const isNitro = discordChannel.isNitro || false;
-    const DISCORD_MAX_SIZE = isNitro ? 25 * 1024 * 1024 : 10 * 1024 * 1024;
+    const discordLimitMB = context.discordIdentity ? 100 : (isNitro ? 25 : 10);
+    const DISCORD_MAX_SIZE = discordLimitMB * 1024 * 1024;
     if (fileSize > DISCORD_MAX_SIZE) {
-        const limitMB = isNitro ? 25 : 10;
-        return createResponse(`Error: File size exceeds Discord limit (${limitMB}MB), please use another channel`, { status: 413 });
+        return createResponse(`Error: File size exceeds Discord limit (${discordLimitMB}MB), please use another channel`, { status: 413 });
     }
 
     const discordAPI = new DiscordAPI(discordChannel.botToken);

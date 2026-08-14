@@ -11,6 +11,7 @@ import {
     resolveS3Credentials,
     resolveWebDAVCredentials,
 } from '../../../utils/metadata/channelCredentials.js';
+import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
 
 // CORS 跨域响应头
 const corsHeaders = {
@@ -22,6 +23,14 @@ const corsHeaders = {
 
 export async function onRequest(context) {
     const { request, env, params, waitUntil } = context;
+
+    // Discord staff must use the moderated endpoint so a reason and audit record are mandatory.
+    if (await getDiscordIdentity(env, request)) {
+        return new Response(JSON.stringify({ success: false, error: 'Use the moderated delete endpoint' }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+    }
 
     const url = new URL(request.url);
 
@@ -138,9 +147,21 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
 
         // 如果文件记录不存在，直接返回成功（幂等删除）
         if (!img) {
-            console.warn(`File ${fileId} not found in database, skipping delete`);
+            await purgeCFCache(env, cdnUrl);
+            const normalizedFolder = fileId.split('/').slice(0, -1).join('/');
+            await purgeRandomFileListCache(url.origin, normalizedFolder);
+            await purgePublicFileListCache(url.origin, normalizedFolder);
             return true;
         }
+
+        // 先隐藏记录并清缓存；后续任何一步失败都能安全重试。
+        if (env.img_d1?.prepare) {
+            const deletingMetadata = { ...img.metadata, ModerationStatus: 'deleting' };
+            img.metadata = deletingMetadata;
+            await env.img_d1.prepare('UPDATE files SET metadata = ?, moderation_status = ? WHERE id = ?')
+                .bind(JSON.stringify(deletingMetadata), 'deleting', fileId).run();
+        }
+        await purgeCFCache(env, cdnUrl);
 
         // 如果是R2渠道的图片，需要删除R2中对应的图片
         if (img.metadata?.Channel === 'CloudflareR2') {
@@ -150,30 +171,38 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
 
         // S3 渠道的图片，需要删除S3中对应的图片
         if (img.metadata?.Channel === 'S3') {
-            await deleteS3File(env, img);
+            if (!await deleteS3File(env, img)) throw new Error('Failed to delete file from S3');
         }
 
         // Discord 渠道的图片，需要删除 Discord 中对应的消息
         if (img.metadata?.Channel === 'Discord') {
-            await deleteDiscordFile(env, img);
+            if (!await deleteDiscordFile(env, img)) throw new Error('Failed to delete Discord message');
         }
 
         // HuggingFace 渠道的图片，需要删除 HuggingFace 中对应的文件
         if (img.metadata?.Channel === 'HuggingFace') {
-            await deleteHuggingFaceFile(env, img);
+            if (!await deleteHuggingFaceFile(env, img)) throw new Error('Failed to delete Hugging Face file');
         }
 
         // WebDAV 渠道的图片，需要删除 WebDAV 中对应的文件
         if (img.metadata?.Channel === 'WebDAV') {
-            await deleteWebDAVFile(env, img);
+            if (!await deleteWebDAVFile(env, img)) throw new Error('Failed to delete WebDAV file');
         }
 
-        // 删除数据库中的记录
-        // 注意：容量统计现在由索引自动维护，删除文件后索引更新时会自动重新计算
-        await db.delete(fileId);
-
-        // 清除CDN缓存
-        await purgeCFCache(env, cdnUrl);
+        // 同一数据库事务中结清相册引用、额度和文件记录。
+        if (env.img_d1?.prepare) {
+            const statements = [
+                env.img_d1.prepare('DELETE FROM album_items WHERE file_id = ?').bind(fileId),
+                env.img_d1.prepare('DELETE FROM files WHERE id = ?').bind(fileId),
+            ];
+            if (img.metadata?.OwnerId && img.metadata?.FileSizeBytes) {
+                statements.splice(1, 0, env.img_d1.prepare('UPDATE users SET used_bytes = MAX(0, used_bytes - ?), updated_at = ? WHERE discord_id = ?').bind(Number(img.metadata.FileSizeBytes), Date.now(), img.metadata.OwnerId));
+            }
+            await env.img_d1.batch(statements);
+            if (env.img_url?.delete) await env.img_url.delete(fileId);
+        } else {
+            await db.delete(fileId);
+        }
 
         // 清除 api/randomFileList 等API缓存
         const normalizedFolder = fileId.split('/').slice(0, -1).join('/');
