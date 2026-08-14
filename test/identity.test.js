@@ -1,4 +1,5 @@
 import assert from 'assert';
+import { existsSync } from 'fs';
 import {
     ALLOWED_UPLOAD_TYPES,
     DISCORD_CALLBACK_URL,
@@ -36,6 +37,11 @@ describe('Discord identity policy', () => {
     it('builds stable public album slugs', () => {
         assert.strictEqual(normalizeSlug('  My Gallery!  '), 'my-gallery');
         assert.strictEqual(normalizeSlug('___'), '');
+    });
+
+    it('uses a single-segment album route so the list endpoint is not swallowed', () => {
+        assert.strictEqual(existsSync(new URL('../functions/api/user/albums/[id].js', import.meta.url)), true);
+        assert.strictEqual(existsSync(new URL('../functions/api/user/albums/[[id]].js', import.meta.url)), false);
     });
 
     it('builds a CharInfo gallery pack with one absolute HTTPS source per file', () => {

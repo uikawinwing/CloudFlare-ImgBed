@@ -48,10 +48,12 @@ async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   const response = await fetch(path, { credentials: 'same-origin', ...options, headers });
-  const contentType = response.headers.get('content-type') || '';
+  const contentType = (response.headers.get('content-type') || '').toLowerCase();
   const body = contentType.includes('application/json') ? await response.json() : await response.text();
   if (!response.ok) {
-    const error = new Error(typeof body === 'object' ? body.error || '请求失败' : body || '请求失败');
+    const serverErrorPage = contentType.includes('text/html') || (typeof body === 'string' && /<(?:!doctype|html)\b/i.test(body));
+    const message = body && typeof body === 'object' ? body.error : (serverErrorPage ? '服务暂时不可用，请稍后重试。' : body);
+    const error = new Error(message || '请求失败');
     error.status = response.status;
     throw error;
   }
