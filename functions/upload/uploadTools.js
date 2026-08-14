@@ -439,6 +439,11 @@ export async function buildUniqueFileId(context, fileName, fileType = 'applicati
 
     const fileExt = resolveFileExt(fileName, fileType);
 
+    // 登录账号的上传永远使用账号命名空间和 UUID，避免并发同名覆盖他人的文件。
+    if (context.discordIdentity) {
+        return `users/${context.discordIdentity.id}/${crypto.randomUUID()}.${fileExt}`;
+    }
+
     const nameType = url.searchParams.get('uploadNameType') || 'default';
     const uploadFolder = url.searchParams.get('uploadFolder') || '';
     // 对上传路径进行安全处理

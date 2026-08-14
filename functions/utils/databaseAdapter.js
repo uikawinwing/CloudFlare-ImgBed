@@ -12,15 +12,62 @@ import { D1Database } from './d1Database.js';
  */
 export function createDatabaseAdapter(env) {
     // 检查是否配置了数据库
-    if (env.img_url && typeof env.img_url.get === 'function') {
-        // 使用KV存储
-        return new KVAdapter(env.img_url);
+    if (env.img_d1 && typeof env.img_d1.prepare === 'function' && env.img_url && typeof env.img_url.get === 'function') {
+        // 身份、归属和图库以 D1 为准；旧设置与会话继续留在 KV。
+        return new HybridAdapter(new D1Database(env.img_d1), new KVAdapter(env.img_url));
     } else if (env.img_d1 && typeof env.img_d1.prepare === 'function') {
         // 使用D1数据库
         return new D1Database(env.img_d1);
+    } else if (env.img_url && typeof env.img_url.get === 'function') {
+        // 使用KV存储
+        return new KVAdapter(env.img_url);
     } else {
         console.error('No database configured. Please configure either KV (env.img_url) or D1 (env.img_d1).');
         return null;
+    }
+}
+
+class HybridAdapter {
+    constructor(d1, kv) {
+        this.d1 = d1;
+        this.kv = kv;
+    }
+
+    isSetting(key) {
+        return key.startsWith('manage@');
+    }
+
+    async put(key, value, options) {
+        if (this.isSetting(key)) return this.kv.put(key, value, options);
+        return this.d1.put(key, value, options);
+    }
+
+    async get(key, options) {
+        if (this.isSetting(key)) {
+            const value = await this.kv.get(key, options);
+            return value === null ? this.d1.get(key, options) : value;
+        }
+        const value = await this.d1.get(key, options);
+        return value === null ? this.kv.get(key, options) : value;
+    }
+
+    async getWithMetadata(key, options) {
+        if (this.isSetting(key)) {
+            const value = await this.kv.getWithMetadata(key, options);
+            return value || this.d1.getWithMetadata(key, options);
+        }
+        const value = await this.d1.getWithMetadata(key, options);
+        return value || this.kv.getWithMetadata(key, options);
+    }
+
+    async delete(key, options) {
+        if (this.isSetting(key)) return this.kv.delete(key, options);
+        await Promise.all([this.d1.delete(key, options), this.kv.delete(key, options)]);
+    }
+
+    async list(options) {
+        const prefix = options?.prefix || '';
+        return this.isSetting(prefix) ? this.kv.list(options) : this.d1.list(options);
     }
 }
 

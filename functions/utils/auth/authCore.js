@@ -8,6 +8,7 @@ import { validateApiToken } from './tokenValidator.js';
 import { getDatabase } from '../databaseAdapter.js';
 import { verifyPassword } from './passwordHash.js';
 import { validateSession } from './sessionManager.js';
+import { getDiscordIdentity, isDiscordAuthConfigured } from './discordIdentity.js';
 
 /**
  * 认证范围常量
@@ -32,7 +33,12 @@ const UNAUTHORIZED = { authorized: false, authType: null };
  *          认证通过返回结果，未通过返回 null（交给调用方继续）
  */
 async function checkAdmin({ env, request, adminConfigured }) {
-    if (!adminConfigured) {
+    const discordIdentity = await getDiscordIdentity(env, request);
+    if (discordIdentity && ['admin', 'owner'].includes(discordIdentity.role)) {
+        return AUTHORIZED('admin');
+    }
+
+    if (!adminConfigured && !isDiscordAuthConfigured(env)) {
         return AUTHORIZED('admin'); // 未配置管理员认证，视为管理员身份放行
     }
 

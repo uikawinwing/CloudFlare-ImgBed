@@ -1,7 +1,10 @@
 import { destroySession } from "../../utils/auth/sessionManager.js";
+import { rejectCrossSiteMutation } from '../../utils/auth/mutationSecurity.js';
 
 export async function onRequestPost(context) {
     const { request, env } = context;
+    const originError = rejectCrossSiteMutation(request);
+    if (originError) return originError;
 
     // 从请求体中获取要登出的类型，默认清除所有
     let authType = null;

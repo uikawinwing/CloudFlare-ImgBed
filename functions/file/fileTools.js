@@ -170,7 +170,10 @@ export async function returnWithCheck(context, imgRecord) {
         return response;
     }
 
-    context.fileAccess.cacheControl = FILE_CACHE_CONTROL.PUBLIC;
+    // 账号所属文件要支持即时撤下；禁用长缓存，避免查询参数产生无法整体清除的变体。
+    context.fileAccess.cacheControl = record.metadata.OwnerId
+        ? FILE_CACHE_CONTROL.NO_STORE
+        : FILE_CACHE_CONTROL.PUBLIC;
 
     if (record.metadata.ListType == "White") {
         return response;
