@@ -118,10 +118,11 @@ function mountUploadFlow() {
   if (!controls.contains(destination)) controls.append(destination);
   if (!destination.contains(folderContainer)) destination.append(folderContainer);
 
-  const folderInput = folderContainer.querySelector('input[placeholder="上传目录"], .upload-folder input, input.inner-folder-input, input');
+  const findFolderInput = () => folderContainer.querySelector('input[placeholder="上传目录"], .upload-folder input, input.inner-folder-input, input');
+  const folderInput = findFolderInput();
   const folderName = destination.querySelector('.legacy-upload-destination-name');
   const syncFolderName = () => {
-    const value = folderInput?.value?.trim() || '默认位置';
+    const value = findFolderInput()?.value?.trim() || '默认位置';
     if (folderName && folderName.textContent !== value) folderName.textContent = value;
   };
   if (folderInput && !folderInput.dataset.legacyFolderNameBound) {
@@ -152,7 +153,7 @@ function mountUploadFlow() {
         destination.classList.toggle('is-editing', editing);
         changeButton.textContent = editing ? '完成' : '更改';
         changeButton.setAttribute('aria-expanded', String(editing));
-        if (editing) folderInput.focus();
+        if (editing) findFolderInput()?.focus();
         else syncFolderName();
       });
     }
