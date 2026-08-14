@@ -44,6 +44,7 @@
 .legacy-shell-backdrop { display: none; }
 
 .legacy-shell-active .account-entry, .legacy-shell-active .quick-toolbar, .legacy-shell-active .toggle-dark-button.desktop-only, .legacy-shell-active .more-dropdown.desktop-only, .legacy-shell-active .mobile-more-dropdown, .legacy-shell-active .upload-method-button.desktop-only, .legacy-shell-active .sidebar-container, .legacy-shell-active .tabs:has(.page-switcher) { display: none !important; }
+.legacy-shell-active .page-footer.footer { display: none !important; }
 .legacy-shell-active #app { min-height: 100vh; padding-left: var(--legacy-shell-width); }
 .legacy-shell-active #app .container { width: calc(100vw - var(--legacy-shell-width)); min-width: 0; }
 .legacy-shell-active #app .background-container, .legacy-shell-active #app .background-image-container { width: calc(100vw - var(--legacy-shell-width)) !important; left: var(--legacy-shell-width) !important; }

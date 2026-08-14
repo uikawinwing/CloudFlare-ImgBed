@@ -91,6 +91,13 @@ function bindUtilities(shell) {
   });
 }
 
+function syncLegacyPresentation() {
+  if (window.location.pathname !== '/') return;
+  document.title = '上传 · CloudFlare ImgBed';
+  const title = document.querySelector('h1.title');
+  if (title && title.textContent.trim() !== '上传文件') title.textContent = '上传文件';
+}
+
 function syncActiveNavigation(shell) {
   const current = activeKey();
   shell.querySelectorAll('[data-shell-key]').forEach(link => {
@@ -148,5 +155,8 @@ export function mountLegacyShell(identity) {
   bindAccountMenu(shell);
   bindDrawer(shell);
   syncActiveNavigation(shell);
+  syncLegacyPresentation();
+  const presentationObserver = new MutationObserver(syncLegacyPresentation);
+  presentationObserver.observe(document.querySelector('#app') || document.body, { childList: true, subtree: true });
   window.addEventListener('hashchange', () => syncActiveNavigation(shell));
 }

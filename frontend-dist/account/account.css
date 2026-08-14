@@ -173,7 +173,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .moderation-head span:first-child { width: 20px; }
 .moderation-row { min-height: 82px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
 .moderation-row:last-child { border-bottom: 0; }
-.admin-select { width: 19px; height: 19px; margin: 0; }
 .moderation-thumb { width: 68px; padding: 0; border: 0; aspect-ratio: 4/3; overflow: hidden; border-radius: 8px; background: #040912; cursor: pointer; }
 .moderation-thumb img, .moderation-thumb video { width: 100%; height: 100%; display: block; object-fit: cover; }
 .moderation-copy { min-width: 0; display: grid; gap: 5px; }
@@ -255,7 +254,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .moderation-table { overflow: visible; border: 0; background: transparent; box-shadow: none; }
   .moderation-list { display: grid; gap: 10px; }
   .moderation-row { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; min-height: 0; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
-  .admin-select, .owner-column, .type-column, .moderation-time { display: none; }
+  .owner-column, .type-column, .moderation-time { display: none; }
   .status-chip { grid-column: 2; }
   .moderation-actions { grid-column: 1 / -1; justify-content: stretch; }
   .moderation-actions .button { flex: 1; }

@@ -254,7 +254,6 @@ function moderationRow(file) {
   const canRestore = ['admin', 'owner'].includes(state.user.role);
   const status = file.moderation_status === 'quarantined' ? '已撤下' : file.moderation_status === 'deleting' ? '删除处理中' : '正常';
   return `<article class="moderation-row" data-file-id="${escapeHtml(file.id)}">
-    <input class="admin-select" type="checkbox" aria-label="选择 ${escapeHtml(file.file_name || file.id)}" disabled>
     <button class="moderation-thumb" type="button" data-preview-admin aria-label="预览 ${escapeHtml(file.file_name || file.id)}">${isVideo ? `<video src="${fileUrl(file)}" muted playsinline preload="metadata"></video>` : `<img src="${fileUrl(file)}" alt="" loading="lazy">`}</button>
     <div class="moderation-copy file-column"><strong>${escapeHtml(file.file_name || file.id)}</strong><span>${escapeHtml(file.id)}</span></div>
     <div class="moderation-copy owner-column"><strong>${escapeHtml(file.owner_name || '未绑定账号')}</strong><span>${escapeHtml(file.owner_id || '旧文件')}</span></div>
