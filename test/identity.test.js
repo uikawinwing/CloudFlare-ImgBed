@@ -15,6 +15,7 @@ import { rejectCrossSiteMutation } from '../functions/utils/auth/mutationSecurit
 import { matchesAllowedFileSignature } from '../functions/utils/fileSignature.js';
 import { D1Database } from '../functions/utils/d1Database.js';
 import { hasExplicitAutomationCredential } from '../functions/utils/automationCredential.js';
+import { resolveUploadTarget } from '../functions/upload/memberUploadPolicy.js';
 
 describe('Discord identity policy', () => {
     it('uses the production callback by default and allows an isolated staging callback', () => {
@@ -102,5 +103,20 @@ describe('Discord identity policy', () => {
         assert.strictEqual(hasExplicitAutomationCredential(tokenRequest, new URL(tokenRequest.url)), true);
         const browserRequest = new Request('https://example.test/upload');
         assert.strictEqual(hasExplicitAutomationCredential(browserRequest, new URL(browserRequest.url)), false);
+    });
+
+    it('keeps storage selection under administrator control for Discord members', () => {
+        const pageConfig = { config: [
+            { id: 'defaultUploadChannel', value: 'discord' },
+            { id: 'defaultChannelName', value: 'CardServer' },
+        ] };
+        assert.deepStrictEqual(resolveUploadTarget(pageConfig, 's3', 'member-choice', { id: 'member' }), {
+            channel: 'discord',
+            channelName: 'CardServer',
+        });
+        assert.deepStrictEqual(resolveUploadTarget(pageConfig, 's3', 'automation-choice', null), {
+            channel: 's3',
+            channelName: 'automation-choice',
+        });
     });
 });

@@ -17,6 +17,7 @@ import { assertUploadAllowed, getDiscordIdentity, isDiscordAuthConfigured, relea
 import { rejectCrossSiteMutation } from '../utils/auth/mutationSecurity.js';
 import { matchesAllowedFileSignature } from '../utils/fileSignature.js';
 import { hasExplicitAutomationCredential } from '../utils/automationCredential.js';
+import { resolveUploadTarget } from './memberUploadPolicy.js';
 
 
 export async function onRequest(context) {  // Contents of context object
@@ -50,6 +51,8 @@ export async function onRequest(context) {  // Contents of context object
             const originError = rejectCrossSiteMutation(request);
             if (originError) return originError;
             context.discordIdentity = identity;
+            // 浏览器成员不能覆盖服务端的图片处理策略。
+            url.searchParams.delete('serverCompress');
             if (url.searchParams.get('initChunked') === 'true' || url.searchParams.get('chunked') === 'true') {
                 return createResponse('Error: Chunked uploads are not supported for Discord accounts', { status: 400 });
             }
@@ -120,10 +123,16 @@ async function processFileUpload(context, formdata = null) {
     // 将 formdata 存储在 context 中
     context.formdata = formdata;
 
-    // 获得上传渠道类型
-    const urlParamUploadChannel = url.searchParams.get('uploadChannel');
-    // 获得指定的渠道名称（可选）
-    const urlParamChannelName = url.searchParams.get('channelName');
+    const pageConfig = await fetchPageConfig(context.env);
+    const uploadTarget = resolveUploadTarget(
+        pageConfig,
+        url.searchParams.get('uploadChannel'),
+        url.searchParams.get('channelName'),
+        context.discordIdentity,
+    );
+    // Discord 成员使用管理员设置的默认渠道；自动化上传仍可显式选择渠道。
+    const urlParamUploadChannel = uploadTarget.channel;
+    const urlParamChannelName = uploadTarget.channelName;
 
     // 获取IP地址
     const uploadIp = getUploadIp(request);
@@ -256,14 +265,13 @@ async function processFileUpload(context, formdata = null) {
     }
 
     // 构建公开访问链接（使用 urlPrefix 配置）
-    const pageConfig = await fetchPageConfig(context.env);
     const urlPrefixConfig = pageConfig.config?.find(c => c.id === 'urlPrefix');
     const urlPrefix = urlPrefixConfig?.value || '';
     context.publicUrl = urlPrefix ? `${urlPrefix.replace(/\/+$/, '')}/${fullId}` : '';
 
     /* ====================================不同渠道上传======================================= */
     // 出错是否切换渠道自动重试，默认开启
-    const autoRetry = url.searchParams.get('autoRetry') === 'false' ? false : true;
+    const autoRetry = context.discordIdentity ? true : url.searchParams.get('autoRetry') !== 'false';
 
     let err = '';
     // 上传到不同渠道

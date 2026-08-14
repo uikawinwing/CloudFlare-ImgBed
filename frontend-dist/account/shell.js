@@ -67,22 +67,78 @@ function buildNavigation(role) {
 
 function activateLegacyControl(command) {
   const click = selector => document.querySelector(selector)?.click();
-  const menuCommand = text => {
+  const menuCommand = labels => {
     click('.more-dropdown .el-button');
     window.setTimeout(() => [...document.querySelectorAll('.el-dropdown-menu__item, [role="menuitem"]')]
-      .find(node => text.some(label => node.textContent.replace(/\s+/g, '').includes(label)))?.click(), 80);
+      .find(node => labels.some(label => node.textContent.replace(/\s+/g, '').includes(label)))?.click(), 80);
   };
-  if (command === 'settings') click('.quick-toolbar > .quick-toolbar-button:not(.quick-toolbar-more)');
-  if (command === 'links') click('.quick-toolbar-actions-inner .quick-toolbar-button:nth-child(3)');
-  if (command === 'history') menuCommand(['历史记录', 'History']);
-  if (command === 'announcement') menuCommand(['公告', 'Announcement']);
   if (command === 'language') {
     const languageSwitcher = document.querySelector('.language-switcher');
     if (languageSwitcher) languageSwitcher.click();
     else menuCommand(['English', '简体中文']);
   }
   if (command === 'theme') click('#themeToggle, .toggle-dark-button');
-  if (command === 'uploadMethod') click('.upload-method-button');
+}
+
+function openLocalImageOptions() {
+  const settingsButton = document.querySelector('.quick-toolbar > .quick-toolbar-button:not(.quick-toolbar-more)');
+  settingsButton?.click();
+  window.setTimeout(() => {
+    const dialog = document.querySelector('.upload-settings-dialog');
+    const title = dialog?.querySelector('.el-dialog__title');
+    if (title) title.textContent = '图片处理选项';
+    dialog?.closest('[role="dialog"], .el-dialog')?.setAttribute('aria-label', '图片处理选项');
+  }, 80);
+}
+
+function mountUploadFlow() {
+  if (window.location.pathname !== '/') return;
+  const uploadHome = document.querySelector('.upload-home');
+  const title = uploadHome?.querySelector('h1.title');
+  const folderContainer = uploadHome?.querySelector('.upload-folder-container');
+  if (!uploadHome || !title || !folderContainer) return;
+
+  let destination = uploadHome.querySelector('.legacy-upload-destination');
+  if (!destination) {
+    destination = document.createElement('div');
+    destination.className = 'legacy-upload-destination';
+    destination.setAttribute('role', 'group');
+    destination.setAttribute('aria-label', '文件保存位置');
+    destination.innerHTML = '<span class="legacy-upload-destination-label">保存到</span><span class="legacy-upload-destination-name" aria-live="polite">默认位置</span>';
+    title.insertAdjacentElement('afterend', destination);
+  }
+  if (!destination.contains(folderContainer)) destination.append(folderContainer);
+
+  const folderInput = folderContainer.querySelector('input[placeholder="上传目录"], .upload-folder input, input.inner-folder-input, input');
+  const folderName = destination.querySelector('.legacy-upload-destination-name');
+  const syncFolderName = () => {
+    const value = folderInput?.value?.trim() || '默认位置';
+    if (folderName && folderName.textContent !== value) folderName.textContent = value;
+  };
+  if (folderInput && !folderInput.dataset.legacyFolderNameBound) {
+    folderInput.dataset.legacyFolderNameBound = 'true';
+    folderInput.addEventListener('input', syncFolderName);
+    folderInput.addEventListener('change', syncFolderName);
+  }
+  syncFolderName();
+
+  const folderTrigger = folderContainer.querySelector('.directory-tree-trigger');
+  destination.classList.toggle('has-folder-picker', Boolean(folderTrigger));
+  if (!folderTrigger && folderInput) folderInput.setAttribute('aria-label', '保存位置路径');
+  if (folderTrigger && !folderTrigger.dataset.legacyLabelled) {
+    folderTrigger.dataset.legacyLabelled = 'true';
+    folderTrigger.setAttribute('aria-label', '更改保存位置');
+    folderTrigger.setAttribute('title', '更改保存位置');
+    folderTrigger.replaceChildren(Object.assign(document.createElement('span'), { textContent: '更改' }));
+  }
+
+  if (!uploadHome.querySelector('.legacy-image-processing')) {
+    const imageProcessing = document.createElement('section');
+    imageProcessing.className = 'legacy-image-processing';
+    imageProcessing.innerHTML = `<button class="legacy-image-processing-button" type="button" aria-haspopup="dialog"><span><strong>图片处理选项</strong><small>WebP 转换与上传前压缩</small></span>${icon('chevron')}</button>`;
+    imageProcessing.querySelector('button').addEventListener('click', openLocalImageOptions);
+    destination.insertAdjacentElement('afterend', imageProcessing);
+  }
 }
 
 function bindUtilities(shell) {
@@ -111,8 +167,7 @@ function syncActiveNavigation(shell) {
 function shellMarkup(identity) {
   const role = identity.role || 'member';
   const avatarStyle = identity.avatar ? ` style="background-image:url('${String(identity.avatar).replace(/["\\]/g, '')}')"` : '';
-  const uploadTools = window.location.pathname === '/' ? `<section class="legacy-shell-utilities" aria-label="上传工具"><p>上传工具</p><button type="button" data-legacy-command="settings">${icon('slider')}上传设置</button><button type="button" data-legacy-command="links">${icon('link')}链接格式</button><button type="button" data-legacy-command="history">${icon('history')}上传记录</button><button type="button" data-legacy-command="uploadMethod">${icon('upload')}切换上传方式</button><button type="button" data-legacy-command="announcement">${icon('bell')}公告</button></section>` : '';
-  return `<button class="legacy-shell-toggle" type="button" aria-label="打开导航" aria-controls="legacyShell" aria-expanded="false">${icon('menu')}</button><div class="legacy-shell-backdrop" hidden></div><aside class="legacy-shell" id="legacyShell" aria-label="主导航"><div class="legacy-shell-brand"><a href="/" aria-label="CloudFlare ImgBed 上传首页"><span class="legacy-shell-mark" aria-hidden="true">${icon('upload')}</span><span>CloudFlare <strong>ImgBed</strong></span></a><button class="legacy-shell-close" type="button" aria-label="关闭导航">${icon('close')}</button></div><nav>${buildNavigation(role)}</nav>${uploadTools}<section class="legacy-shell-utilities legacy-shell-preferences" aria-label="显示偏好"><p>显示</p><button type="button" data-legacy-command="theme">${icon('slider')}切换主题</button><button type="button" data-legacy-command="language">${icon('language')}切换语言</button></section><div class="legacy-shell-account"><button class="legacy-shell-account-button" type="button" aria-controls="legacyAccountMenu" aria-haspopup="true" aria-expanded="false"><span class="legacy-shell-avatar"${avatarStyle}></span><span><strong>${escapeHtml(identity.username || 'Discord 账户')}</strong><small>${labels[role] || labels.member}</small></span>${icon('chevron')}</button><div class="legacy-shell-account-menu" id="legacyAccountMenu" role="menu" hidden><a href="${accountHref('files')}" role="menuitem">我的文件</a><button type="button" role="menuitem" data-legacy-logout>${icon('logout')}退出登录</button></div></div></aside>`;
+  return `<button class="legacy-shell-toggle" type="button" aria-label="打开导航" aria-controls="legacyShell" aria-expanded="false">${icon('menu')}</button><div class="legacy-shell-backdrop" hidden></div><aside class="legacy-shell" id="legacyShell" aria-label="主导航"><div class="legacy-shell-brand"><a href="/" aria-label="CloudFlare ImgBed 上传首页"><span class="legacy-shell-mark" aria-hidden="true">${icon('upload')}</span><span>CloudFlare <strong>ImgBed</strong></span></a><button class="legacy-shell-close" type="button" aria-label="关闭导航">${icon('close')}</button></div><nav>${buildNavigation(role)}</nav><section class="legacy-shell-utilities legacy-shell-preferences" aria-label="显示偏好"><p>显示</p><button type="button" data-legacy-command="theme">${icon('slider')}切换主题</button><button type="button" data-legacy-command="language">${icon('language')}切换语言</button></section><div class="legacy-shell-account"><button class="legacy-shell-account-button" type="button" aria-controls="legacyAccountMenu" aria-haspopup="true" aria-expanded="false"><span class="legacy-shell-avatar"${avatarStyle}></span><span><strong>${escapeHtml(identity.username || 'Discord 账户')}</strong><small>${labels[role] || labels.member}</small></span>${icon('chevron')}</button><div class="legacy-shell-account-menu" id="legacyAccountMenu" role="menu" hidden><a href="${accountHref('files')}" role="menuitem">我的文件</a><button type="button" role="menuitem" data-legacy-logout>${icon('logout')}退出登录</button></div></div></aside>`;
 }
 
 function bindAccountMenu(shell) {
@@ -156,7 +211,11 @@ export function mountLegacyShell(identity) {
   bindDrawer(shell);
   syncActiveNavigation(shell);
   syncLegacyPresentation();
-  const presentationObserver = new MutationObserver(syncLegacyPresentation);
+  mountUploadFlow();
+  const presentationObserver = new MutationObserver(() => {
+    syncLegacyPresentation();
+    mountUploadFlow();
+  });
   presentationObserver.observe(document.querySelector('#app') || document.body, { childList: true, subtree: true });
   window.addEventListener('hashchange', () => syncActiveNavigation(shell));
 }
