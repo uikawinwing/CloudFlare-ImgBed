@@ -1,78 +1,83 @@
 const entry = document.querySelector('#accountEntry');
 const root = document.documentElement;
-let gateObserver;
+const loginPath = window.location.pathname === '/login';
+const legacyAdminLoginPath = window.location.pathname === '/adminLogin';
+let loginObserver;
 
 root.classList.add('discord-auth-pending');
+entry.hidden = true;
 
-function removeUploadGate() {
-  root.classList.remove('discord-auth-pending', 'discord-auth-required');
-  gateObserver?.disconnect();
-  document.querySelector('.discord-auth-gate')?.remove();
+function showAuthenticatedApp() {
+  root.classList.remove('discord-auth-pending', 'discord-login-only');
+  loginObserver?.disconnect();
+  entry.hidden = false;
+  entry.href = '/my-files';
+  entry.textContent = '我的文件';
 }
 
-function renderUploadGate() {
-  const card = document.querySelector('.upload-card');
-  const upload = card?.querySelector('.el-upload[role="button"]');
-  if (!card || !upload) return;
+function showLegacyApp() {
+  root.classList.remove('discord-auth-pending', 'discord-login-only');
+  entry.hidden = true;
+}
 
-  upload.setAttribute('aria-disabled', 'true');
-  upload.setAttribute('tabindex', '-1');
-  if (card.querySelector('.discord-auth-gate')) return;
+function renderDiscordLogin() {
+  const container = document.querySelector('.login-container');
+  if (!container || container.dataset.discordLoginReady === 'true') return;
 
-  const gate = document.createElement('div');
-  gate.className = 'discord-auth-gate';
-  gate.setAttribute('role', 'region');
-  gate.setAttribute('aria-labelledby', 'discord-auth-gate-title');
-  gate.setAttribute('aria-describedby', 'discord-auth-gate-note');
-  gate.setAttribute('aria-live', 'polite');
+  container.dataset.discordLoginReady = 'true';
+  container.replaceChildren();
 
-  const title = document.createElement('strong');
-  title.id = 'discord-auth-gate-title';
-  title.textContent = '登录 Discord 后上传';
+  const title = document.createElement('h1');
+  title.textContent = '登录后开始上传';
 
-  const note = document.createElement('span');
-  note.id = 'discord-auth-gate-note';
-  note.textContent = '管理员密码仅用于系统设置；上传文件需要绑定 Discord 账号。';
+  const note = document.createElement('p');
+  note.textContent = '使用 Discord 验证身份，登录后即可进入上传页面。';
 
   const login = document.createElement('a');
+  login.className = 'discord-login-button';
   login.href = '/api/auth/discord';
   login.textContent = '使用 Discord 登录';
 
-  gate.append(title, note, login);
-  card.append(gate);
+  const hint = document.createElement('small');
+  hint.textContent = '登录完成后会自动返回本站。';
+
+  container.append(title, note, login, hint);
 }
 
-function requireDiscordLogin() {
+function showDiscordLogin() {
   root.classList.remove('discord-auth-pending');
-  root.classList.add('discord-auth-required');
-  renderUploadGate();
-  gateObserver = new MutationObserver(renderUploadGate);
-  gateObserver.observe(document.querySelector('#app') || document.body, { childList: true, subtree: true });
+  root.classList.add('discord-login-only');
+  entry.hidden = true;
+  renderDiscordLogin();
+  loginObserver = new MutationObserver(renderDiscordLogin);
+  loginObserver.observe(document.querySelector('#app') || document.body, { childList: true, subtree: true });
 }
 
-function blockAnonymousFileTransfer(event) {
-  if (!root.classList.contains('discord-auth-pending') && !root.classList.contains('discord-auth-required')) return;
-  const transfer = event.clipboardData || event.dataTransfer;
-  const containsFile = [...(transfer?.items || [])].some(item => item.kind === 'file') || [...(transfer?.files || [])].length > 0;
-  if (!containsFile) return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
+function handleSignedOut() {
+  if (loginPath) {
+    showDiscordLogin();
+    return;
+  }
+  window.location.replace('/login');
 }
-
-document.addEventListener('paste', blockAnonymousFileTransfer, true);
-document.addEventListener('drop', blockAnonymousFileTransfer, true);
 
 fetch('/api/user/me', { credentials: 'same-origin' }).then(async response => {
   const data = await response.json().catch(() => ({}));
-  if (data.authenticated) {
-    removeUploadGate();
-    entry.href = '/my-files';
-    entry.textContent = '我的文件';
-    return;
-  }
   if (data.discordAuthConfigured === false) {
-    removeUploadGate();
+    showLegacyApp();
     return;
   }
-  requireDiscordLogin();
-}).catch(requireDiscordLogin);
+  if (legacyAdminLoginPath) {
+    window.location.replace('/login');
+    return;
+  }
+  if (data.authenticated) {
+    if (loginPath) {
+      window.location.replace('/');
+      return;
+    }
+    showAuthenticatedApp();
+    return;
+  }
+  handleSignedOut();
+}).catch(handleSignedOut);

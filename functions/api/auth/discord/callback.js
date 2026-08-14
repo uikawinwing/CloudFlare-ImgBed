@@ -11,7 +11,7 @@ export async function onRequestGet({ request, env }) {
         const { user, roles } = await fetchEligibleDiscordUser(token.access_token);
         const identity = await upsertDiscordUser(env, user, roles);
         const { cookie } = await createDiscordSession(env, identity);
-        const headers = new Headers({ Location: '/my-files', 'Set-Cookie': cookie });
+        const headers = new Headers({ Location: '/', 'Set-Cookie': cookie });
         headers.append('Set-Cookie', buildCookie('discord_oauth_state', '', 0));
         return new Response(null, { status: 302, headers });
     } catch (error) {

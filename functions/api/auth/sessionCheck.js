@@ -1,5 +1,6 @@
 import { validateAnySession } from "../../utils/auth/sessionManager.js";
 import { fetchSecurityConfig } from "../../utils/sysConfig.js";
+import { getDiscordIdentity, isDiscordAuthConfigured } from "../../utils/auth/discordIdentity.js";
 
 /**
  * 会话检查接口
@@ -24,8 +25,22 @@ export async function onRequestGet(context) {
     const adminPassword = securityConfig.auth.admin.adminPassword;
     const userAuthCode = securityConfig.auth.user.authCode;
 
-    const adminRequired = !!(adminUsername && adminUsername.trim()) || !!(adminPassword && adminPassword.trim());
-    const userRequired = !!(userAuthCode && userAuthCode.trim());
+    const discordAuthConfigured = isDiscordAuthConfigured(env);
+    const adminRequired = discordAuthConfigured || !!(adminUsername && adminUsername.trim()) || !!(adminPassword && adminPassword.trim());
+    const userRequired = discordAuthConfigured || !!(userAuthCode && userAuthCode.trim());
+
+    const discordIdentity = discordAuthConfigured ? await getDiscordIdentity(env, request) : null;
+    if (discordIdentity) {
+        return new Response(JSON.stringify({
+            valid: true,
+            authType: discordIdentity.role === 'owner' || discordIdentity.role === 'admin' ? 'admin' : 'user',
+            adminRequired,
+            userRequired,
+        }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        });
+    }
 
     // 检查会话
     const sessionResult = await validateAnySession(env, request);
@@ -37,7 +52,7 @@ export async function onRequestGet(context) {
             userRequired,
         }), {
             status: 200,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
         });
     }
 
@@ -47,6 +62,6 @@ export async function onRequestGet(context) {
         userRequired,
     }), {
         status: 200, // 不再返回 401，让前端根据字段判断
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });
 }
