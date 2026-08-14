@@ -12,6 +12,10 @@ export function isDiscordAuthConfigured(env) {
     return Boolean(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET);
 }
 
+export function getDiscordCallbackUrl(env) {
+    return env.DISCORD_CALLBACK_URL || DISCORD_CALLBACK_URL;
+}
+
 export function getCookie(request, name) {
     const value = request.headers.get('Cookie') || '';
     const match = value.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
@@ -29,7 +33,7 @@ export function makeOAuthState() {
 }
 
 export async function exchangeDiscordCode(env, code) {
-    const body = new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'authorization_code', code, redirect_uri: DISCORD_CALLBACK_URL });
+    const body = new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'authorization_code', code, redirect_uri: getDiscordCallbackUrl(env) });
     const response = await fetch('https://discord.com/api/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
     if (!response.ok) throw new Error('Discord token exchange failed');
     return response.json();

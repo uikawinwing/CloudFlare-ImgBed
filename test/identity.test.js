@@ -5,6 +5,7 @@ import {
     DISCORD_OWNER_ID,
     MAX_UPLOAD_BYTES,
     USER_QUOTA_BYTES,
+    getDiscordCallbackUrl,
     resolveAppRole,
 } from '../functions/utils/auth/discordIdentity.js';
 import { normalizeSlug } from '../functions/api/user/albums/index.js';
@@ -15,8 +16,13 @@ import { D1Database } from '../functions/utils/d1Database.js';
 import { hasExplicitAutomationCredential } from '../functions/utils/automationCredential.js';
 
 describe('Discord identity policy', () => {
-    it('uses the fixed callback and makes the fixed Discord account the owner', () => {
+    it('uses the production callback by default and allows an isolated staging callback', () => {
         assert.strictEqual(DISCORD_CALLBACK_URL, 'https://cloudflare-imgbed-dxx.pages.dev/api/auth/discord/callback');
+        assert.strictEqual(getDiscordCallbackUrl({}), DISCORD_CALLBACK_URL);
+        assert.strictEqual(getDiscordCallbackUrl({ DISCORD_CALLBACK_URL: 'https://staging.cloudflare-imgbed-dxx.pages.dev/api/auth/discord/callback' }), 'https://staging.cloudflare-imgbed-dxx.pages.dev/api/auth/discord/callback');
+    });
+
+    it('makes the fixed Discord account the owner', () => {
         assert.strictEqual(resolveAppRole(DISCORD_OWNER_ID, [], {}), 'owner');
         assert.strictEqual(resolveAppRole('another-user', [], {}), 'member');
     });
