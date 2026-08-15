@@ -29,6 +29,7 @@ const icons = {
   image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m6.5 16 4-4 3 3 2-2 2.5 3"/><circle cx="16.5" cy="8.5" r="1.5"/></svg>',
   plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
   link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 14.5 5-5m-7 8H6a4 4 0 0 1 0-8h3m6 0h3a4 4 0 0 1 0 8h-3"/></svg>',
+  external: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>',
 };
 
@@ -42,6 +43,10 @@ function encodeFilePath(id) {
 
 function fileUrl(file) {
   return `/file/${encodeFilePath(file.id)}`;
+}
+
+function isEnabled(value) {
+  return value === true || value === 1 || value === '1';
 }
 
 async function api(path, options = {}) {
@@ -100,7 +105,7 @@ function syncNavigation() {
 }
 
 function showLogin() {
-  location.replace('/login');
+  location.replace(`/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`);
 }
 
 async function applyConfiguredWallpaper() {
@@ -142,6 +147,8 @@ function fileCard(file) {
   const selected = state.selected.has(file.id);
   const src = fileUrl(file);
   const mediaLabel = file.file_name || file.id;
+  const visibility = ['private', 'unlisted', 'public'].includes(file.visibility) ? file.visibility : 'private';
+  const visibilityHelp = visibility === 'private' ? '不公开展示；已有资源链接仍可访问' : visibility === 'unlisted' ? '仅用于链接分享；不出现在公开目录' : '可在公开图库展示；可选择加入发现';
   return `<article class="media-card${selected ? ' selected' : ''}" data-file-id="${escapeHtml(file.id)}">
     <input class="media-select" type="checkbox" aria-label="选择 ${escapeHtml(mediaLabel)}" ${selected ? 'checked' : ''}>
     <button class="media-frame" type="button" aria-label="预览 ${escapeHtml(mediaLabel)}">
@@ -150,6 +157,8 @@ function fileCard(file) {
     <div class="media-info">
       <p class="media-name" title="${escapeHtml(file.file_name || file.id)}">${escapeHtml(file.file_name || file.id)}</p>
       <div class="media-meta"><span>${formatBytes(file.file_size_bytes)}</span><span>${formatDate(file.timestamp)}</span>${file.moderation_status === 'quarantined' ? '<span>已撤下</span>' : ''}</div>
+      <div class="file-visibility-row"><label><span class="sr-only">${escapeHtml(mediaLabel)} 的可见性</span><select class="file-visibility" aria-label="${escapeHtml(mediaLabel)} 的可见性"><option value="private" ${visibility === 'private' ? 'selected' : ''}>私密（不展示）</option><option value="unlisted" ${visibility === 'unlisted' ? 'selected' : ''}>不公开链接</option><option value="public" ${visibility === 'public' ? 'selected' : ''}>公开</option></select></label>${visibility === 'public' ? `<label class="discover-option"><input class="file-discover" type="checkbox" ${isEnabled(file.discover_eligible) || isEnabled(file.discoverEligible) ? 'checked' : ''}><span>加入发现</span></label>` : ''}</div><small class="file-visibility-help">${visibilityHelp}</small>
+      <div class="file-card-actions"><button class="file-action" type="button" data-copy-file>${icons.link}<span>复制链接</span></button><a class="file-action" href="${escapeHtml(src)}" target="_blank" rel="noopener">${icons.external}<span>原文件</span></a></div>
     </div>
   </article>`;
 }
@@ -179,7 +188,7 @@ function renderFiles() {
           <div class="quota-copy"><span>${quota ? `已使用 ${formatBytes(used)} / 200 MB` : `已使用 ${formatBytes(used)}`}</span><span>${quota ? `${Math.min(100, Math.round(used / quota * 100))}%` : '所有者不限额'}</span></div>
           <div class="quota-track"><div class="quota-bar" style="width:${quota ? Math.min(100, used / quota * 100) : 0}%"></div></div>
         </div>
-        <a class="button primary" href="/">${icons.upload}前往上传</a>
+        <a class="button primary" href="/studio">${icons.upload}前往上传</a>
       </div>
     </header>
     <div class="toolbar file-toolbar">
@@ -195,7 +204,7 @@ function renderFiles() {
       <div class="selection-copy"><strong>已选择 ${state.selected.size} 项</strong><button class="button ghost" id="clearSelection" type="button">取消选择</button></div>
       <div class="selection-actions"><button class="button" id="addToAlbum" type="button">${icons.folder}加入图库</button><button class="button danger" id="deleteSelected" type="button">${icons.trash}永久删除</button></div>
     </div>` : ''}
-    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '试试更换筛选条件或搜索词。' : '从上传页添加 JPG、PNG、GIF、WebP、AVIF 或 MP4。'}</p>${state.files.length ? '' : '<a class="button primary" href="/">上传第一个文件</a>'}</div>`}
+    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '试试更换筛选条件或搜索词。' : '从上传页添加 JPG、PNG、GIF、WebP、AVIF 或 MP4。'}</p>${state.files.length ? '' : '<a class="button primary" href="/studio">上传第一个文件</a>'}</div>`}
   </section>`;
   bindFileEvents();
   observeVideos();
@@ -418,7 +427,36 @@ function bindFileEvents() {
       renderFiles();
     });
     card.querySelector('.media-frame').addEventListener('click', () => previewFile(state.files.find(file => file.id === id)));
+    card.querySelector('[data-copy-file]')?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(new URL(fileUrl(state.files.find(file => file.id === id)), location.origin).href);
+        toast('资源链接已复制。');
+      } catch {
+        toast('复制失败，请直接打开原文件后复制地址。', 'error');
+      }
+    });
+    card.querySelector('.file-visibility')?.addEventListener('change', event => updateFileVisibility(id, event.currentTarget.value));
+    card.querySelector('.file-discover')?.addEventListener('change', event => updateFileVisibility(id, 'public', event.currentTarget.checked));
   });
+}
+
+async function updateFileVisibility(fileId, visibility, discoverEligible = undefined) {
+  const file = state.files.find(item => item.id === fileId);
+  if (!file) return;
+  const previous = { visibility: file.visibility || 'private', discoverEligible: isEnabled(file.discover_eligible) || isEnabled(file.discoverEligible) };
+  const nextDiscover = visibility === 'public' ? (discoverEligible === undefined ? previous.discoverEligible : discoverEligible) : false;
+  file.visibility = visibility;
+  file.discover_eligible = nextDiscover;
+  renderFiles();
+  try {
+    await api(`/api/user/files/${encodeFilePath(fileId)}`, { method: 'PATCH', body: JSON.stringify({ visibility, discoverEligible: nextDiscover }) });
+    toast(visibility === 'private' ? '已设为私密。' : visibility === 'unlisted' ? '已设为不公开链接。' : nextDiscover ? '已公开，并会出现在发现页候选中。' : '已公开，但不会出现在发现页。');
+  } catch (error) {
+    file.visibility = previous.visibility;
+    file.discover_eligible = previous.discoverEligible;
+    renderFiles();
+    toast(error.message || '无法更新可见性。', 'error');
+  }
 }
 
 async function addSelectedToAlbum() {

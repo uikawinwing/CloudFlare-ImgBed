@@ -26,15 +26,16 @@ D1Database.prototype.putFile = function(fileId, value, options) {
         'id, value, metadata, file_name, file_type, file_size, file_size_bytes, ' +
         'upload_ip, upload_address, list_type, timestamp, ' +
         'label, directory, channel, channel_name, ' +
-        'tg_file_id, tg_chat_id, tg_bot_token, is_chunked, owner_id, visibility, moderation_status' +
-        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
+        'tg_file_id, tg_chat_id, tg_bot_token, is_chunked, owner_id, visibility, discover_eligible, width, height, moderation_status' +
+        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ' +
         'ON CONFLICT(id) DO UPDATE SET value = excluded.value, metadata = excluded.metadata, ' +
         'file_name = excluded.file_name, file_type = excluded.file_type, file_size = excluded.file_size, ' +
         'file_size_bytes = excluded.file_size_bytes, upload_ip = excluded.upload_ip, upload_address = excluded.upload_address, ' +
         'list_type = excluded.list_type, timestamp = excluded.timestamp, label = excluded.label, directory = excluded.directory, ' +
         'channel = excluded.channel, channel_name = excluded.channel_name, tg_file_id = excluded.tg_file_id, ' +
         'tg_chat_id = excluded.tg_chat_id, tg_bot_token = excluded.tg_bot_token, is_chunked = excluded.is_chunked, ' +
-        'owner_id = excluded.owner_id, visibility = excluded.visibility, moderation_status = excluded.moderation_status'
+        'owner_id = excluded.owner_id, visibility = excluded.visibility, discover_eligible = excluded.discover_eligible, ' +
+        'width = excluded.width, height = excluded.height, moderation_status = excluded.moderation_status'
     );
     
     return stmt.bind(
@@ -59,6 +60,9 @@ D1Database.prototype.putFile = function(fileId, value, options) {
         extractedFields.isChunked,
         extractedFields.ownerId,
         extractedFields.visibility,
+        extractedFields.discoverEligible,
+        extractedFields.width,
+        extractedFields.height,
         extractedFields.moderationStatus
     ).run();
 };
@@ -334,6 +338,9 @@ D1Database.prototype.extractMetadataFields = function(metadata) {
         isChunked: metadata.IsChunked || false,
         ownerId: metadata.OwnerId || null,
         visibility: metadata.Visibility || 'private',
+        discoverEligible: metadata.DiscoverEligible ? 1 : 0,
+        width: Number.isFinite(Number(metadata.Width)) ? Number(metadata.Width) : null,
+        height: Number.isFinite(Number(metadata.Height)) ? Number(metadata.Height) : null,
         moderationStatus: metadata.ModerationStatus || 'active'
     };
 };

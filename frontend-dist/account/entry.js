@@ -2,9 +2,14 @@ import { mountLegacyShell } from './shell.js';
 
 const entry = document.querySelector('#accountEntry');
 const root = document.documentElement;
-const loginPath = window.location.pathname === '/login';
+const loginPath = window.location.pathname === '/login' || window.location.pathname === '/login/';
 const legacyAdminLoginPath = window.location.pathname === '/adminLogin';
 let loginObserver;
+
+function localReturnTo(fallback = '/studio') {
+  const value = new URLSearchParams(window.location.search).get('returnTo');
+  return value && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') ? value : fallback;
+}
 
 root.classList.add('discord-auth-pending');
 entry.hidden = true;
@@ -38,7 +43,7 @@ function renderDiscordLogin() {
 
   const login = document.createElement('a');
   login.className = 'discord-login-button';
-  login.href = '/api/auth/discord';
+  login.href = `/api/auth/discord?returnTo=${encodeURIComponent(localReturnTo())}`;
   login.textContent = '使用 Discord 登录';
 
   const hint = document.createElement('small');
@@ -61,7 +66,7 @@ function handleSignedOut() {
     showDiscordLogin();
     return;
   }
-  window.location.replace('/login');
+  window.location.replace(`/login?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`);
 }
 
 fetch('/api/user/me', { credentials: 'same-origin' }).then(async response => {
@@ -76,7 +81,7 @@ fetch('/api/user/me', { credentials: 'same-origin' }).then(async response => {
   }
   if (data.authenticated) {
     if (loginPath) {
-      window.location.replace('/');
+      window.location.replace(localReturnTo());
       return;
     }
     showAuthenticatedApp(data.user || data.identity || data);

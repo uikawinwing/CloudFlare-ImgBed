@@ -1,0 +1,11 @@
+/studio /legacy 200
+/studio/ /studio 302
+/login /legacy 200
+/login/ /login 302
+/adminLogin /legacy 200
+/dashboard /legacy 200
+/customerConfig /legacy 200
+/systemConfig /legacy 200
+/blockimg /legacy 200
+/whiteliston /legacy 200
+/browse/* /legacy 200

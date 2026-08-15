@@ -1,3 +1,5 @@
+import { absoluteFileUrl as catalogFileUrl, listPublicAlbumFiles } from '../../../../utils/publicCatalog.js';
+
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -12,8 +14,7 @@ export async function onRequestGet({ request, env, params }) {
     if (!env.img_d1?.prepare) return json({ error: 'D1 is required' }, 503);
     const album = await env.img_d1.prepare("SELECT a.id, a.name, a.description, a.updated_at, u.discord_id, u.username, u.public_handle FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE u.public_handle = ? AND u.status = 'active' AND a.slug = ? AND a.visibility = 'public'").bind(params.ownerSlug, params.albumSlug).first();
     if (!album) return json({ error: 'Gallery not found' }, 404);
-    const rows = await env.img_d1.prepare("SELECT f.id, f.file_name, f.timestamp FROM album_items ai JOIN files f ON f.id = ai.file_id WHERE ai.album_id = ? AND f.moderation_status = 'active' ORDER BY ai.position, ai.created_at").bind(album.id).all();
-    const files = rows.results || [];
+    const files = await listPublicAlbumFiles(env, album.id);
     const lastModifiedAt = Math.max(Number(album.updated_at) || 0, ...files.map((file) => Number(file.timestamp) || 0));
     const etag = makeEtag(album, files, lastModifiedAt);
     const headers = publicHeaders(etag, lastModifiedAt);
@@ -36,12 +37,7 @@ export function createGalleryPack(album, albumSlug, files, requestUrl) {
 }
 
 export function absoluteFileUrl(requestUrl, fileId) {
-    const url = new URL(requestUrl);
-    url.protocol = 'https:';
-    url.pathname = `/file/${fileId.split('/').map(encodeURIComponent).join('/')}`;
-    url.search = '';
-    url.hash = '';
-    return url.toString();
+    return catalogFileUrl(requestUrl, fileId);
 }
 
 function makeEtag(album, files, lastModifiedAt) {

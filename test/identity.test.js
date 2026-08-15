@@ -8,6 +8,7 @@ import {
     USER_QUOTA_BYTES,
     getDiscordCallbackUrl,
     resolveAppRole,
+    sanitizeReturnTo,
 } from '../functions/utils/auth/discordIdentity.js';
 import { normalizeSlug } from '../functions/api/user/albums/index.js';
 import { absoluteFileUrl, createGalleryPack } from '../functions/api/public/gallery/[[ownerSlug]]/[[albumSlug]].js';
@@ -22,6 +23,13 @@ describe('Discord identity policy', () => {
         assert.strictEqual(DISCORD_CALLBACK_URL, 'https://cloudflare-imgbed-dxx.pages.dev/api/auth/discord/callback');
         assert.strictEqual(getDiscordCallbackUrl({}), DISCORD_CALLBACK_URL);
         assert.strictEqual(getDiscordCallbackUrl({ DISCORD_CALLBACK_URL: 'https://staging.cloudflare-imgbed-dxx.pages.dev/api/auth/discord/callback' }), 'https://staging.cloudflare-imgbed-dxx.pages.dev/api/auth/discord/callback');
+    });
+
+    it('only returns from Discord sign-in to a local page', () => {
+        assert.strictEqual(sanitizeReturnTo('/discover/?type=video'), '/discover/?type=video');
+        assert.strictEqual(sanitizeReturnTo('https://evil.test'), '/studio');
+        assert.strictEqual(sanitizeReturnTo('//evil.test'), '/studio');
+        assert.strictEqual(sanitizeReturnTo('/\\evil.test'), '/studio');
     });
 
     it('makes the fixed Discord account the owner', () => {

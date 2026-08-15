@@ -1,6 +1,6 @@
-import { buildCookie, getDiscordCallbackUrl, isDiscordAuthConfigured, makeOAuthState } from '../../../utils/auth/discordIdentity.js';
+import { buildCookie, getDiscordCallbackUrl, isDiscordAuthConfigured, makeOAuthState, sanitizeReturnTo } from '../../../utils/auth/discordIdentity.js';
 
-export async function onRequestGet({ env }) {
+export async function onRequestGet({ request, env }) {
     if (!isDiscordAuthConfigured(env)) return new Response('Discord OAuth is not configured', { status: 503 });
     const state = makeOAuthState();
     const authorizeUrl = new URL('https://discord.com/oauth2/authorize');
@@ -11,5 +11,9 @@ export async function onRequestGet({ env }) {
         scope: 'identify guilds.members.read',
         state,
     }).toString();
-    return new Response(null, { status: 302, headers: { Location: authorizeUrl.toString(), 'Set-Cookie': buildCookie('discord_oauth_state', state, 600) } });
+    const returnTo = sanitizeReturnTo(new URL(request.url).searchParams.get('returnTo'));
+    const headers = new Headers({ Location: authorizeUrl.toString() });
+    headers.append('Set-Cookie', buildCookie('discord_oauth_state', state, 600));
+    headers.append('Set-Cookie', buildCookie('discord_oauth_return_to', returnTo, 600));
+    return new Response(null, { status: 302, headers });
 }

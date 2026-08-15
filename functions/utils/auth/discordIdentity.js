@@ -32,6 +32,11 @@ export function makeOAuthState() {
     return [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
+export function sanitizeReturnTo(value, fallback = '/studio') {
+    if (typeof value !== 'string' || value.length > 500 || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return fallback;
+    return value;
+}
+
 export async function exchangeDiscordCode(env, code) {
     const body = new URLSearchParams({ client_id: env.DISCORD_CLIENT_ID, client_secret: env.DISCORD_CLIENT_SECRET, grant_type: 'authorization_code', code, redirect_uri: getDiscordCallbackUrl(env) });
     const response = await fetch('https://discord.com/api/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });

@@ -34,6 +34,10 @@ CREATE TABLE IF NOT EXISTS files (
     tags TEXT, 
     owner_id TEXT,
     visibility TEXT NOT NULL DEFAULT 'private',
+    discover_eligible INTEGER NOT NULL DEFAULT 0,
+    width INTEGER,
+    height INTEGER,
+    featured_at INTEGER,
     moderation_status TEXT NOT NULL DEFAULT 'active',
     quarantined_by TEXT,
     quarantined_at INTEGER,
@@ -143,6 +147,8 @@ CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_files_tags ON files(tags);
 CREATE INDEX IF NOT EXISTS idx_files_owner_id ON files(owner_id);
 CREATE INDEX IF NOT EXISTS idx_files_moderation_status ON files(moderation_status);
+CREATE INDEX IF NOT EXISTS idx_files_public_catalog ON files(discover_eligible, visibility, moderation_status, timestamp DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_files_featured_catalog ON files(featured_at DESC, visibility, moderation_status, id DESC);
 CREATE INDEX IF NOT EXISTS idx_users_public_handle ON users(public_handle);
 CREATE INDEX IF NOT EXISTS idx_album_items_album_order ON album_items(album_id, position);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);

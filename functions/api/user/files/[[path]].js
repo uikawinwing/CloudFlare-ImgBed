@@ -2,6 +2,7 @@ import { deleteFile } from '../../manage/delete/[[path]].js';
 import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
 import { removeFileFromIndex } from '../../../utils/indexManager.js';
+import { resolveFilePublication } from '../../../utils/publicCatalog.js';
 
 export async function onRequestDelete(context) {
     const identity = await getDiscordIdentity(context.env, context.request);
@@ -27,12 +28,13 @@ export async function onRequestPatch(context) {
     if (!file) return json({ error: 'File not found' }, 404);
     if (file.metadata?.OwnerId !== identity.id) return json({ error: 'Only the owner can change this file' }, 403);
     const payload = await context.request.json();
-    const visibility = payload.visibility === undefined ? (file.metadata.Visibility || 'private') : payload.visibility;
-    if (!['private', 'public'].includes(visibility)) return json({ error: 'Invalid visibility' }, 400);
-    const metadata = { ...file.metadata, Visibility: visibility };
+    const publication = resolveFilePublication(file.metadata, payload);
+    if (!publication) return json({ error: 'Discover can only be enabled for public files' }, 400);
+    const { visibility, discoverEligible } = publication;
+    const metadata = { ...file.metadata, Visibility: visibility, DiscoverEligible: discoverEligible };
     await db.put(fileId, file.value || '', { metadata });
-    await context.env.img_d1.prepare('UPDATE files SET metadata = ?, visibility = ? WHERE id = ?').bind(JSON.stringify(metadata), visibility, fileId).run();
-    return json({ success: true, fileId, visibility });
+    await context.env.img_d1.prepare('UPDATE files SET metadata = ?, visibility = ?, discover_eligible = ? WHERE id = ?').bind(JSON.stringify(metadata), visibility, discoverEligible, fileId).run();
+    return json({ success: true, fileId, visibility, discoverEligible: Boolean(discoverEligible) });
 }
 
 function json(body, status = 200) {
