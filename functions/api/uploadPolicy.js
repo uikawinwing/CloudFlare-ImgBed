@@ -6,6 +6,7 @@ const DEFAULT_POLICY = Object.freeze({
     compressBar: 5,
     compressQuality: 4,
     serverCompress: false,
+    autoRetry: true,
     uploadChannel: 'telegram',
     channelName: '',
     uploadNameType: 'default',
@@ -56,17 +57,15 @@ function toStringValue(value, fallback) {
 }
 
 function buildPolicy(pageConfig) {
-    const customerCompress = toBoolean(
-        readConfigValue(pageConfig, 'defaultCustomerCompress', DEFAULT_POLICY.customerCompress),
-        DEFAULT_POLICY.customerCompress,
-    );
-
     const policy = {
         convertToWebp: toBoolean(
             readConfigValue(pageConfig, 'defaultConvertToWebp', DEFAULT_POLICY.convertToWebp),
             DEFAULT_POLICY.convertToWebp,
         ),
-        customerCompress,
+        customerCompress: toBoolean(
+            readConfigValue(pageConfig, 'defaultCustomerCompress', DEFAULT_POLICY.customerCompress),
+            DEFAULT_POLICY.customerCompress,
+        ),
         compressBar: toNumber(
             readConfigValue(pageConfig, 'defaultCompressBar', DEFAULT_POLICY.compressBar),
             DEFAULT_POLICY.compressBar,
@@ -79,12 +78,13 @@ function buildPolicy(pageConfig) {
             0.5,
             20,
         ),
-        // There is no independent admin field in the current management UI yet.
-        // Use defaultServerCompress when available; otherwise follow the admin's
-        // general compression policy instead of a browser/user preference.
         serverCompress: toBoolean(
-            readConfigValue(pageConfig, 'defaultServerCompress', customerCompress),
-            customerCompress,
+            readConfigValue(pageConfig, 'defaultServerCompress', DEFAULT_POLICY.serverCompress),
+            DEFAULT_POLICY.serverCompress,
+        ),
+        autoRetry: toBoolean(
+            readConfigValue(pageConfig, 'defaultAutoRetry', DEFAULT_POLICY.autoRetry),
+            DEFAULT_POLICY.autoRetry,
         ),
         uploadChannel: toStringValue(
             readConfigValue(pageConfig, 'defaultUploadChannel', DEFAULT_POLICY.uploadChannel),
@@ -136,6 +136,7 @@ function buildBootstrapScript(policy) {
     };
     persistedState.storeUploadChannel = policy.uploadChannel;
     persistedState.storeChannelName = policy.channelName;
+    persistedState.storeAutoRetry = policy.autoRetry;
     persistedState.storeUploadNameType = policy.uploadNameType;
     localStorage.setItem('vuex', JSON.stringify(persistedState));
   } catch (error) {
@@ -151,7 +152,7 @@ function buildBootstrapScript(policy) {
 
     document.querySelectorAll('.setting-item').forEach((item) => {
       const text = (item.textContent || '').trim();
-      const isAdminOwned = /webp|compress|compression|压缩|channel|渠道|naming|命名/i.test(text);
+      const isAdminOwned = /webp|compress|compression|压缩|channel|渠道|naming|命名|retry|重试/i.test(text);
       if (isAdminOwned) {
         item.style.display = 'none';
         item.setAttribute('aria-hidden', 'true');
