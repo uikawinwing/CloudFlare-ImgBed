@@ -118,7 +118,13 @@ function buildBootstrapScript(policy) {
     console.warn('[ImgBed] Unable to apply upload policy to persisted state:', error);
   }
 
+  // Only simplify the creator upload UI. Admin configuration pages use the same
+  // legacy shell and must keep the processing controls visible.
+  const isStudioPage = () => /^\\/studio\\/?$/.test(window.location.pathname);
+
   const hideTechnicalImageControls = () => {
+    if (!isStudioPage()) return;
+
     document.querySelectorAll('.setting-item').forEach((item) => {
       const text = (item.textContent || '').trim();
       if (/webp|compress|compression|压缩/i.test(text)) {
@@ -126,9 +132,25 @@ function buildBootstrapScript(policy) {
         item.setAttribute('aria-hidden', 'true');
       }
     });
+
+    // Do not leave an empty technical section/header behind after its controls
+    // are hidden. User-facing settings such as folder and naming stay untouched.
+    document.querySelectorAll('.section-content').forEach((content) => {
+      const items = Array.from(content.querySelectorAll('.setting-item'));
+      if (items.length === 0) return;
+      const allHidden = items.every(item => item.style.display === 'none');
+      if (!allHidden) return;
+
+      content.style.display = 'none';
+      const header = content.previousElementSibling;
+      if (header?.classList?.contains('section-header')) {
+        header.style.display = 'none';
+      }
+    });
   };
 
   const startUiGuard = () => {
+    if (!isStudioPage()) return;
     hideTechnicalImageControls();
     const observer = new MutationObserver(hideTechnicalImageControls);
     observer.observe(document.body, { childList: true, subtree: true });
