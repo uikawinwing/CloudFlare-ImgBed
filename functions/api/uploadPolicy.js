@@ -6,6 +6,9 @@ const DEFAULT_POLICY = Object.freeze({
     compressBar: 5,
     compressQuality: 4,
     serverCompress: false,
+    uploadChannel: 'telegram',
+    channelName: '',
+    uploadNameType: 'default',
 });
 
 function getConfigItem(pageConfig, id) {
@@ -47,6 +50,11 @@ function toNumber(value, fallback, min, max) {
     return Math.min(max, Math.max(min, parsed));
 }
 
+function toStringValue(value, fallback) {
+    if (value === undefined || value === null) return fallback;
+    return String(value).trim();
+}
+
 function buildPolicy(pageConfig) {
     const customerCompress = toBoolean(
         readConfigValue(pageConfig, 'defaultCustomerCompress', DEFAULT_POLICY.customerCompress),
@@ -78,6 +86,18 @@ function buildPolicy(pageConfig) {
             readConfigValue(pageConfig, 'defaultServerCompress', customerCompress),
             customerCompress,
         ),
+        uploadChannel: toStringValue(
+            readConfigValue(pageConfig, 'defaultUploadChannel', DEFAULT_POLICY.uploadChannel),
+            DEFAULT_POLICY.uploadChannel,
+        ) || DEFAULT_POLICY.uploadChannel,
+        channelName: toStringValue(
+            readConfigValue(pageConfig, 'defaultChannelName', DEFAULT_POLICY.channelName),
+            DEFAULT_POLICY.channelName,
+        ),
+        uploadNameType: toStringValue(
+            readConfigValue(pageConfig, 'defaultUploadNameType', DEFAULT_POLICY.uploadNameType),
+            DEFAULT_POLICY.uploadNameType,
+        ) || DEFAULT_POLICY.uploadNameType,
     };
 
     // The bundled client compressor does not preserve WebP output correctly when
@@ -101,8 +121,9 @@ function buildBootstrapScript(policy) {
   window.__IMGBED_UPLOAD_POLICY__ = policy;
 
   // vuex-persistedstate uses the "vuex" localStorage key in the bundled client.
-  // Replace old per-user image-processing choices before Vue creates the store,
-  // so the admin policy is authoritative on every page load.
+  // Replace old per-user technical choices before Vue creates the store, so the
+  // admin policy is authoritative on every page load. User-owned choices such as
+  // upload folder are deliberately left untouched.
   try {
     const rawState = localStorage.getItem('vuex');
     const persistedState = rawState ? JSON.parse(rawState) : {};
@@ -113,28 +134,32 @@ function buildBootstrapScript(policy) {
       compressQuality: policy.compressQuality,
       serverCompress: policy.serverCompress,
     };
+    persistedState.storeUploadChannel = policy.uploadChannel;
+    persistedState.storeChannelName = policy.channelName;
+    persistedState.storeUploadNameType = policy.uploadNameType;
     localStorage.setItem('vuex', JSON.stringify(persistedState));
   } catch (error) {
     console.warn('[ImgBed] Unable to apply upload policy to persisted state:', error);
   }
 
   // Only simplify the creator upload UI. Admin configuration pages use the same
-  // legacy shell and must keep the processing controls visible.
+  // legacy shell and must keep the policy controls visible.
   const isStudioPage = () => /^\\/studio\\/?$/.test(window.location.pathname);
 
-  const hideTechnicalImageControls = () => {
+  const hideTechnicalUploadControls = () => {
     if (!isStudioPage()) return;
 
     document.querySelectorAll('.setting-item').forEach((item) => {
       const text = (item.textContent || '').trim();
-      if (/webp|compress|compression|压缩/i.test(text)) {
+      const isAdminOwned = /webp|compress|compression|压缩|channel|渠道|naming|命名/i.test(text);
+      if (isAdminOwned) {
         item.style.display = 'none';
         item.setAttribute('aria-hidden', 'true');
       }
     });
 
     // Do not leave an empty technical section/header behind after its controls
-    // are hidden. User-facing settings such as folder and naming stay untouched.
+    // are hidden. User-facing settings such as folder stay untouched.
     document.querySelectorAll('.section-content').forEach((content) => {
       const items = Array.from(content.querySelectorAll('.setting-item'));
       if (items.length === 0) return;
@@ -151,8 +176,8 @@ function buildBootstrapScript(policy) {
 
   const startUiGuard = () => {
     if (!isStudioPage()) return;
-    hideTechnicalImageControls();
-    const observer = new MutationObserver(hideTechnicalImageControls);
+    hideTechnicalUploadControls();
+    const observer = new MutationObserver(hideTechnicalUploadControls);
     observer.observe(document.body, { childList: true, subtree: true });
   };
 
