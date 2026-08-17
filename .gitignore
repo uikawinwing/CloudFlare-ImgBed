@@ -2,6 +2,7 @@
 data/*
 node_modules
 /wrangler.toml
+/deploy/worker/wrangler.staging.toml
 .DS_Store
 
 *.sqlite
