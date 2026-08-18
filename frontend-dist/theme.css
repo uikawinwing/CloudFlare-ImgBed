@@ -1,0 +1,67 @@
+:root {
+  color-scheme: light;
+  --app-bg: #f6f4ef;
+  --app-bg-deep: #efede7;
+  --app-surface: #ffffff;
+  --app-surface-soft: #f0eee8;
+  --app-surface-strong: #e8e5dd;
+  --app-surface-translucent: rgba(255, 255, 255, .82);
+  --app-text: #17191e;
+  --app-text-strong: #0f1115;
+  --app-muted: #777d88;
+  --app-muted-strong: #565c67;
+  --app-border: rgba(23, 25, 30, .12);
+  --app-border-strong: rgba(23, 25, 30, .22);
+  --app-accent: #7567ee;
+  --app-accent-hover: #6759e4;
+  --app-accent-soft: rgba(117, 103, 238, .12);
+  --app-danger: #d84f5b;
+  --app-success: #2ca875;
+  --app-shadow-sm: 0 8px 24px rgba(34, 31, 25, .07);
+  --app-shadow-md: 0 18px 54px rgba(34, 31, 25, .10);
+  --app-radius-sm: 10px;
+  --app-radius-md: 14px;
+  --app-radius-lg: 18px;
+  --app-radius-xl: 24px;
+  --app-font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --app-bg: #08111e;
+  --app-bg-deep: #050c16;
+  --app-surface: #101a2a;
+  --app-surface-soft: #141f32;
+  --app-surface-strong: #19263b;
+  --app-surface-translucent: rgba(12, 23, 39, .84);
+  --app-text: #f7f8fc;
+  --app-text-strong: #ffffff;
+  --app-muted: #9ca8bb;
+  --app-muted-strong: #c7cfdd;
+  --app-border: rgba(160, 178, 210, .15);
+  --app-border-strong: rgba(167, 184, 218, .28);
+  --app-accent: #8279f7;
+  --app-accent-hover: #938bff;
+  --app-accent-soft: rgba(130, 121, 247, .16);
+  --app-danger: #f16975;
+  --app-success: #48cf98;
+  --app-shadow-sm: 0 8px 28px rgba(0, 0, 0, .18);
+  --app-shadow-md: 0 20px 60px rgba(0, 0, 0, .28);
+}
+
+html, body { background: var(--app-bg); color: var(--app-text); font-family: var(--app-font); }
+button, input, select, textarea { font-family: inherit; }
+::selection { background: var(--app-accent-soft); color: var(--app-text-strong); }
+
+[data-theme-toggle] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.theme-toggle-icon { width: 18px; height: 18px; display: block; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.theme-toggle-icon .theme-moon { display: none; }
+:root[data-theme="dark"] .theme-toggle-icon .theme-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle-icon .theme-moon { display: block; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
