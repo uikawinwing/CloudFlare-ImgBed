@@ -7,7 +7,10 @@ import {
     THUMBNAIL_WIDTH,
 } from '../utils/thumbnail.js';
 
-const THUMBNAIL_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600';
+// Owned files can switch from public to private at any time. Keep browser/CDN
+// copies revocable in v1; a versioned edge-cache can be added later without
+// changing the stable /thumb/<fileId> contract used by external clients.
+const THUMBNAIL_CACHE_CONTROL = 'private, no-store, max-age=0';
 
 export async function onRequest(context) {
     const { request, env, params } = context;
@@ -84,7 +87,7 @@ function fallbackToDynamicThumbnail(requestUrl, fileId) {
         status: 302,
         headers: {
             Location: fallback.toString(),
-            'Cache-Control': 'private, no-store, max-age=0',
+            'Cache-Control': THUMBNAIL_CACHE_CONTROL,
             'Access-Control-Allow-Origin': '*',
         },
     });
@@ -105,7 +108,7 @@ function thumbnailHeaders(thumbnail) {
 
 function noStoreHeaders() {
     return {
-        'Cache-Control': 'private, no-store, max-age=0',
+        'Cache-Control': THUMBNAIL_CACHE_CONTROL,
         'Access-Control-Allow-Origin': '*',
     };
 }
