@@ -6,6 +6,7 @@ const feedSentinel = document.querySelector('#feedSentinel');
 const dialogRoot = document.querySelector('#dialogRoot');
 let lastTrigger = null;
 let discoverReady = false;
+let lastRefreshAt = 0;
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 const encodeFilePath = id => String(id).split('/').map(encodeURIComponent).join('/');
@@ -20,7 +21,6 @@ const ratioFor = item => {
   const height = Number(item.height);
   return width > 0 && height > 0 ? `${width} / ${height}` : '1 / 1';
 };
-const initials = value => String(value || 'I').trim().slice(0, 1).toUpperCase();
 
 function copyText(value) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
@@ -56,15 +56,12 @@ async function reflectSignInState() {
 function mediaMarkup(item, eager = false) {
   const title = escapeHtml(titleFor(item));
   if (isVideo(item)) return `<div class="video-placeholder" aria-hidden="true"><span class="play-symbol"></span></div><span class="type-label">视频</span>`;
-  return `<img src="${escapeHtml(previewUrl(item))}" alt="${title}" loading="${eager ? 'eager' : 'lazy'}" decoding="async">`;
+  return `<img src="${escapeHtml(previewUrl(item))}" alt="${title}" loading="${eager ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${eager ? 'high' : 'low'}">`;
 }
 
 function cardMarkup(item, featured = false) {
-  const title = escapeHtml(titleFor(item));
-  const creator = escapeHtml(creatorFor(item));
-  const album = item.album || item.albumName ? escapeHtml(item.album || item.albumName) : '';
-  if (featured) return `<button class="feature-card" type="button" data-open-id="${escapeHtml(item.id)}"><span class="feature-media">${mediaMarkup(item)}</span><span class="feature-meta"><strong>${title}</strong><small>${creator}${album ? ` · ${album}` : ''}</small></span></button>`;
-  return `<article class="pin"><button class="pin-button" type="button" data-open-id="${escapeHtml(item.id)}"><span class="pin-media" style="aspect-ratio:${ratioFor(item)}">${mediaMarkup(item)}</span><span class="pin-info"><strong class="pin-title">${title}</strong><span class="pin-by"><i aria-hidden="true">${escapeHtml(initials(creatorFor(item)))}</i>${creator}${album ? ` · ${album}` : ''}</span></span></button></article>`;
+  if (featured) return `<button class="feature-card" type="button" data-open-id="${escapeHtml(item.id)}" aria-label="查看作品"><span class="feature-media">${mediaMarkup(item)}</span></button>`;
+  return `<article class="pin"><button class="pin-button" type="button" data-open-id="${escapeHtml(item.id)}" aria-label="查看作品"><span class="pin-media" style="aspect-ratio:${ratioFor(item)}">${mediaMarkup(item)}</span></button></article>`;
 }
 
 function render() {
@@ -93,7 +90,7 @@ function featured(items) {
   if (!heroItem) return;
 
   hero.hidden = false;
-  hero.innerHTML = `<button type="button" data-open-id="${escapeHtml(heroItem.id)}"><span class="hero-media">${mediaMarkup(heroItem, true)}</span><span class="hero-feature-overlay"><small>精选推荐</small><strong>${escapeHtml(titleFor(heroItem))}</strong><span>${escapeHtml(creatorFor(heroItem))}</span></span></button>`;
+  hero.innerHTML = `<button type="button" data-open-id="${escapeHtml(heroItem.id)}" aria-label="查看精选作品"><span class="hero-media">${mediaMarkup(heroItem, true)}</span><span class="hero-feature-overlay"><small>精选推荐</small></span></button>`;
   rail.innerHTML = items.slice(1, 5).map(item => cardMarkup(item, true)).join('');
 }
 
@@ -142,7 +139,9 @@ async function loadFeatured() {
 }
 
 async function refreshDiscover() {
-  if (!discoverReady) return;
+  const now = Date.now();
+  if (!discoverReady || now - lastRefreshAt < 30000) return;
+  lastRefreshAt = now;
   await Promise.all([loadFeatured(), loadFeed({ reset: true })]);
 }
 
@@ -196,10 +195,11 @@ window.addEventListener('focus', refreshDiscover);
 
 Promise.all([reflectSignInState(), loadFeatured(), loadFeed()]).finally(() => {
   discoverReady = true;
+  lastRefreshAt = Date.now();
   if ('IntersectionObserver' in window && feedSentinel) {
     const observer = new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting) && !state.loading && !state.done) loadFeed();
-    }, { rootMargin: '700px 0px' });
+    }, { rootMargin: '500px 0px' });
     observer.observe(feedSentinel);
   }
 });

@@ -101,7 +101,7 @@ export function presentDiscoverFile(file, requestUrl) {
             handle: file.creator_handle || null,
         },
         url,
-        thumbnailUrl: isImage ? `${url}?width=720&fallback=original` : null,
+        thumbnailUrl: isImage ? `${url}?width=720&format=webp&fallback=original` : null,
     };
 }
 

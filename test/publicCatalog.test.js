@@ -40,9 +40,9 @@ describe('public catalog policy', () => {
         assert.strictEqual(video.thumbnailUrl, null);
     });
 
-    it('falls back to the original when a source cannot be resized', () => {
-        const image = presentDiscoverFile({ id: 'art.gif', file_name: 'Art', file_type: 'image/gif', timestamp: 1 }, 'https://example.test/api/public/discover');
-        assert.strictEqual(image.thumbnailUrl, 'https://example.test/file/art.gif?width=720&fallback=original');
+    it('emits a fixed WebP thumbnail for Discover images', () => {
+        const image = presentDiscoverFile({ id: 'art.png', file_name: 'Art', file_type: 'image/png', timestamp: 1 }, 'https://example.test/api/public/discover');
+        assert.strictEqual(image.thumbnailUrl, 'https://example.test/file/art.png?width=720&format=webp&fallback=original');
     });
 
     it('emits a Discover thumbnail URL accepted by the file image transform parser', () => {
@@ -54,21 +54,29 @@ describe('public catalog policy', () => {
         }, 'https://staging.cloudflare-imgbed-dxx.pages.dev/api/public/discover');
         const transform = parseImageTransform(new URL(image.thumbnailUrl), { imageTransformEnabled: true });
         assert.strictEqual(transform.error, undefined);
+        assert.strictEqual(transform.options.width, 720);
+        assert.strictEqual(transform.format, 'webp');
+        assert.strictEqual(transform.outputFormat, 'image/webp');
         assert.match(image.url, /\/file\/users\/589790434960867328\/55226fd2-d75d-44d7-be34-f392ce2bd2d8\.png$/);
         assert.strictEqual(image.name, 'venus_divinity.png');
     });
 
-    it('uses the original Discover thumbnail when resizing is disabled', () => {
+    it('keeps the fixed Discover thumbnail active when arbitrary resizing is disabled', () => {
         const image = presentDiscoverFile({
             id: 'art.png',
             file_name: 'Art',
             file_type: 'image/png',
             timestamp: 1,
         }, 'https://example.test/api/public/discover');
-        const fallback = parseImageTransform(new URL(image.thumbnailUrl), { imageTransformEnabled: false });
-        assert.strictEqual(fallback.requested, false);
-        assert.strictEqual(fallback.fallback, 'original');
-        assert.strictEqual(fallback.error, undefined);
+        const thumbnail = parseImageTransform(new URL(image.thumbnailUrl), { imageTransformEnabled: false });
+        assert.strictEqual(thumbnail.requested, true);
+        assert.strictEqual(thumbnail.publicThumbnailPreset, true);
+        assert.strictEqual(thumbnail.outputFormat, 'image/webp');
+        assert.strictEqual(thumbnail.error, undefined);
+
+        const genericFallback = parseImageTransform(new URL('https://example.test/file/art.png?width=640&format=webp&fallback=original'), { imageTransformEnabled: false });
+        assert.strictEqual(genericFallback.requested, false);
+        assert.strictEqual(genericFallback.fallback, 'original');
 
         const strict = parseImageTransform(new URL('https://example.test/file/art.png?width=720'), { imageTransformEnabled: false });
         assert.strictEqual(strict.error, 'Image resizing is disabled');

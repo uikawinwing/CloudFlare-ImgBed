@@ -1,5 +1,6 @@
 const MAX_IMAGE_DIMENSION = 4096;
 const MAX_IMAGE_INPUT_BYTES = 20 * 1024 * 1024;
+const DISCOVER_THUMBNAIL_WIDTH = 720;
 
 const OUTPUT_FORMATS = new Map([
     ['image/jpeg', 'image/jpeg'],
@@ -8,6 +9,14 @@ const OUTPUT_FORMATS = new Map([
     ['image/webp', 'image/webp'],
     ['image/avif', 'image/avif'],
     ['image/gif', 'image/gif'],
+]);
+
+const REQUESTED_OUTPUT_FORMATS = new Map([
+    ['jpg', 'image/jpeg'],
+    ['jpeg', 'image/jpeg'],
+    ['png', 'image/png'],
+    ['webp', 'image/webp'],
+    ['avif', 'image/avif'],
 ]);
 
 const IMAGE_TYPES_BY_EXTENSION = new Map([
@@ -27,28 +36,42 @@ export function parseImageTransform(url, accessConfig = {}) {
     const widthResult = parseDimension(url.searchParams, 'width');
     const heightResult = parseDimension(url.searchParams, 'height');
     const fitResult = parseFit(url.searchParams);
+    const formatResult = parseFormat(url.searchParams);
     const fallbackResult = parseFallback(url.searchParams);
 
-    if (widthResult.error || heightResult.error || fitResult.error || fallbackResult.error) {
+    if (widthResult.error || heightResult.error || fitResult.error || formatResult.error || fallbackResult.error) {
         return {
             requested: true,
-            error: widthResult.error || heightResult.error || fitResult.error || fallbackResult.error,
+            error: widthResult.error || heightResult.error || fitResult.error || formatResult.error || fallbackResult.error,
         };
     }
 
-    const requested = widthResult.present || heightResult.present || fitResult.present || fallbackResult.present;
+    const requested = widthResult.present || heightResult.present || fitResult.present || formatResult.present || fallbackResult.present;
     if (!requested) {
         return { requested: false };
     }
 
-    if (fallbackResult.present && !widthResult.present && !heightResult.present && !fitResult.present) {
+    if (fallbackResult.present && !widthResult.present && !heightResult.present && !fitResult.present && !formatResult.present) {
         return {
             requested: true,
-            error: 'fallback=original requires image resizing parameters',
+            error: 'fallback=original requires image transformation parameters',
         };
     }
 
-    if (accessConfig.imageTransformEnabled !== true) {
+    const width = widthResult.value;
+    const height = heightResult.value;
+    const fit = fitResult.value;
+    const format = formatResult.value;
+    const publicThumbnailPreset = width === DISCOVER_THUMBNAIL_WIDTH
+        && !height
+        && !fit
+        && format === 'webp'
+        && fallbackResult.value === 'original';
+
+    // Discover has one fixed, bounded thumbnail variant. Keep it available even
+    // when arbitrary user-selected image resizing is disabled, so the public
+    // feed never has to download full-size originals just to paint the grid.
+    if (accessConfig.imageTransformEnabled !== true && !publicThumbnailPreset) {
         if (fallbackResult.value === 'original') {
             return { requested: false, fallback: 'original' };
         }
@@ -58,10 +81,6 @@ export function parseImageTransform(url, accessConfig = {}) {
             errorStatus: 403,
         };
     }
-
-    const width = widthResult.value;
-    const height = heightResult.value;
-    const fit = fitResult.value;
 
     if (fit && (!width || !height)) {
         return {
@@ -73,7 +92,7 @@ export function parseImageTransform(url, accessConfig = {}) {
     const sizeKey = `${width || 'auto'}x${height || 'auto'}`;
     const allowedSizes = parseAllowedSizes(accessConfig.imageTransformAllowedSizes);
 
-    if (allowedSizes.size > 0 && !allowedSizes.has(sizeKey)) {
+    if (!publicThumbnailPreset && (width || height) && allowedSizes.size > 0 && !allowedSizes.has(sizeKey)) {
         return {
             requested: true,
             error: `Image size ${sizeKey} is not allowed`,
@@ -83,7 +102,10 @@ export function parseImageTransform(url, accessConfig = {}) {
     return {
         requested: true,
         sizeKey,
+        format,
+        outputFormat: formatResult.outputFormat,
         fallback: fallbackResult.value,
+        publicThumbnailPreset,
         options: {
             ...(width ? { width } : {}),
             ...(height ? { height } : {}),
@@ -148,10 +170,12 @@ export async function transformImageRequestViaUrl(context) {
     sourceUrl.searchParams.delete('width');
     sourceUrl.searchParams.delete('height');
     sourceUrl.searchParams.delete('fit');
+    sourceUrl.searchParams.delete('format');
     sourceUrl.searchParams.delete('fallback');
 
     const transformOptions = Object.entries({
         ...imageTransform.options,
+        ...(imageTransform.format ? { format: imageTransform.format } : {}),
         ...(imageTransform.fallback === 'original' ? { onerror: 'redirect' } : {}),
     })
         .map(([name, value]) => `${name}=${encodeURIComponent(value)}`)
@@ -177,7 +201,7 @@ export async function transformImageResponse(context, response) {
     }
 
     const sourceType = normalizeContentType(response.headers.get('Content-Type'));
-    const outputFormat = OUTPUT_FORMATS.get(sourceType);
+    const outputFormat = imageTransform.outputFormat || OUTPUT_FORMATS.get(sourceType);
     if (!canTransformImageType(context.env, sourceType)) {
         if (imageTransform.fallback === 'original') {
             return response;
@@ -314,6 +338,24 @@ function parseFit(searchParams) {
     }
 
     return { present: true, value: values[0] };
+}
+
+function parseFormat(searchParams) {
+    const values = searchParams.getAll('format');
+    if (values.length === 0) return { present: false, value: null, outputFormat: null };
+    if (values.length !== 1) return { present: true, error: 'Duplicate format parameter' };
+
+    const requested = values[0].trim().toLowerCase();
+    const outputFormat = REQUESTED_OUTPUT_FORMATS.get(requested);
+    if (!outputFormat) {
+        return { present: true, error: 'format must be jpg, jpeg, png, webp or avif' };
+    }
+
+    return {
+        present: true,
+        value: requested === 'jpg' ? 'jpeg' : requested,
+        outputFormat,
+    };
 }
 
 function parseFallback(searchParams) {
