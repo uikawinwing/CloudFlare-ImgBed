@@ -29,9 +29,18 @@ function normalizeWorkspaceNavigation(root = document) {
   root.querySelectorAll?.('[data-shell-key="upload"], .legacy-shell-nav-item[href="/studio"], .legacy-shell-nav-item[href="/studio/"]').forEach(node => node.remove());
 }
 
+function normalizeWorkspaceCopy(root = document) {
+  root.querySelectorAll?.('.empty-state p').forEach(node => {
+    if (node.textContent.includes('从上传页添加')) {
+      node.textContent = '点击“上传文件”，或直接拖拽 / Ctrl+V 粘贴图片到这里。';
+    }
+  });
+}
+
 function normalizeUi(root = document) {
   normalizeVisibilityControls(root);
   normalizeWorkspaceNavigation(root);
+  normalizeWorkspaceCopy(root);
 }
 
 function toggleUnifiedTheme() {
