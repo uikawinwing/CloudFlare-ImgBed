@@ -49,7 +49,7 @@ async function reflectSignInState() {
     const uploadAction = document.querySelector('[data-upload-action]');
     accountAction.href = '/account/?view=files';
     accountAction.textContent = '我的工作室';
-    uploadAction.href = '/studio';
+    uploadAction.href = '/account/?view=files&upload=1';
   } catch {}
 }
 
