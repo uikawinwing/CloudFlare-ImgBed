@@ -49,6 +49,9 @@ export function parseImageTransform(url, accessConfig = {}) {
     }
 
     if (accessConfig.imageTransformEnabled !== true) {
+        if (fallbackResult.value === 'original') {
+            return { requested: false, fallback: 'original' };
+        }
         return {
             requested: true,
             error: 'Image resizing is disabled',
