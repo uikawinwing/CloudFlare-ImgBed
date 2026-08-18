@@ -1,6 +1,7 @@
 import { mountLegacyShell } from './shell.js';
 
 const MEMBER_QUOTA_BYTES = 200 * 1024 * 1024;
+const VIEW_CACHE_TTL = 30000;
 
 const state = {
   user: null,
@@ -18,6 +19,13 @@ const state = {
   users: [],
   audit: [],
 };
+
+const viewCache = {
+  files: { loaded: false, dirty: false, loadedAt: 0, promise: null },
+  albums: { loaded: false, dirty: false, loadedAt: 0, promise: null },
+  admin: { loaded: false, dirty: false, loadedAt: 0, promise: null },
+};
+const scrollPositions = new Map();
 
 const main = document.querySelector('#mainContent');
 const dialogRoot = document.querySelector('#dialogRoot');
@@ -92,6 +100,61 @@ function toast(message, type = '') {
   setTimeout(() => node.remove(), 3600);
 }
 
+function currentViewKey() {
+  return state.view === 'admin' ? 'admin' : state.view;
+}
+
+function currentScrollKey() {
+  return state.view === 'admin' ? `admin:${state.adminSection}` : state.view;
+}
+
+function cacheEntry(key = currentViewKey()) {
+  return viewCache[key] || viewCache.files;
+}
+
+function markViewDirty(...keys) {
+  keys.forEach(key => {
+    if (viewCache[key]) viewCache[key].dirty = true;
+  });
+}
+
+function markViewFresh(key = currentViewKey()) {
+  const entry = cacheEntry(key);
+  entry.loaded = true;
+  entry.dirty = false;
+  entry.loadedAt = Date.now();
+}
+
+function rememberScroll() {
+  scrollPositions.set(currentScrollKey(), window.scrollY || document.documentElement.scrollTop || 0);
+}
+
+function restoreScroll(key = currentScrollKey()) {
+  const top = scrollPositions.get(key) || 0;
+  requestAnimationFrame(() => window.scrollTo(0, top));
+}
+
+function workspaceTargetFromUrl(value = location.href) {
+  const url = value instanceof URL ? value : new URL(value, location.href);
+  if (url.origin !== location.origin || !/^\/account\/?$/.test(url.pathname)) return null;
+  const view = ['files', 'albums', 'admin'].includes(url.searchParams.get('view')) ? url.searchParams.get('view') : 'files';
+  const section = ['content', 'users', 'audit'].includes(url.searchParams.get('section')) ? url.searchParams.get('section') : 'content';
+  return { view, section };
+}
+
+function buildWorkspaceUrl(view = state.view, section = state.adminSection) {
+  const url = new URL('/account/', location.origin);
+  url.searchParams.set('view', view);
+  if (view === 'admin') url.searchParams.set('section', section);
+  return url;
+}
+
+function renderCurrentView() {
+  if (state.view === 'files') renderFiles();
+  else if (state.view === 'albums') renderAlbums();
+  else renderAdmin();
+}
+
 function syncNavigation() {
   const activeKey = state.view === 'admin' ? state.adminSection : state.view;
   document.querySelectorAll('[data-shell-key]').forEach(link => {
@@ -100,11 +163,7 @@ function syncNavigation() {
     if (active) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   });
-  const url = new URL(location.href);
-  url.searchParams.set('view', state.view);
-  if (state.view === 'admin') url.searchParams.set('section', state.adminSection);
-  else url.searchParams.delete('section');
-  history.replaceState(null, '', url);
+  history.replaceState(null, '', buildWorkspaceUrl());
   const titles = { files: '我的文件', albums: '我的图库', admin: state.adminSection === 'users' ? '成员管理' : state.adminSection === 'audit' ? '操作记录' : '内容管理' };
   document.title = `${titles[state.view] || titles.files} · CloudFlare ImgBed`;
 }
@@ -128,6 +187,7 @@ async function loadFiles() {
   const data = await api('/api/user/files');
   state.files = Array.isArray(data.files) ? data.files : [];
   state.selected = new Set([...state.selected].filter(id => state.files.some(file => file.id === id)));
+  markViewFresh('files');
 }
 
 async function loadAlbums(includeItems = true) {
@@ -145,6 +205,7 @@ async function loadAlbums(includeItems = true) {
       return { ...album, items: [] };
     }
   }));
+  markViewFresh('albums');
 }
 
 function fileCard(file) {
@@ -212,7 +273,7 @@ function renderFiles() {
       <div class="selection-copy"><strong>已选择 ${state.selected.size} 项</strong><button class="button ghost" id="clearSelection" type="button">取消选择</button></div>
       <div class="selection-actions"><button class="button" id="addToAlbum" type="button">${icons.folder}加入图库</button><button class="button danger" id="deleteSelected" type="button">${icons.trash}永久删除</button></div>
     </div>` : ''}
-    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '试试更换筛选条件或搜索词。' : '从上传页添加 JPG、PNG、GIF、WebP、AVIF 或 MP4。'}</p>${state.files.length ? '' : '<a class="button primary" href="/studio">上传第一个文件</a>'}</div>`}
+    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '试试更换筛选条件或搜索词。' : '点击上传文件，或直接拖拽 / Ctrl+V 粘贴 JPG、PNG、GIF、WebP、AVIF 或 MP4。'}</p>${state.files.length ? '' : `<button class="button primary" type="button" data-integrated-upload-trigger>${icons.upload}上传第一个文件</button>`}</div>`}
   </section>`;
   bindFileEvents();
   observeVideos();
@@ -264,6 +325,7 @@ async function loadAdminData() {
   state.adminFiles = files.files || [];
   state.audit = audit.audit || [];
   state.users = users.users || [];
+  markViewFresh('admin');
 }
 
 function moderationRow(file) {
@@ -292,7 +354,6 @@ function auditRow(entry) {
 
 function renderAdmin() {
   syncNavigation();
-  const owner = state.user.role === 'owner';
   let body = '';
   if (state.adminSection === 'content') {
     const query = state.adminQuery.trim().toLocaleLowerCase('zh-CN');
@@ -322,7 +383,13 @@ function askReason(title, explanation, confirmLabel, action, danger = false) {
 }
 
 function bindAdminEvents() {
-  document.querySelectorAll('[data-admin-section]').forEach(button => button.addEventListener('click', () => { state.adminSection = button.dataset.adminSection; if (button.dataset.setStatus) state.adminStatus = button.dataset.setStatus; renderAdmin(); }));
+  document.querySelectorAll('[data-admin-section]').forEach(button => button.addEventListener('click', () => {
+    rememberScroll();
+    state.adminSection = button.dataset.adminSection;
+    if (button.dataset.setStatus) state.adminStatus = button.dataset.setStatus;
+    renderAdmin();
+    restoreScroll();
+  }));
   document.querySelectorAll('[data-admin-status]').forEach(button => button.addEventListener('click', () => { state.adminStatus = button.dataset.adminStatus; renderAdmin(); }));
   document.querySelector('#adminSearch')?.addEventListener('change', event => { state.adminQuery = event.target.value; renderAdmin(); });
   document.querySelector('#adminSearch')?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); state.adminQuery = event.currentTarget.value; renderAdmin(); } });
@@ -351,6 +418,7 @@ async function migrateLegacyFiles() {
       migrated += result.migrated;
       cursor = result.cursor;
     } while (cursor);
+    markViewDirty('admin');
     toast(`未归属旧文件整理完成：${migrated} 条。`);
   } catch (error) { toast(error.message, 'error'); }
   finally { button.disabled = false; }
@@ -472,6 +540,8 @@ async function updateFileVisibility(fileId, visibility) {
     file.discover_eligible = file.visibility === 'public';
     file.thumbnail_url = result.thumbnailUrl || null;
     file.thumbnail_ready = Boolean(result.thumbnailReady);
+    markViewFresh('files');
+    markViewDirty('albums');
     renderFiles();
     if (file.visibility === 'private') {
       toast('已设为私密。');
@@ -494,8 +564,7 @@ async function addSelectedToAlbum() {
   if (!state.albums.length) await loadAlbums(false);
   if (!state.albums.length) {
     toast('请先创建一个图库。', 'error');
-    state.view = 'albums';
-    await showView();
+    await navigateWorkspace({ view: 'albums', section: 'content' });
     return;
   }
   const content = `<div class="dialog-head"><h2>加入图库</h2><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
@@ -517,6 +586,7 @@ async function addSelectedToAlbum() {
     }
     close();
     state.selected.clear();
+    if (added) markViewDirty('albums');
     renderFiles();
     toast(`已将 ${added} 个文件加入图库。`);
   });
@@ -542,6 +612,7 @@ function confirmDeleteSelected() {
     close();
     state.selected.clear();
     await loadFiles();
+    markViewDirty('albums');
     renderFiles();
     toast(`已永久删除 ${deleted} 个文件。`);
   });
@@ -668,24 +739,110 @@ function confirmDeleteAlbum(album) {
   });
 }
 
-async function showView() {
-  syncNavigation();
-  main.innerHTML = '<div class="loading-state"><span class="spinner" aria-hidden="true"></span><p>正在读取内容…</p></div>';
-  try {
-    if (state.view === 'files') {
+async function loadViewData(key) {
+  const entry = cacheEntry(key);
+  if (entry.promise) return entry.promise;
+  entry.promise = (async () => {
+    if (key === 'files') {
       await Promise.all([loadFiles(), state.albums.length ? Promise.resolve() : loadAlbums(false)]);
-      renderFiles();
-    } else if (state.view === 'albums') {
+    } else if (key === 'albums') {
       await loadAlbums(true);
-      renderAlbums();
     } else {
       await loadAdminData();
-      renderAdmin();
+    }
+    markViewFresh(key);
+  })();
+  try {
+    await entry.promise;
+  } finally {
+    entry.promise = null;
+  }
+}
+
+async function refreshView(key = currentViewKey(), { preserveScroll = true } = {}) {
+  const scrollKey = currentScrollKey();
+  const top = window.scrollY || 0;
+  try {
+    await loadViewData(key);
+    if (currentViewKey() === key) {
+      renderCurrentView();
+      if (preserveScroll) {
+        scrollPositions.set(scrollKey, top);
+        restoreScroll(scrollKey);
+      }
     }
   } catch (error) {
-    main.innerHTML = `<div class="error-state"><span class="empty-icon">${icons.image}</span><h2>暂时无法读取内容</h2><p>${escapeHtml(error.message)}</p><button class="button" id="retryButton" type="button">重试</button></div>`;
-    document.querySelector('#retryButton').addEventListener('click', showView);
+    if (currentViewKey() === key) toast(error.message || '刷新失败，请稍后重试。', 'error');
   }
+}
+
+async function showView({ initial = false, force = false } = {}) {
+  syncNavigation();
+  const key = currentViewKey();
+  const scrollKey = currentScrollKey();
+  const entry = cacheEntry(key);
+
+  if (entry.loaded && !force) {
+    renderCurrentView();
+    restoreScroll(scrollKey);
+    if (entry.dirty || Date.now() - entry.loadedAt > VIEW_CACHE_TTL) refreshView(key, { preserveScroll: true });
+    return;
+  }
+
+  const alreadyShowingWorkspace = Boolean(main.querySelector('.page-section'));
+  if (initial && !alreadyShowingWorkspace) {
+    main.innerHTML = '<div class="loading-state"><span class="spinner" aria-hidden="true"></span><p>正在读取内容…</p></div>';
+  }
+  main.setAttribute('aria-busy', 'true');
+  try {
+    await loadViewData(key);
+    if (currentViewKey() !== key) return;
+    renderCurrentView();
+    restoreScroll(scrollKey);
+  } catch (error) {
+    if (currentViewKey() !== key) return;
+    main.innerHTML = `<div class="error-state"><span class="empty-icon">${icons.image}</span><h2>暂时无法读取内容</h2><p>${escapeHtml(error.message)}</p><button class="button" id="retryButton" type="button">重试</button></div>`;
+    document.querySelector('#retryButton')?.addEventListener('click', () => showView({ force: true }));
+  } finally {
+    if (currentViewKey() === key) main.removeAttribute('aria-busy');
+  }
+}
+
+async function navigateWorkspace(target, { historyMode = 'push' } = {}) {
+  if (!target) return;
+  let { view, section } = target;
+  if (view === 'admin' && !['manager', 'admin', 'owner'].includes(state.user?.role)) view = 'files';
+  if (view === 'admin' && section === 'users' && state.user?.role !== 'owner') section = 'content';
+  if (state.view === view && (view !== 'admin' || state.adminSection === section)) return;
+
+  rememberScroll();
+  state.view = view;
+  if (view === 'admin') state.adminSection = section;
+  dialogRoot.innerHTML = '';
+  const url = buildWorkspaceUrl(view, section);
+  if (historyMode === 'push') history.pushState(null, '', url);
+  else if (historyMode === 'replace') history.replaceState(null, '', url);
+  await showView();
+}
+
+function bindWorkspaceNavigation() {
+  document.addEventListener('click', event => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest('a[href]');
+    if (!link || link.target === '_blank' || link.hasAttribute('download')) return;
+    const target = workspaceTargetFromUrl(link.href);
+    if (!target) return;
+    event.preventDefault();
+    navigateWorkspace(target);
+  });
+  window.addEventListener('popstate', () => {
+    const target = workspaceTargetFromUrl(location.href);
+    if (target) navigateWorkspace(target, { historyMode: 'none' });
+  });
+  window.addEventListener('imgbed:files-changed', () => {
+    markViewDirty('files');
+    if (currentViewKey() === 'files') refreshView('files', { preserveScroll: true });
+  });
 }
 
 async function init() {
@@ -693,10 +850,11 @@ async function init() {
     const data = await api('/api/user/me');
     state.user = data.user;
     mountLegacyShell(state.user);
+    bindWorkspaceNavigation();
     if (!['manager', 'admin', 'owner'].includes(state.user.role) && state.view === 'admin') state.view = 'files';
     if (state.view === 'admin' && state.adminSection === 'users' && state.user.role !== 'owner') state.adminSection = 'content';
     applyConfiguredWallpaper();
-    await showView();
+    await showView({ initial: true });
   } catch (error) {
     if (error.status === 401) showLogin();
     else main.innerHTML = `<div class="error-state"><h2>账户暂时不可用</h2><p>${escapeHtml(error.message)}</p></div>`;
