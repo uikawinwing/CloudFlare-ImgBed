@@ -17,7 +17,10 @@ export async function onRequestOptions() {
 
 export async function onRequestGet({ request, env, params }) {
     if (!env.img_d1?.prepare) return json({ error: 'D1 is required' }, 503);
-    const album = await env.img_d1.prepare("SELECT a.id, a.name, a.description, a.char_info_character_name, a.updated_at, u.discord_id, u.username, u.public_handle FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE u.public_handle = ? AND u.status = 'active' AND a.slug = ? AND a.visibility = 'public'").bind(params.ownerSlug, params.albumSlug).first();
+    const ownerSlug = normalizeSingleSegmentParam(params.ownerSlug);
+    const albumSlug = normalizeSingleSegmentParam(params.albumSlug);
+    if (!ownerSlug || !albumSlug) return json({ error: 'Gallery not found' }, 404);
+    const album = await env.img_d1.prepare("SELECT a.id, a.name, a.description, a.char_info_character_name, a.updated_at, u.discord_id, u.username, u.public_handle FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE u.public_handle = ? AND u.status = 'active' AND a.slug = ? AND a.visibility = 'public'").bind(ownerSlug, albumSlug).first();
     if (!album) return json({ error: 'Gallery not found' }, 404);
     try {
         requireCharInfoAlbumIdentity(album);
@@ -29,7 +32,7 @@ export async function onRequestGet({ request, env, params }) {
     const etag = makeEtag(album, files, lastModifiedAt);
     const headers = publicHeaders(etag, lastModifiedAt);
     if (request.headers.get('If-None-Match') === etag) return new Response(null, { status: 304, headers });
-    return new Response(JSON.stringify(createGalleryPack(album, params.albumSlug, files, request.url)), { headers });
+    return new Response(JSON.stringify(createGalleryPack(album, albumSlug, files, request.url)), { headers });
 }
 
 export function createGalleryPack(album, albumSlug, files, requestUrl) {
@@ -79,6 +82,12 @@ function publicHeaders(etag, lastModifiedAt) {
         'ETag': etag,
         'Last-Modified': new Date(lastModifiedAt || 0).toUTCString(),
     };
+}
+
+function normalizeSingleSegmentParam(value) {
+    if (Array.isArray(value)) return value.length === 1 && typeof value[0] === 'string' && value[0] ? value[0] : null;
+    if (typeof value !== 'string' || !value || value.includes('/')) return null;
+    return value;
 }
 
 function json(body, status = 200) {

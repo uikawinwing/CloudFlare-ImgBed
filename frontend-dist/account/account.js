@@ -457,7 +457,7 @@ async function ensurePublicHandle() {
     <div class="dialog-head"><h2>设置公开名称</h2></div>
     <div class="dialog-body">
       <p style="margin-top:0;color:var(--muted);line-height:1.65">这个名称会出现在公开图库链接中，并绑定当前 Discord 账号。</p>
-      <div class="field"><label for="publicHandle">公开名称</label><input id="publicHandle" name="publicHandle" autocomplete="off" minlength="3" maxlength="32" pattern="[a-z0-9][a-z0-9-]{2,31}" required><small>使用 3–32 位小写英文字母、数字或短横线。</small><small class="field-error" id="handleError"></small></div>
+      <div class="field"><label for="publicHandle">公开名称</label><input id="publicHandle" name="publicHandle" autocomplete="off" minlength="3" maxlength="32" pattern="[a-z0-9][a-z0-9\\-]{2,31}" required><small>使用 3–32 位小写英文字母、数字或短横线。</small><small class="field-error" id="handleError"></small></div>
     </div>
     <div class="dialog-actions"><button class="button primary" type="submit">保存并继续</button></div>
   </form>`;
@@ -626,7 +626,7 @@ function albumDialog(album = null) {
     <div class="dialog-head"><h2>${editing ? '编辑图库' : '新建图库'}</h2><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
     <div class="dialog-body">
       <div class="field"><label for="albumName">图库名称</label><input id="albumName" name="name" maxlength="80" value="${escapeHtml(album?.name || '')}" required></div>
-      <div class="field"><label for="albumSlug">分享链接名称</label><input id="albumSlug" name="slug" maxlength="80" value="${escapeHtml(album?.slug || '')}" pattern="[a-z0-9][a-z0-9-]*"><small>用于分享链接，只能使用小写英文字母、数字和短横线；留空会根据图库名称生成。</small></div>
+      <div class="field"><label for="albumSlug">分享链接名称</label><input id="albumSlug" name="slug" maxlength="80" value="${escapeHtml(album?.slug || '')}" pattern="[a-z0-9][a-z0-9\\-]*"><small>用于分享链接，只能使用小写英文字母、数字和短横线；留空会根据图库名称生成。</small></div>
       <div class="field"><label for="albumDescription">说明</label><textarea id="albumDescription" name="description" maxlength="200">${escapeHtml(album?.description || '')}</textarea></div>
       <div class="field"><label for="albumCharInfoCharacterName">CharInfo 角色全名（可选）</label><input id="albumCharInfoCharacterName" name="charInfoCharacterName" maxlength="80" value="${escapeHtml(album?.charInfoCharacterName || '')}"><small>需要生成 CharInfo 链接时填写角色完整姓名；不要填写 Discord 用户名或角色简称。</small></div>
       <fieldset class="field" style="border:0;padding:0"><legend>可见性</legend>
