@@ -45,8 +45,13 @@ function fileUrl(file) {
   return `/file/${encodeFilePath(file.id)}`;
 }
 
-function isEnabled(value) {
-  return value === true || value === 1 || value === '1';
+function thumbnailUrl(file) {
+  return file.thumbnail_url || `/thumb/${encodeFilePath(file.id)}`;
+}
+
+function previewUrl(file) {
+  const isImage = String(file.file_type || '').startsWith('image/');
+  return isImage && file.visibility === 'public' ? thumbnailUrl(file) : fileUrl(file);
 }
 
 async function api(path, options = {}) {
@@ -146,19 +151,22 @@ function fileCard(file) {
   const isVideo = file.file_type === 'video/mp4';
   const selected = state.selected.has(file.id);
   const src = fileUrl(file);
+  const preview = previewUrl(file);
   const mediaLabel = file.file_name || file.id;
-  const visibility = ['private', 'unlisted', 'public'].includes(file.visibility) ? file.visibility : 'private';
-  const visibilityHelp = visibility === 'private' ? '不公开展示；已有资源链接仍可访问' : visibility === 'unlisted' ? '仅用于链接分享；不出现在公开目录' : '可在公开图库展示；可选择加入发现';
+  const visibility = file.visibility === 'public' ? 'public' : 'private';
+  const visibilityHelp = visibility === 'public'
+    ? '公开后自动进入发现页；列表优先使用可复用缩略图。'
+    : '不公开展示；原文件仍保留在你的工作室。';
   return `<article class="media-card${selected ? ' selected' : ''}" data-file-id="${escapeHtml(file.id)}">
     <input class="media-select" type="checkbox" aria-label="选择 ${escapeHtml(mediaLabel)}" ${selected ? 'checked' : ''}>
     <button class="media-frame" type="button" aria-label="预览 ${escapeHtml(mediaLabel)}">
-      ${isVideo ? `<video src="${src}" muted loop playsinline preload="metadata"></video><span class="play" aria-hidden="true"></span><span class="media-type">MP4</span>` : `<img src="${src}" alt="${escapeHtml(mediaLabel)}" loading="lazy">`}
+      ${isVideo ? `<video src="${src}" muted loop playsinline preload="metadata"></video><span class="play" aria-hidden="true"></span><span class="media-type">MP4</span>` : `<img src="${escapeHtml(preview)}" alt="${escapeHtml(mediaLabel)}" loading="lazy" decoding="async">`}
     </button>
     <div class="media-info">
       <p class="media-name" title="${escapeHtml(file.file_name || file.id)}">${escapeHtml(file.file_name || file.id)}</p>
       <div class="media-meta"><span>${formatBytes(file.file_size_bytes)}</span><span>${formatDate(file.timestamp)}</span>${file.moderation_status === 'quarantined' ? '<span>已撤下</span>' : ''}</div>
-      <div class="file-visibility-row"><label><span class="sr-only">${escapeHtml(mediaLabel)} 的可见性</span><select class="file-visibility" aria-label="${escapeHtml(mediaLabel)} 的可见性"><option value="private" ${visibility === 'private' ? 'selected' : ''}>私密（不展示）</option><option value="unlisted" ${visibility === 'unlisted' ? 'selected' : ''}>不公开链接</option><option value="public" ${visibility === 'public' ? 'selected' : ''}>公开</option></select></label>${visibility === 'public' ? `<label class="discover-option"><input class="file-discover" type="checkbox" ${isEnabled(file.discover_eligible) || isEnabled(file.discoverEligible) ? 'checked' : ''}><span>加入发现</span></label>` : ''}</div><small class="file-visibility-help">${visibilityHelp}</small>
-      <div class="file-card-actions"><button class="file-action" type="button" data-copy-file>${icons.link}<span>复制链接</span></button><a class="file-action" href="${escapeHtml(src)}" target="_blank" rel="noopener">${icons.external}<span>原文件</span></a></div>
+      <div class="file-visibility-row"><label><span class="sr-only">${escapeHtml(mediaLabel)} 的可见性</span><select class="file-visibility" aria-label="${escapeHtml(mediaLabel)} 的可见性"><option value="private" ${visibility === 'private' ? 'selected' : ''}>私密</option><option value="public" ${visibility === 'public' ? 'selected' : ''}>公开</option></select></label></div><small class="file-visibility-help">${visibilityHelp}</small>
+      <div class="file-card-actions"><button class="file-action" type="button" data-copy-file>${icons.link}<span>复制链接</span></button>${visibility === 'public' && !isVideo ? `<button class="file-action" type="button" data-copy-thumbnail>${icons.link}<span>复制缩略图</span></button>` : ''}<a class="file-action" href="${escapeHtml(src)}" target="_blank" rel="noopener">${icons.external}<span>原文件</span></a></div>
     </div>
   </article>`;
 }
@@ -213,7 +221,7 @@ function renderFiles() {
 function albumRow(album) {
   const items = album.items || [];
   const cover = items.find(item => item.moderation_status !== 'quarantined');
-  const coverMedia = cover ? (cover.file_type === 'video/mp4' ? `<video src="${fileUrl(cover)}" muted loop playsinline preload="metadata"></video>` : `<img src="${fileUrl(cover)}" alt="${escapeHtml(cover.file_name || album.name)}" loading="lazy">`) : `<span class="empty-icon">${icons.image}</span>`;
+  const coverMedia = cover ? (cover.file_type === 'video/mp4' ? `<video src="${fileUrl(cover)}" muted loop playsinline preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(cover))}" alt="${escapeHtml(cover.file_name || album.name)}" loading="lazy" decoding="async">`) : `<span class="empty-icon">${icons.image}</span>`;
   const canShare = album.visibility === 'public' && state.user.publicHandle;
   const shareUrl = canShare ? `${location.origin}/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
   const feedUrl = canShare ? `${location.origin}/api/public/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
@@ -435,25 +443,48 @@ function bindFileEvents() {
         toast('复制失败，请直接打开原文件后复制地址。', 'error');
       }
     });
+    card.querySelector('[data-copy-thumbnail]')?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(new URL(thumbnailUrl(state.files.find(file => file.id === id)), location.origin).href);
+        toast('缩略图链接已复制。');
+      } catch {
+        toast('缩略图链接复制失败。', 'error');
+      }
+    });
     card.querySelector('.file-visibility')?.addEventListener('change', event => updateFileVisibility(id, event.currentTarget.value));
-    card.querySelector('.file-discover')?.addEventListener('change', event => updateFileVisibility(id, 'public', event.currentTarget.checked));
   });
 }
 
-async function updateFileVisibility(fileId, visibility, discoverEligible = undefined) {
+async function updateFileVisibility(fileId, visibility) {
   const file = state.files.find(item => item.id === fileId);
   if (!file) return;
-  const previous = { visibility: file.visibility || 'private', discoverEligible: isEnabled(file.discover_eligible) || isEnabled(file.discoverEligible) };
-  const nextDiscover = visibility === 'public' ? (discoverEligible === undefined ? previous.discoverEligible : discoverEligible) : false;
+  const previous = {
+    visibility: file.visibility || 'private',
+    thumbnailUrl: file.thumbnail_url || null,
+    thumbnailReady: Boolean(file.thumbnail_ready),
+  };
   file.visibility = visibility;
-  file.discover_eligible = nextDiscover;
+  file.discover_eligible = visibility === 'public';
   renderFiles();
   try {
-    await api(`/api/user/files/${encodeFilePath(fileId)}`, { method: 'PATCH', body: JSON.stringify({ visibility, discoverEligible: nextDiscover }) });
-    toast(visibility === 'private' ? '已设为私密。' : visibility === 'unlisted' ? '已设为不公开链接。' : nextDiscover ? '已公开，并会出现在发现页候选中。' : '已公开，但不会出现在发现页。');
+    const result = await api(`/api/user/files/${encodeFilePath(fileId)}`, { method: 'PATCH', body: JSON.stringify({ visibility }) });
+    file.visibility = result.visibility || visibility;
+    file.discover_eligible = file.visibility === 'public';
+    file.thumbnail_url = result.thumbnailUrl || null;
+    file.thumbnail_ready = Boolean(result.thumbnailReady);
+    renderFiles();
+    if (file.visibility === 'private') {
+      toast('已设为私密。');
+    } else if (result.thumbnailReady) {
+      toast(result.thumbnailCreated ? '已公开，并已生成可复用缩略图。' : '已公开；现有缩略图会继续复用。');
+    } else {
+      toast('已公开；缩略图暂时使用动态预览，原图不受影响。');
+    }
   } catch (error) {
     file.visibility = previous.visibility;
-    file.discover_eligible = previous.discoverEligible;
+    file.thumbnail_url = previous.thumbnailUrl;
+    file.thumbnail_ready = previous.thumbnailReady;
+    file.discover_eligible = previous.visibility === 'public';
     renderFiles();
     toast(error.message || '无法更新可见性。', 'error');
   }
@@ -571,7 +602,7 @@ function bindAlbumEvents() {
 function manageAlbumItems(album) {
   const items = [...(album.items || [])].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
   const rows = items.map((item, index) => `<article class="album-item-row" data-file-id="${escapeHtml(item.id)}">
-    <div class="album-item-thumb">${item.file_type === 'video/mp4' ? `<video src="${fileUrl(item)}" muted playsinline preload="metadata"></video>` : `<img src="${fileUrl(item)}" alt="${escapeHtml(item.file_name || item.id)}">`}</div>
+    <div class="album-item-thumb">${item.file_type === 'video/mp4' ? `<video src="${fileUrl(item)}" muted playsinline preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(item.file_name || item.id)}" loading="lazy" decoding="async">`}</div>
     <div class="album-item-copy"><strong>${escapeHtml(item.file_name || item.id)}</strong><span>${formatBytes(item.file_size_bytes)}</span></div>
     <div class="album-item-actions"><button class="icon-button" type="button" data-move-up aria-label="上移" ${index === 0 ? 'disabled' : ''}>↑</button><button class="icon-button" type="button" data-move-down aria-label="下移" ${index === items.length - 1 ? 'disabled' : ''}>↓</button><button class="button danger" type="button" data-remove-item>移出图库</button></div>
   </article>`).join('');
