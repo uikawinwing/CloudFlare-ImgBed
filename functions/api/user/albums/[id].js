@@ -1,4 +1,5 @@
 import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
+import { normalizeCharInfoCharacterName, validateCharInfoCharacterName } from '../../../utils/charInfoGallery.js';
 import { normalizeSlug } from './index.js';
 
 export async function onRequest(context) {
@@ -11,7 +12,7 @@ export async function onRequest(context) {
     if (album.owner_id !== identity.id && identity.role !== 'owner') return json({ error: 'Only the owner can change this album' }, 403);
     if (context.request.method === 'GET') {
         const items = await context.env.img_d1.prepare('SELECT f.id, f.file_name, f.file_type, f.file_size_bytes, f.timestamp, f.visibility, f.moderation_status, ai.position FROM album_items ai JOIN files f ON f.id = ai.file_id WHERE ai.album_id = ? ORDER BY ai.position, ai.created_at').bind(id).all();
-        return json({ album, items: items.results || [] });
+        return json({ album: { ...album, charInfoCharacterName: normalizeCharInfoCharacterName(album.char_info_character_name) }, items: items.results || [] });
     }
     if (context.request.method === 'DELETE') {
         await context.env.img_d1.batch([
@@ -26,13 +27,18 @@ export async function onRequest(context) {
     const description = payload.description === undefined ? album.description : String(payload.description).trim();
     const slug = payload.slug === undefined ? album.slug : normalizeSlug(payload.slug);
     const visibility = payload.visibility === undefined ? album.visibility : payload.visibility;
+    const charInfoCharacterName = payload.charInfoCharacterName === undefined
+        ? normalizeCharInfoCharacterName(album.char_info_character_name)
+        : normalizeCharInfoCharacterName(payload.charInfoCharacterName);
+    const charInfoCharacterNameError = validateCharInfoCharacterName(charInfoCharacterName);
     if (!name || (description !== null && description.length > 1000) || !slug || !['public', 'unlisted'].includes(visibility)) return json({ error: 'Invalid album data' }, 400);
+    if (charInfoCharacterNameError) return json({ error: charInfoCharacterNameError }, 400);
     try {
-        await context.env.img_d1.prepare('UPDATE albums SET slug = ?, name = ?, description = ?, visibility = ?, updated_at = ? WHERE id = ?').bind(slug, name, description, visibility, Date.now(), id).run();
+        await context.env.img_d1.prepare('UPDATE albums SET slug = ?, name = ?, description = ?, char_info_character_name = ?, visibility = ?, updated_at = ? WHERE id = ?').bind(slug, name, description, charInfoCharacterName, visibility, Date.now(), id).run();
     } catch {
         return json({ error: 'Album slug is already in use' }, 409);
     }
-    return json({ id, slug, name, description, visibility });
+    return json({ id, slug, name, description, charInfoCharacterName, visibility });
 }
 
 function json(body, status = 200) {

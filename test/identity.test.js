@@ -11,7 +11,9 @@ import {
     sanitizeReturnTo,
 } from '../functions/utils/auth/discordIdentity.js';
 import { normalizeSlug } from '../functions/api/user/albums/index.js';
+import { normalizeAlbumIdParam } from '../functions/api/user/albums/[[id]]/items.js';
 import { absoluteFileUrl, createGalleryPack } from '../functions/api/public/gallery/[[ownerSlug]]/[[albumSlug]].js';
+import { normalizeCharInfoCharacterName, validateCharInfoCharacterName } from '../functions/utils/charInfoGallery.js';
 import { rejectCrossSiteMutation } from '../functions/utils/auth/mutationSecurity.js';
 import { matchesAllowedFileSignature } from '../functions/utils/fileSignature.js';
 import { D1Database } from '../functions/utils/d1Database.js';
@@ -53,18 +55,37 @@ describe('Discord identity policy', () => {
         assert.strictEqual(existsSync(new URL('../functions/api/user/albums/[[id]].js', import.meta.url)), false);
     });
 
-    it('builds a CharInfo gallery pack with one absolute HTTPS source per file', () => {
-        const pack = createGalleryPack({ id: 'album-id', public_handle: 'master', discord_id: 'discord-id', username: 'Master' }, 'summer', [
-            { id: 'folder/a b.png', file_name: 'First image.png', timestamp: 1 },
-            { id: 'second.mp4', file_name: 'Second video.mp4', timestamp: 2 },
+    it('normalizes the catch-all album id before binding it to D1', () => {
+        assert.strictEqual(normalizeAlbumIdParam('album-id'), 'album-id');
+        assert.strictEqual(normalizeAlbumIdParam(['album-id']), 'album-id');
+        assert.strictEqual(normalizeAlbumIdParam(['album-id', 'extra']), null);
+        assert.strictEqual(normalizeAlbumIdParam('album-id/extra'), null);
+    });
+
+    it('builds a CharInfo gallery pack from album identity instead of Discord identity', () => {
+        const pack = createGalleryPack({ id: 'album-id', public_handle: 'master', discord_id: 'discord-id', username: 'Master', char_info_character_name: '维奥莱塔·马克西姆·奥古斯塔' }, 'summer', [
+            { id: 'folder/a b.png', file_name: 'First image.png', file_type: 'image/png', timestamp: 1 },
+            { id: 'second.mp4', file_name: 'Second video.mp4', file_type: 'video/mp4', timestamp: 2 },
         ], 'http://example.test/api/public/gallery/master/summer');
         assert.strictEqual(pack.format, 'char-info-gallery-pack');
-        assert.strictEqual(pack.profileId, 'master');
+        assert.strictEqual(pack.packId, 'master');
+        assert.strictEqual(pack.profileId, 'album-id');
+        assert.strictEqual(pack.characterName, '维奥莱塔·马克西姆·奥古斯塔');
         assert.deepStrictEqual(pack.gallery, [
-            { title: 'First image.png', sources: ['https://example.test/file/folder/a%20b.png'] },
-            { title: 'Second video.mp4', sources: ['https://example.test/file/second.mp4'] },
+            { title: 'First image.png', sources: ['https://example.test/file/folder/a%20b.png'], thumbnail: 'https://example.test/thumb/folder/a%20b.png' },
+            { title: 'Second video.mp4', sources: ['https://example.test/file/second.mp4'], thumbnail: null },
         ]);
         assert.strictEqual(absoluteFileUrl('http://example.test/x', 'a.png'), 'https://example.test/file/a.png');
+    });
+
+    it('requires an explicit valid character name before exposing a CharInfo pack', () => {
+        assert.strictEqual(normalizeCharInfoCharacterName('  维奥莱塔·马克西姆·奥古斯塔  '), '维奥莱塔·马克西姆·奥古斯塔');
+        assert.strictEqual(validateCharInfoCharacterName('维奥莱塔·马克西姆·奥古斯塔'), null);
+        assert.match(validateCharInfoCharacterName('bad\nname'), /control characters/);
+        assert.throws(
+            () => createGalleryPack({ id: 'album-id', public_handle: 'master', username: 'Master' }, 'summer', [], 'https://example.test/x'),
+            /character name is not configured/,
+        );
     });
 
     it('rejects cross-site mutations but allows same-origin requests', () => {

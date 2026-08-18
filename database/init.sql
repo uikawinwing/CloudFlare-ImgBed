@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS albums (
     owner_id TEXT NOT NULL,
     slug TEXT NOT NULL,
     name TEXT NOT NULL,
+    char_info_character_name TEXT,
     description TEXT,
     visibility TEXT NOT NULL DEFAULT 'unlisted',
     created_at INTEGER NOT NULL,

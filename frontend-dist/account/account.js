@@ -284,16 +284,18 @@ function albumRow(album) {
   const cover = items.find(item => item.moderation_status !== 'quarantined');
   const coverMedia = cover ? (cover.file_type === 'video/mp4' ? `<video src="${fileUrl(cover)}" muted loop playsinline preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(cover))}" alt="${escapeHtml(cover.file_name || album.name)}" loading="lazy" decoding="async">`) : `<span class="empty-icon">${icons.image}</span>`;
   const canShare = album.visibility === 'public' && state.user.publicHandle;
+  const canShareCharInfo = canShare && Boolean(album.charInfoCharacterName);
   const shareUrl = canShare ? `${location.origin}/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
-  const feedUrl = canShare ? `${location.origin}/api/public/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
+  const feedUrl = canShareCharInfo ? `${location.origin}/api/public/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
   return `<article class="album-row" data-album-id="${escapeHtml(album.id)}">
     <div class="album-cover">${coverMedia}</div>
     <div class="album-body">
       <h2>${escapeHtml(album.name)}</h2>
       <div class="album-meta"><span>${items.length} 个项目</span><span>最近更新：${formatDate(album.updated_at)}</span></div>
-      <p class="album-visibility">${album.visibility === 'public' ? '公开 · 可通过分享链接访问' : '不公开 · 已分享的文件链接仍可访问'}</p>
+      <p class="album-visibility">${album.visibility === 'public' ? `公开 · 可通过分享链接访问${album.charInfoCharacterName ? ` · CharInfo：${escapeHtml(album.charInfoCharacterName)}` : ' · CharInfo 未配置角色全名'}` : '不公开 · 已分享的文件链接仍可访问'}</p>
       <div class="album-actions">
-        ${canShare ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button><button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制 CharInfo 链接</button>` : ''}
+        ${canShare ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : ''}
+        ${canShareCharInfo ? `<button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制 CharInfo 链接</button>` : ''}
         <button class="button" type="button" data-manage-album>管理内容</button>
         <button class="button" type="button" data-edit-album>编辑</button>
         <button class="button danger" type="button" data-delete-album>删除图库</button>
@@ -626,8 +628,9 @@ function albumDialog(album = null) {
       <div class="field"><label for="albumName">图库名称</label><input id="albumName" name="name" maxlength="80" value="${escapeHtml(album?.name || '')}" required></div>
       <div class="field"><label for="albumSlug">分享链接名称</label><input id="albumSlug" name="slug" maxlength="80" value="${escapeHtml(album?.slug || '')}" pattern="[a-z0-9][a-z0-9-]*"><small>用于分享链接，只能使用小写英文字母、数字和短横线；留空会根据图库名称生成。</small></div>
       <div class="field"><label for="albumDescription">说明</label><textarea id="albumDescription" name="description" maxlength="200">${escapeHtml(album?.description || '')}</textarea></div>
+      <div class="field"><label for="albumCharInfoCharacterName">CharInfo 角色全名（可选）</label><input id="albumCharInfoCharacterName" name="charInfoCharacterName" maxlength="80" value="${escapeHtml(album?.charInfoCharacterName || '')}"><small>需要生成 CharInfo 链接时填写角色完整姓名；不要填写 Discord 用户名或角色简称。</small></div>
       <fieldset class="field" style="border:0;padding:0"><legend>可见性</legend>
-        <label class="radio-option"><input type="radio" name="visibility" value="public" ${album?.visibility === 'public' ? 'checked' : ''}><span class="radio-copy"><strong>公开图库</strong><small>任何人都可以通过链接浏览，并可供 CharInfo 读取。</small></span></label>
+        <label class="radio-option"><input type="radio" name="visibility" value="public" ${album?.visibility === 'public' ? 'checked' : ''}><span class="radio-copy"><strong>公开图库</strong><small>任何人都可以通过链接浏览；填写 CharInfo 角色全名后可供 CharInfo 读取。</small></span></label>
         <label class="radio-option"><input type="radio" name="visibility" value="unlisted" ${album?.visibility !== 'public' ? 'checked' : ''}><span class="radio-copy"><strong>不公开图库</strong><small>不会公开展示图库，但已分享的文件直链仍可访问。</small></span></label>
       </fieldset>
       <small class="field-error" id="albumError"></small>
@@ -638,7 +641,7 @@ function albumDialog(album = null) {
   dialogRoot.querySelector('#albumForm').addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.currentTarget;
-    const payload = { name: form.name.value.trim(), slug: form.slug.value.trim() || undefined, description: form.description.value.trim(), visibility: form.visibility.value };
+    const payload = { name: form.name.value.trim(), slug: form.slug.value.trim() || undefined, description: form.description.value.trim(), charInfoCharacterName: form.charInfoCharacterName.value.trim(), visibility: form.visibility.value };
     form.querySelector('button[type="submit"]').disabled = true;
     try {
       if (editing) await api(`/api/user/albums/${encodeURIComponent(album.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });

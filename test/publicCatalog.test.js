@@ -9,7 +9,7 @@ import {
     listDiscover,
     listPublicAlbumFiles,
 } from '../functions/utils/publicCatalog.js';
-import { parseImageTransform } from '../functions/file/imageTransform.js';
+import { parseImageTransform, transformImageRequestViaUrl } from '../functions/file/imageTransform.js';
 
 describe('public catalog policy', () => {
     const activeOwner = { status: 'active' };
@@ -72,6 +72,13 @@ describe('public catalog policy', () => {
         const strict = parseImageTransform(new URL('https://example.test/file/art.png?width=720'), { imageTransformEnabled: false });
         assert.strictEqual(strict.error, 'Image resizing is disabled');
         assert.strictEqual(strict.errorStatus, 403);
+    });
+
+    it('skips unavailable Pages image resizing when original fallback is requested', async () => {
+        const request = new Request('https://staging.cloudflare-imgbed-dxx.pages.dev/file/users/example/art.png?width=720&fallback=original');
+        const imageTransform = parseImageTransform(new URL(request.url), { imageTransformEnabled: true });
+        const response = await transformImageRequestViaUrl({ env: {}, imageTransform, request });
+        assert.strictEqual(response, null);
     });
 
     it('puts the public-only rule in both public SQL queries', async () => {

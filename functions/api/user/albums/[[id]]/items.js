@@ -5,7 +5,9 @@ export async function onRequestPost(context) {
     if (!identity) return json({ error: 'Discord sign-in is required' }, 401);
     if (!context.env.img_d1?.prepare) return json({ error: 'D1 is required' }, 503);
     const { fileId, position = 0 } = await context.request.json();
-    const album = await ownedAlbum(context.env, context.params.id, identity);
+    const albumId = normalizeAlbumIdParam(context.params.id);
+    if (!albumId) return json({ error: 'Album not found' }, 404);
+    const album = await ownedAlbum(context.env, albumId, identity);
     if (!album) return json({ error: 'Album not found' }, 404);
     const file = await context.env.img_d1.prepare('SELECT id FROM files WHERE id = ? AND owner_id = ?').bind(fileId, identity.id).first();
     if (!file) return json({ error: 'File not found' }, 404);
@@ -18,7 +20,9 @@ export async function onRequestDelete(context) {
     if (!identity) return json({ error: 'Discord sign-in is required' }, 401);
     if (!context.env.img_d1?.prepare) return json({ error: 'D1 is required' }, 503);
     const fileId = new URL(context.request.url).searchParams.get('fileId');
-    const album = await ownedAlbum(context.env, context.params.id, identity);
+    const albumId = normalizeAlbumIdParam(context.params.id);
+    if (!albumId) return json({ error: 'Album not found' }, 404);
+    const album = await ownedAlbum(context.env, albumId, identity);
     if (!album) return json({ error: 'Album not found' }, 404);
     await context.env.img_d1.prepare('DELETE FROM album_items WHERE album_id = ? AND file_id = ?').bind(album.id, fileId).run();
     return json({ success: true });
@@ -29,10 +33,18 @@ export async function onRequestPatch(context) {
     if (!identity) return json({ error: 'Discord sign-in is required' }, 401);
     if (!context.env.img_d1?.prepare) return json({ error: 'D1 is required' }, 503);
     const { fileId, position } = await context.request.json();
-    const album = await ownedAlbum(context.env, context.params.id, identity);
+    const albumId = normalizeAlbumIdParam(context.params.id);
+    if (!albumId) return json({ error: 'Album not found' }, 404);
+    const album = await ownedAlbum(context.env, albumId, identity);
     if (!album) return json({ error: 'Album not found' }, 404);
     await context.env.img_d1.prepare('UPDATE album_items SET position = ? WHERE album_id = ? AND file_id = ?').bind(Number(position) || 0, album.id, fileId).run();
     return json({ success: true });
+}
+
+export function normalizeAlbumIdParam(value) {
+    if (Array.isArray(value)) return value.length === 1 && typeof value[0] === 'string' && value[0] ? value[0] : null;
+    if (typeof value !== 'string' || !value || value.includes('/')) return null;
+    return value;
 }
 
 async function ownedAlbum(env, id, identity) {

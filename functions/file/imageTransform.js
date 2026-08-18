@@ -167,6 +167,7 @@ export async function transformImageRequestViaUrl(context) {
     }
 
     const sourceUrl = new URL(request.url);
+    if (imageTransform.fallback === 'original' && sourceUrl.hostname.toLowerCase().endsWith('.pages.dev')) return null;
     sourceUrl.searchParams.delete('width');
     sourceUrl.searchParams.delete('height');
     sourceUrl.searchParams.delete('fit');
