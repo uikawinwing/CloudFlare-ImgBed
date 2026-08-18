@@ -12,6 +12,7 @@ import {
     resolveWebDAVCredentials,
 } from '../../../utils/metadata/channelCredentials.js';
 import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
+import { absoluteThumbnailUrl, deletePermanentThumbnail } from '../../../utils/thumbnail.js';
 
 // CORS 跨域响应头
 const corsHeaders = {
@@ -148,6 +149,7 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
         // 如果文件记录不存在，直接返回成功（幂等删除）
         if (!img) {
             await purgeCFCache(env, cdnUrl);
+            await purgeCFCache(env, absoluteThumbnailUrl(url.toString(), fileId));
             const normalizedFolder = fileId.split('/').slice(0, -1).join('/');
             await purgeRandomFileListCache(url.origin, normalizedFolder);
             await purgePublicFileListCache(url.origin, normalizedFolder);
@@ -162,6 +164,12 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
                 .bind(JSON.stringify(deletingMetadata), 'deleting', fileId).run();
         }
         await purgeCFCache(env, cdnUrl);
+        await purgeCFCache(env, absoluteThumbnailUrl(url.toString(), fileId));
+
+        // 缩图是原文件的派生资源，不作为独立作品；删除原文件时尽力一起清理。
+        if (!await deletePermanentThumbnail(env, img.metadata)) {
+            console.warn(`Failed to delete permanent thumbnail for ${fileId}; continuing original deletion`);
+        }
 
         // 如果是R2渠道的图片，需要删除R2中对应的图片
         if (img.metadata?.Channel === 'CloudflareR2') {
