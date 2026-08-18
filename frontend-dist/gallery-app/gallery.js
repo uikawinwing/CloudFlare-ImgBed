@@ -5,7 +5,9 @@ const albumName = document.body.dataset.name || album;
 const creator = document.body.dataset.creator || owner;
 const description = document.body.dataset.description || '';
 
-const brand = `<a class="brand" href="/" aria-label="返回 CloudFlare ImgBed 首页"><svg viewBox="0 0 36 28" aria-hidden="true"><path d="M10.5 23.5h17a6.5 6.5 0 0 0 .5-13 10.5 10.5 0 0 0-20.2 3.6A4.8 4.8 0 0 0 10.5 23.5Z"/><path d="M12 15.5a6.5 6.5 0 0 1 12.3-2.9"/></svg><span>CloudFlare <strong>ImgBed</strong></span></a>`;
+const brand = `<a class="brand" href="/" aria-label="返回 CloudFlare ImgBed 首页"><span class="brand-mark" aria-hidden="true">I</span><span>ImgBed <small>Community</small></span></a>`;
+const themeButton = `<button class="theme-button" type="button" data-theme-toggle aria-label="切换主题"><svg class="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><g class="theme-sun"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"/></g><g class="theme-moon"><path d="M20 15.2A8.3 8.3 0 0 1 8.8 4 8.4 8.4 0 1 0 20 15.2Z"/></g></svg></button>`;
+const topbar = `${brand}<div class="top-actions"><a href="/">发现</a><span class="top-label">公开图库</span>${themeButton}</div>`;
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
@@ -43,21 +45,21 @@ function openViewer(item) {
 }
 
 async function init() {
-  root.innerHTML = `<div class="gallery-shell"><header class="gallery-topbar">${brand}<span class="top-label">公开图库</span></header><div class="loading"><span class="loading-ring" aria-hidden="true"></span><p>正在读取图库…</p></div></div>`;
+  root.innerHTML = `<div class="gallery-shell"><header class="gallery-topbar">${topbar}</header><div class="loading"><span class="loading-ring" aria-hidden="true"></span><p>正在读取图库…</p></div></div>`;
   try {
-    const response = await fetch(`/api/public/gallery/${encodeURIComponent(owner)}/${encodeURIComponent(album)}`);
+    const response = await fetch(`/api/public/gallery/${encodeURIComponent(owner)}/${encodeURIComponent(album)}`, { cache: 'no-store' });
     if (!response.ok) throw new Error(response.status === 404 ? '这个图库不存在，或尚未公开。' : '图库暂时无法读取。');
     const pack = await response.json();
     const items = Array.isArray(pack.gallery) ? pack.gallery : [];
     const cover = items[0];
     document.title = `${albumName} · CloudFlare ImgBed`;
     root.innerHTML = `<div class="gallery-shell">
-      <header class="gallery-topbar">${brand}<span class="top-label">公开图库</span></header>
+      <header class="gallery-topbar">${topbar}</header>
       <main class="gallery-main">
         <section class="gallery-head">
           <div class="cover">${cover ? itemMedia(cover, true) : ''}</div>
           <div class="gallery-copy"><h1>${escapeHtml(albumName)}</h1><p class="creator">由 <strong>${escapeHtml(creator)}</strong> 创建</p>${description ? `<p class="description">${escapeHtml(description)}</p>` : ''}<p class="item-count">${items.length} 个项目</p></div>
-          <button class="copy-button" id="copyGallery" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 14.5 5-5m-7 8H6a4 4 0 0 1 0-8h3m6 0h3a4 4 0 0 1 0 8h-3"/></svg>复制图库链接</button>
+          <button class="copy-button" id="copyGallery" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 14.5 5-5m-7 8H6a4 4 0 0 1 0-8h3m6 0h3a4 4 0 0 1 0 8h-3"/></svg><span>复制图库链接</span></button>
         </section>
         ${items.length ? `<section class="gallery-grid" aria-label="图库内容">${items.map((item, index) => `<button class="gallery-item" type="button" data-index="${index}" aria-label="查看 ${escapeHtml(item.title)}"><div class="item-media">${itemMedia(item)}</div><p class="item-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</p></button>`).join('')}</section>` : '<section class="empty"><h2>这个图库还是空的</h2><p>创作者加入内容后，会自动显示在这里。</p></section>'}
         <p class="gallery-note">公开图库中的内容可通过分享链接访问。</p>
@@ -65,13 +67,14 @@ async function init() {
     </div>`;
     document.querySelector('#copyGallery').addEventListener('click', async event => {
       await navigator.clipboard.writeText(location.href);
-      event.currentTarget.lastChild.textContent = ' 已复制';
-      setTimeout(() => { event.currentTarget.lastChild.textContent = '复制图库链接'; }, 1800);
+      const label = event.currentTarget.querySelector('span');
+      label.textContent = '已复制';
+      setTimeout(() => { label.textContent = '复制图库链接'; }, 1800);
     });
     document.querySelectorAll('[data-index]').forEach(button => button.addEventListener('click', () => openViewer(items[Number(button.dataset.index)])));
     observeVideos();
   } catch (error) {
-    root.innerHTML = `<div class="gallery-shell"><header class="gallery-topbar">${brand}<span class="top-label">公开图库</span></header><section class="gallery-error"><h1>无法打开图库</h1><p>${escapeHtml(error.message)}</p></section></div>`;
+    root.innerHTML = `<div class="gallery-shell"><header class="gallery-topbar">${topbar}</header><section class="gallery-error"><h1>无法打开图库</h1><p>${escapeHtml(error.message)}</p></section></div>`;
   }
 }
 
