@@ -3,11 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0d1119">
+  <meta name="theme-color" content="#f6f4ef">
   <meta name="description" content="管理上传文件与公开图库">
   <link rel="icon" href="/static/media/logo.png">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('imgbed-theme')||((matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light')}catch{}</script>
+  <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/account/shell.css">
   <link rel="stylesheet" href="/account/account.css">
+  <link rel="stylesheet" href="/account/unified.css">
   <title>我的文件 · CloudFlare ImgBed</title>
 </head>
 <body>
@@ -20,6 +23,8 @@
   <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
   <div id="dialogRoot"></div>
   <noscript>需要启用 JavaScript 才能管理文件与图库。</noscript>
+  <script type="module" src="/theme.js"></script>
+  <script type="module" src="/account/unified.js"></script>
   <script type="module" src="/account/account.js"></script>
 </body>
 </html>
