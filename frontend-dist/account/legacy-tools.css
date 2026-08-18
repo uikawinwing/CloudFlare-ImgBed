@@ -1,7 +1,7 @@
 .legacy-tool-host {
   position: fixed;
   z-index: 30;
-  inset: 0 0 0 var(--sidebar-width, 280px);
+  inset: 0 0 0 var(--legacy-shell-width, 280px);
   overflow: hidden;
   background: var(--app-bg, #f6f4ef);
 }
