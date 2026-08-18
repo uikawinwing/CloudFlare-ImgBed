@@ -2,29 +2,19 @@ const MAX_PAGE_SIZE = 48;
 
 export const PUBLIC_FILE_SQL = "f.visibility = 'public' AND f.moderation_status = 'active' AND u.status = 'active'";
 
-export function isPublicCatalogFile(file, owner, { discover = false } = {}) {
+export function isPublicCatalogFile(file, owner) {
     return file?.visibility === 'public'
         && file?.moderation_status === 'active'
-        && owner?.status === 'active'
-        && (!discover || Number(file?.discover_eligible) === 1);
+        && owner?.status === 'active';
 }
 
 export function resolveFilePublication(metadata, payload) {
     const visibility = payload.visibility === undefined ? (metadata.Visibility || 'private') : payload.visibility;
     if (!['private', 'unlisted', 'public'].includes(visibility)) return null;
-    const requestedDiscover = payload.discoverEligible === undefined
-        ? isEnabled(metadata.DiscoverEligible)
-        : isEnabled(payload.discoverEligible);
-    if (visibility !== 'public') {
-        if (payload.discoverEligible !== undefined && requestedDiscover) return null;
-        return { visibility, discoverEligible: 0 };
-    }
-    const discoverEligible = requestedDiscover ? 1 : 0;
-    return { visibility, discoverEligible };
-}
-
-function isEnabled(value) {
-    return value === true || value === 1 || value === '1';
+    return {
+        visibility,
+        discoverEligible: visibility === 'public' ? 1 : 0,
+    };
 }
 
 export function parseDiscoverQuery(url) {
@@ -59,7 +49,7 @@ export function decodeCursor(rawCursor) {
 export async function listDiscover(env, query, requestUrl) {
     const isFeatured = query.sort === 'featured';
     const orderColumn = isFeatured ? 'f.featured_at' : 'f.timestamp';
-    const conditions = [PUBLIC_FILE_SQL, 'f.discover_eligible = 1'];
+    const conditions = [PUBLIC_FILE_SQL];
     const bindings = [];
     if (isFeatured) conditions.push('f.featured_at IS NOT NULL');
     if (query.type === 'image') conditions.push("f.file_type LIKE 'image/%'");
