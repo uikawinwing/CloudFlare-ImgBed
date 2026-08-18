@@ -2,9 +2,9 @@ import { userAuthCheck, UnauthorizedResponse } from "../utils/auth/userAuth";
 import { fetchUploadConfig, fetchSecurityConfig, fetchPageConfig } from "../utils/sysConfig";
 import {
     createResponse, getUploadIp, getIPAddress, resolveFileExt,
-    moderateContent, purgeCDNCache, isBlockedUploadIp, buildUniqueFileId, endUpload, getImageDimensions,
-    sanitizeUploadFolder
+    moderateContent, purgeCDNCache, isBlockedUploadIp, buildUniqueFileId, endUpload, getImageDimensions
 } from "./uploadTools";
+import { resolveStorageFileName, buildHuggingFaceFilePath } from "./uploadNaming.js";
 import { initializeChunkedUpload, handleChunkUpload, uploadLargeFileToTelegram, handleCleanupRequest } from "./chunkUpload";
 import { handleChunkMerge } from "./chunkMerge";
 import { TelegramAPI } from "../utils/storage/telegramAPI";
@@ -16,7 +16,6 @@ import { getDatabase } from '../utils/databaseAdapter.js';
 import { assertUploadAllowed, getDiscordIdentity, isDiscordAuthConfigured, releaseUploadReservation } from '../utils/auth/discordIdentity.js';
 import { rejectCrossSiteMutation } from '../utils/auth/mutationSecurity.js';
 import { matchesAllowedFileSignature } from '../utils/fileSignature.js';
-import { hasExplicitAutomationCredential } from '../utils/automationCredential.js';
 import { resolveUploadTarget } from './memberUploadPolicy.js';
 
 
@@ -45,6 +44,10 @@ export async function onRequest(context) {  // Contents of context object
         return UnauthorizedResponse('Unauthorized');
     }
 
+    if (!isDiscordAuthConfigured(env)) {
+        return createResponse('Error: Discord auth is required for uploads', { status: 503 });
+    }
+
     if (isDiscordAuthConfigured(env)) {
         const identity = await getDiscordIdentity(env, request);
         if (identity) {
@@ -56,7 +59,7 @@ export async function onRequest(context) {  // Contents of context object
             if (url.searchParams.get('initChunked') === 'true' || url.searchParams.get('chunked') === 'true') {
                 return createResponse('Error: Chunked uploads are not supported for Discord accounts', { status: 400 });
             }
-        } else if (!hasExplicitAutomationCredential(request, url)) {
+        } else {
             return UnauthorizedResponse('Discord sign-in is required');
         }
     }
@@ -124,13 +127,8 @@ async function processFileUpload(context, formdata = null) {
     context.formdata = formdata;
 
     const pageConfig = await fetchPageConfig(context.env);
-    const uploadTarget = resolveUploadTarget(
-        pageConfig,
-        url.searchParams.get('uploadChannel'),
-        url.searchParams.get('channelName'),
-        context.discordIdentity,
-    );
-    // Discord 成员使用管理员设置的默认渠道；自动化上传仍可显式选择渠道。
+    const uploadTarget = resolveUploadTarget(pageConfig);
+    // storage backend 完全由管理员控制，用户不能通过 URL 覆盖。
     const urlParamUploadChannel = uploadTarget.channel;
     const urlParamChannelName = uploadTarget.channelName;
 
@@ -138,11 +136,11 @@ async function processFileUpload(context, formdata = null) {
     const uploadIp = getUploadIp(request);
     const ipAddress = await getIPAddress(context.env, uploadIp, context.securityConfig);
 
-    // 获取上传文件夹路径
-    let uploadFolder = url.searchParams.get('uploadFolder') || '';
 
-    // 路径安全性处理：防止路径穿越和特殊字符注入
-    uploadFolder = sanitizeUploadFolder(uploadFolder);
+
+
+
+
 
     let uploadChannel = 'TelegramNew';
     switch (urlParamUploadChannel) {
@@ -164,9 +162,6 @@ async function processFileUpload(context, formdata = null) {
         case 'webdav':
             uploadChannel = 'WebDAV';
             break;
-        case 'external':
-            uploadChannel = 'External';
-            break;
         default:
             uploadChannel = 'TelegramNew';
             break;
@@ -182,7 +177,7 @@ async function processFileUpload(context, formdata = null) {
         return createResponse('Error: No file provided', { status: 400 });
     }
     const fileType = file.type;
-    let fileName = file.name;
+    let fileName = String(file.name).replace(/\\/g, '/').split('/').pop();
     const fileSizeBytes = file.size; // 文件大小，单位字节
     const fileSize = (fileSizeBytes / 1024 / 1024).toFixed(2); // 文件大小，单位MB
 
@@ -214,16 +209,15 @@ async function processFileUpload(context, formdata = null) {
         }
     }
 
-    // 如果上传文件夹路径为空，尝试从文件名中获取
-    if (uploadFolder === '' || uploadFolder === null || uploadFolder === undefined) {
-        uploadFolder = fileName.split('/').slice(0, -1).join('/');
-        // 对从文件名中提取的路径也进行安全处理
-        uploadFolder = sanitizeUploadFolder(uploadFolder);
-        // 从文件名中去除路径信息，只保留文件名部分
-        fileName = fileName.split('/').pop();
-    }
-    // uploadFolder 已经过 sanitizeUploadFolder 处理，直接使用
-    const normalizedFolder = uploadFolder;
+
+
+
+
+    
+
+
+    // 用户文件不再具有 folder 路径；归类由 Album 负责。
+
 
     const metadata = {
         FileName: fileName,
@@ -235,7 +229,7 @@ async function processFileUpload(context, formdata = null) {
         ListType: "None",
         TimeStamp: time,
         Label: "None",
-        Directory: normalizedFolder === '' ? '' : normalizedFolder + '/',
+        Directory: '',
         Tags: []
     };
     if (context.discordIdentity) {
@@ -254,6 +248,7 @@ async function processFileUpload(context, formdata = null) {
 
     // 构建文件ID
     const fullId = await buildUniqueFileId(context, fileName, fileType);
+    const storageFileName = resolveStorageFileName(context, fullId, fileName);
 
     // 获得返回链接格式, default为返回/file/id, full为返回完整链接
     const returnFormat = url.searchParams.get('returnFormat') || 'default';
@@ -315,13 +310,9 @@ async function processFileUpload(context, formdata = null) {
         } else {
             err = await res.text();
         }
-    } else if (uploadChannel === 'External') {
-        // --------------------外链渠道----------------------
-        const res = await uploadFileToExternal(context, fullId, metadata, returnLink);
-        return res;
     } else {
         // ----------------Telegram New 渠道-------------------
-        const res = await uploadFileToTelegram(context, fullId, metadata, fileExt, fileName, fileType, returnLink);
+        const res = await uploadFileToTelegram(context, fullId, metadata, fileExt, storageFileName, fileType, returnLink);
         if (res.status === 200 || !autoRetry) {
             return res;
         } else {
@@ -330,7 +321,7 @@ async function processFileUpload(context, formdata = null) {
     }
 
     // 上传失败，开始自动切换渠道重试
-    const res = await tryRetry(err, context, uploadChannel, fullId, metadata, fileExt, fileName, fileType, returnLink);
+    const res = await tryRetry(err, context, uploadChannel, fullId, metadata, fileExt, storageFileName, fileType, returnLink);
     return res;
 }
 
@@ -499,7 +490,7 @@ async function uploadFileToS3(context, fullId, metadata, returnLink) {
 
 
 // 上传到Telegram
-async function uploadFileToTelegram(context, fullId, metadata, fileExt, fileName, fileType, returnLink) {
+async function uploadFileToTelegram(context, fullId, metadata, fileExt, storageFileName, fileType, returnLink) {
     const { env, waitUntil, uploadConfig, url, formdata, specifiedChannelName } = context;
     const db = getDatabase(env);
 
@@ -533,18 +524,21 @@ async function uploadFileToTelegram(context, fullId, metadata, fileExt, fileName
 
     if (fileSize > CHUNK_SIZE) {
         // 大文件分片上传
-        return await uploadLargeFileToTelegram(context, file, fullId, metadata, fileName, fileType, returnLink, tgBotToken, tgChatId, tgChannel);
+        return await uploadLargeFileToTelegram(context, file, fullId, metadata, storageFileName, fileType, returnLink, tgBotToken, tgChatId, tgChannel);
     }
 
     // 由于TG会把gif后缀的文件转为视频，所以需要修改后缀名绕过限制
+    let telegramFileName = storageFileName;
     if (fileExt === 'gif') {
-        const newFileName = fileName.replace(/\.gif$/, '.jpeg');
+        const newFileName = storageFileName.replace(/\.gif$/i, '.jpeg');
         const newFile = new File([formdata.get('file')], newFileName, { type: fileType });
         formdata.set('file', newFile);
+        telegramFileName = newFileName;
     } else if (fileExt === 'webp') {
-        const newFileName = fileName.replace(/\.webp$/, '.jpeg');
+        const newFileName = storageFileName.replace(/\.webp$/i, '.jpeg');
         const newFile = new File([formdata.get('file')], newFileName, { type: fileType });
         formdata.set('file', newFile);
+        telegramFileName = newFileName;
     }
 
     // 选择对应的发送接口
@@ -576,7 +570,7 @@ async function uploadFileToTelegram(context, fullId, metadata, fileExt, fileName
     // 上传文件到 Telegram
     let res = createResponse('upload error, check your environment params about telegram channel!', { status: 400 });
     try {
-        const response = await telegramAPI.sendFile(formdata.get('file'), tgChatId, sendFunction.url, sendFunction.type);
+        const response = await telegramAPI.sendFile(formdata.get('file'), tgChatId, sendFunction.url, sendFunction.type, '', telegramFileName);
         const fileInfo = telegramAPI.getFileInfo(response);
         const filePath = await telegramAPI.getFilePath(fileInfo.file_id);
         const id = fileInfo.file_id;
@@ -617,37 +611,6 @@ async function uploadFileToTelegram(context, fullId, metadata, fileExt, fileName
 }
 
 
-// 外链渠道
-async function uploadFileToExternal(context, fullId, metadata, returnLink) {
-    const { env, waitUntil, formdata } = context;
-    const db = getDatabase(env);
-
-    // 直接将外链写入metadata
-    metadata.Channel = "External";
-    metadata.ChannelName = "External";
-    // 从 formdata 中获取外链
-    const extUrl = formdata.get('url');
-    if (extUrl === null || extUrl === undefined) {
-        return createResponse('Error: No url provided', { status: 400 });
-    }
-    metadata.ExternalLink = extUrl;
-    // 写入KV数据库
-    try {
-        await db.put(fullId, "", {
-            metadata: metadata,
-        });
-    } catch (error) {
-        return createResponse('Error: Failed to write to KV database', { status: 500 });
-    }
-
-    // 结束上传
-    waitUntil(endUpload(context, fullId, metadata));
-
-    // 返回结果
-    return buildUploadResponse(context, returnLink);
-}
-
-
 // 上传到 Discord
 async function uploadFileToDiscord(context, fullId, metadata, returnLink) {
     const { env, waitUntil, uploadConfig, formdata, specifiedChannelName } = context;
@@ -677,7 +640,7 @@ async function uploadFileToDiscord(context, fullId, metadata, returnLink) {
 
     const file = formdata.get('file');
     const fileSize = file.size;
-    const fileName = metadata.FileName;
+    const storageFileName = resolveStorageFileName(context, fullId, metadata.FileName);
 
     // 账号上传使用已确认的 Level 3 存储服务器（100MB）；站点入口另有 95MB 安全线。
     const isNitro = discordChannel.isNitro || false;
@@ -691,7 +654,7 @@ async function uploadFileToDiscord(context, fullId, metadata, returnLink) {
 
     try {
         // 上传文件到 Discord
-        const response = await discordAPI.sendFile(file, discordChannel.channelId, fileName);
+        const response = await discordAPI.sendFile(file, discordChannel.channelId, storageFileName);
         const fileInfo = discordAPI.getFileInfo(response);
 
         if (!fileInfo) {
@@ -780,12 +743,7 @@ async function uploadFileToHuggingFace(context, fullId, metadata, returnLink) {
     const precomputedSha256 = formdata.get('sha256') || null;
     console.log('File to upload:', fileName, 'size:', file?.size, 'precomputed SHA256:', precomputedSha256 ? 'yes' : 'no');
 
-    // 生成唯一标识符前缀（UUID格式），加在文件名前面
-    const uniquePrefix = crypto.randomUUID();
-    const lastSlashIndex = fullId.lastIndexOf('/');
-    const hfFilePath = lastSlashIndex === -1 
-        ? `${uniquePrefix}_${fullId}` 
-        : `${fullId.substring(0, lastSlashIndex + 1)}${uniquePrefix}_${fullId.substring(lastSlashIndex + 1)}`;
+    const hfFilePath = buildHuggingFaceFilePath(context, fullId);
     console.log('HuggingFace file path:', hfFilePath);
 
     const huggingfaceAPI = new HuggingFaceAPI(hfChannel.token, hfChannel.repo, hfChannel.isPrivate || false);
@@ -922,7 +880,7 @@ async function uploadFileToWebDAV(context, fullId, metadata, returnLink) {
 
 
 // 自动切换渠道重试
-async function tryRetry(err, context, uploadChannel, fullId, metadata, fileExt, fileName, fileType, returnLink) {
+async function tryRetry(err, context, uploadChannel, fullId, metadata, fileExt, storageFileName, fileType, returnLink) {
     const { env, url, formdata } = context;
 
     // 渠道列表（Discord 因为有 10MB 限制，放在最后尝试）
@@ -936,7 +894,7 @@ async function tryRetry(err, context, uploadChannel, fullId, metadata, fileExt, 
     if (uploadChannel === 'CloudflareR2') {
         retryRes = await uploadFileToCloudflareR2(context, fullId, metadata, returnLink);
     } else if (uploadChannel === 'TelegramNew') {
-        retryRes = await uploadFileToTelegram(context, fullId, metadata, fileExt, fileName, fileType, returnLink);
+        retryRes = await uploadFileToTelegram(context, fullId, metadata, fileExt, storageFileName, fileType, returnLink);
     } else if (uploadChannel === 'S3') {
         retryRes = await uploadFileToS3(context, fullId, metadata, returnLink);
     } else if (uploadChannel === 'HuggingFace') {
@@ -961,7 +919,7 @@ async function tryRetry(err, context, uploadChannel, fullId, metadata, fileExt, 
             if (channelList[i] === 'CloudflareR2') {
                 res = await uploadFileToCloudflareR2(context, fullId, metadata, returnLink);
             } else if (channelList[i] === 'TelegramNew') {
-                res = await uploadFileToTelegram(context, fullId, metadata, fileExt, fileName, fileType, returnLink);
+                res = await uploadFileToTelegram(context, fullId, metadata, fileExt, storageFileName, fileType, returnLink);
             } else if (channelList[i] === 'S3') {
                 res = await uploadFileToS3(context, fullId, metadata, returnLink);
             } else if (channelList[i] === 'HuggingFace') {

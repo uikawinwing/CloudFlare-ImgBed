@@ -157,7 +157,7 @@ async function handleChannelBasedMerge(context, uploadId, totalChunks, originalF
         // 获得上传IP
         const uploadIp = getUploadIp(request);
 
-        const normalizedFolder = sanitizeUploadFolder(url.searchParams.get('uploadFolder') || '');
+        const normalizedFolder = '';
 
         // 构建基础metadata
         const metadata = {

@@ -9,7 +9,8 @@ const DEFAULT_POLICY = Object.freeze({
     autoRetry: true,
     uploadChannel: 'telegram',
     channelName: '',
-    uploadNameType: 'default',
+
+
 });
 
 function getConfigItem(pageConfig, id) {
@@ -94,10 +95,10 @@ function buildPolicy(pageConfig) {
             readConfigValue(pageConfig, 'defaultChannelName', DEFAULT_POLICY.channelName),
             DEFAULT_POLICY.channelName,
         ),
-        uploadNameType: toStringValue(
-            readConfigValue(pageConfig, 'defaultUploadNameType', DEFAULT_POLICY.uploadNameType),
-            DEFAULT_POLICY.uploadNameType,
-        ) || DEFAULT_POLICY.uploadNameType,
+        // Legacy upload naming removed.
+
+
+
     };
 
     // The bundled client compressor does not preserve WebP output correctly when
@@ -137,7 +138,8 @@ function buildBootstrapScript(policy) {
     persistedState.storeUploadChannel = policy.uploadChannel;
     persistedState.storeChannelName = policy.channelName;
     persistedState.storeAutoRetry = policy.autoRetry;
-    persistedState.storeUploadNameType = policy.uploadNameType;
+    delete persistedState.storeUploadNameType;
+    delete persistedState.storeUploadFolder;
     localStorage.setItem('vuex', JSON.stringify(persistedState));
   } catch (error) {
     console.warn('[ImgBed] Unable to apply upload policy to persisted state:', error);
@@ -152,7 +154,7 @@ function buildBootstrapScript(policy) {
 
     document.querySelectorAll('.setting-item').forEach((item) => {
       const text = (item.textContent || '').trim();
-      const isAdminOwned = /webp|compress|compression|压缩|channel|渠道|naming|命名|retry|重试/i.test(text);
+      const isAdminOwned = /webp|compress|compression|压缩|channel|渠道|naming|命名|retry|重试|folder|目录|文件夹/i.test(text);
       if (isAdminOwned) {
         item.style.display = 'none';
         item.setAttribute('aria-hidden', 'true');

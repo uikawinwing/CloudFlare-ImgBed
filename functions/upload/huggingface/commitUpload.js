@@ -9,6 +9,10 @@ import { fetchPageConfig, fetchUploadConfig } from '../../utils/sysConfig.js';
 import { getDatabase } from '../../utils/databaseAdapter.js';
 import { moderateContent, endUpload, getUploadIp, getIPAddress, sanitizeUploadFolder, createResponse } from '../uploadTools.js';
 import { userAuthCheck, UnauthorizedResponse } from '../../utils/auth/userAuth.js';
+import { getDiscordIdentity, isDiscordAuthConfigured } from '../../utils/auth/discordIdentity.js';
+import { rejectCrossSiteMutation } from '../../utils/auth/mutationSecurity.js';
+import { isOwnedCanonicalFileId } from '../uploadNaming.js';
+import { resolveUploadTarget } from '../memberUploadPolicy.js';
 
 export async function onRequestPost(context) {
     const { request, env, waitUntil } = context;
@@ -21,14 +25,31 @@ export async function onRequestPost(context) {
             return UnauthorizedResponse('Unauthorized');
         }
 
+        if (!isDiscordAuthConfigured(env)) {
+            return createResponse(JSON.stringify({ error: 'Discord auth is required for uploads' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        const identity = await getDiscordIdentity(env, request);
+        if (!identity) return UnauthorizedResponse('Discord sign-in is required');
+        const originError = rejectCrossSiteMutation(request);
+        if (originError) return originError;
+        context.discordIdentity = identity;
+
         const body = await request.json();
-        const { fullId, filePath, sha256, fileSize, fileName, fileType, channelName } = body;
+        const { fullId, filePath, sha256, fileSize, fileName, fileType } = body;
 
         if (!fullId || !filePath || !sha256 || !fileSize) {
             return createResponse(JSON.stringify({
                 error: 'Missing required fields: fullId, filePath, sha256, fileSize'
             }), {
                 status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        if (!isOwnedCanonicalFileId(identity, fullId) || filePath !== fullId) {
+            return createResponse(JSON.stringify({ error: 'Upload target does not belong to the signed-in user' }), {
+                status: 403,
                 headers: { 'Content-Type': 'application/json' }
             });
         }
@@ -40,6 +61,14 @@ export async function onRequestPost(context) {
                 error: 'Invalid fullId: contains illegal path characters'
             }), {
                 status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        const uploadTarget = resolveUploadTarget(await fetchPageConfig(env));
+        if (uploadTarget.channel !== 'huggingface') {
+            return createResponse(JSON.stringify({ error: 'HuggingFace is not the active upload backend' }), {
+                status: 403,
                 headers: { 'Content-Type': 'application/json' }
             });
         }
@@ -57,8 +86,8 @@ export async function onRequestPost(context) {
 
         // 选择渠道
         let hfChannel;
-        if (channelName) {
-            hfChannel = hfSettings.channels.find(c => c.name === channelName);
+        if (uploadTarget.channelName) {
+            hfChannel = hfSettings.channels.find(c => c.name === uploadTarget.channelName);
         }
         if (!hfChannel) {
             hfChannel = hfSettings.channels[0];
@@ -86,9 +115,9 @@ export async function onRequestPost(context) {
         // 构建文件 URL
         const fileUrl = `https://huggingface.co/datasets/${hfChannel.repo}/resolve/main/${filePath}`;
 
-        // 从 fullId 中提取目录信息
-        const dirParts = fullId.split('/').slice(0, -1).join('/');
-        const normalizedDirectory = dirParts === '' ? '' : dirParts + '/';
+        // 用户文件不再暴露 folder 语义。
+
+
 
         // 获取上传IP和地址
         const uploadIp = getUploadIp(request) || '';
@@ -108,8 +137,11 @@ export async function onRequestPost(context) {
             HfFilePath: filePath,
             TimeStamp: Date.now(),
             Label: "None",
-            Directory: normalizedDirectory,
-            Tags: []
+            Directory: '',
+            Tags: [],
+            OwnerId: identity.id,
+            Visibility: 'private',
+            ModerationStatus: 'active'
         };
 
         // 图像审查（公开仓库）

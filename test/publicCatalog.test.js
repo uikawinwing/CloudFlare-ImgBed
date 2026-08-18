@@ -9,6 +9,7 @@ import {
     listDiscover,
     listPublicAlbumFiles,
 } from '../functions/utils/publicCatalog.js';
+import { parseImageTransform } from '../functions/file/imageTransform.js';
 
 describe('public catalog policy', () => {
     const activeOwner = { status: 'active' };
@@ -42,7 +43,20 @@ describe('public catalog policy', () => {
 
     it('falls back to the original when a source cannot be resized', () => {
         const image = presentDiscoverFile({ id: 'art.gif', file_name: 'Art', file_type: 'image/gif', timestamp: 1 }, 'https://example.test/api/public/discover');
-        assert.strictEqual(image.thumbnailUrl, 'https://example.test/file/art.gif?width=720&fit=cover&fallback=original');
+        assert.strictEqual(image.thumbnailUrl, 'https://example.test/file/art.gif?width=720&fallback=original');
+    });
+
+    it('emits a Discover thumbnail URL accepted by the file image transform parser', () => {
+        const image = presentDiscoverFile({
+            id: 'users/589790434960867328/55226fd2-d75d-44d7-be34-f392ce2bd2d8.png',
+            file_name: 'venus_divinity.png',
+            file_type: 'image/png',
+            timestamp: 1,
+        }, 'https://staging.cloudflare-imgbed-dxx.pages.dev/api/public/discover');
+        const transform = parseImageTransform(new URL(image.thumbnailUrl), { imageTransformEnabled: true });
+        assert.strictEqual(transform.error, undefined);
+        assert.match(image.url, /\/file\/users\/589790434960867328\/55226fd2-d75d-44d7-be34-f392ce2bd2d8\.png$/);
+        assert.strictEqual(image.name, 'venus_divinity.png');
     });
 
     it('puts the public-only rule in both public SQL queries', async () => {

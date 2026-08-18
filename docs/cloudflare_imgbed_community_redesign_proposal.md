@@ -847,6 +847,17 @@ Discover feed
 4. migration 必须可重复/可检测
 5. 旧 route 尽可能继续工作
 
+### TODO：统一文件身份与显示名称
+
+- [x] 登录用户的实际存储与永久 `/file/...` URL 统一使用稳定的内部 ID / storage key，例如 `users/<owner>/<uuid>.<ext>`；Discord、Telegram、HuggingFace 也使用该 canonical 名称。
+- [x] 登录用户上传时的原始文件名只作为显示 metadata 使用，不参与文件读取路径。
+- [ ] 将容易误解的 `file_name` 语义整理为 `display_name` 或 `original_name`；若涉及数据库字段迁移，先保持兼容读取，再逐步切换。
+- [ ] 用户修改显示名称时不得改变永久资源 URL，也不得改变 Discord / R2 等底层存储定位。
+- [x] 用户上传必须绑定明确 owner；不再创建匿名或 ownerless 文件记录。旧式 automation credential 不再作为绕过登录的上传入口，未来如需 ST 自动上传，应改为 owner-bound Personal API Token。
+- [x] 移除 `uploadNameType` 与用户自定义 `uploadFolder`；文件归类改由 Album / Visual Pack 管理，移动分类不得改变永久 URL。
+- [x] 移除对外 `/dav/*` WebDAV 服务入口与 External 外链伪上传；WebDAV、Discord、R2、Telegram、S3、HuggingFace 仍可作为管理员控制的 storage backend。
+- [ ] 后续 storage 架构允许管理员迁移 origin，或为同一 canonical file 配置多个 origin，以便故障时切换 / fallback；canonical `/file/...` URL 不随 origin 变化。
+
 默认安全策略：
 
 > 旧文件绝不能因为新功能自动变成 Public

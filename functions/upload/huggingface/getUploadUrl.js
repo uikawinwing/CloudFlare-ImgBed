@@ -11,9 +11,13 @@
  */
 
 import { HuggingFaceAPI } from '../../utils/storage/huggingfaceAPI.js';
-import { fetchUploadConfig } from '../../utils/sysConfig.js';
+import { fetchPageConfig, fetchUploadConfig } from '../../utils/sysConfig.js';
+import { resolveUploadTarget } from '../memberUploadPolicy.js';
 import { userAuthCheck, UnauthorizedResponse } from '../../utils/auth/userAuth.js';
+import { getDiscordIdentity, isDiscordAuthConfigured } from '../../utils/auth/discordIdentity.js';
+import { rejectCrossSiteMutation } from '../../utils/auth/mutationSecurity.js';
 import { buildUniqueFileId, getUploadIp, isBlockedUploadIp, createResponse } from '../uploadTools.js';
+import { buildHuggingFaceFilePath } from '../uploadNaming.js';
 
 export async function onRequestPost(context) {
     const { request, env } = context;
@@ -27,6 +31,23 @@ export async function onRequestPost(context) {
             return UnauthorizedResponse('Unauthorized');
         }
 
+        if (!isDiscordAuthConfigured(env)) {
+            return createResponse(JSON.stringify({ error: 'Discord auth is required for uploads' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        if (isDiscordAuthConfigured(env)) {
+            const identity = await getDiscordIdentity(env, request);
+            if (identity) {
+                const originError = rejectCrossSiteMutation(request);
+                if (originError) return originError;
+                context.discordIdentity = identity;
+            }
+        }
+
+        if (!context.discordIdentity) {
+            return UnauthorizedResponse('Discord sign-in is required');
+        }
+
         // 检查上传IP是否被封禁
         const uploadIp = getUploadIp(request);
         if (await isBlockedUploadIp(env, uploadIp)) {
@@ -37,7 +58,7 @@ export async function onRequestPost(context) {
         }
 
         const body = await request.json();
-        const { fileSize, fileName, fileType, sha256, fileSample, channelName, uploadNameType, uploadFolder } = body;
+        const { fileSize, fileName, fileType, sha256, fileSample } = body;
         const normalizedFileType = fileType || 'application/octet-stream';
 
         if (!fileSize || !fileName || !sha256 || !fileSample) {
@@ -45,6 +66,15 @@ export async function onRequestPost(context) {
                 error: 'Missing required fields: fileSize, fileName, sha256, fileSample'
             }), {
                 status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // HuggingFace 直传也必须服从管理员的 storage target。
+        const uploadTarget = resolveUploadTarget(await fetchPageConfig(env));
+        if (uploadTarget.channel !== 'huggingface') {
+            return createResponse(JSON.stringify({ error: 'HuggingFace is not the active upload backend' }), {
+                status: 403,
                 headers: { 'Content-Type': 'application/json' }
             });
         }
@@ -62,8 +92,8 @@ export async function onRequestPost(context) {
 
         // 选择渠道
         let hfChannel;
-        if (channelName) {
-            hfChannel = hfSettings.channels.find(c => c.name === channelName);
+        if (uploadTarget.channelName) {
+            hfChannel = hfSettings.channels.find(c => c.name === uploadTarget.channelName);
         }
         if (!hfChannel) {
             hfChannel = hfSettings.loadBalance?.enabled
@@ -78,23 +108,10 @@ export async function onRequestPost(context) {
             });
         }
 
-        // 将命名参数添加到 URL 以便 buildUniqueFileId 使用
-        if (uploadNameType) {
-            url.searchParams.set('uploadNameType', uploadNameType);
-        }
-        if (uploadFolder) {
-            url.searchParams.set('uploadFolder', uploadFolder);
-        }
-
         // 使用统一的文件命名函数生成文件ID
         const fullId = await buildUniqueFileId(context, fileName, normalizedFileType);
 
-        // 生成唯一标识符前缀（UUID格式），加在文件名前面
-        const uniquePrefix = crypto.randomUUID();
-        const lastSlashIndex = fullId.lastIndexOf('/');
-        const filePath = lastSlashIndex === -1 
-            ? `${uniquePrefix}_${fullId}` 
-            : `${fullId.substring(0, lastSlashIndex + 1)}${uniquePrefix}_${fullId.substring(lastSlashIndex + 1)}`;
+        const filePath = buildHuggingFaceFilePath(context, fullId);
 
         // 获取 LFS 上传信息
         const huggingfaceAPI = new HuggingFaceAPI(hfChannel.token, hfChannel.repo, hfChannel.isPrivate || false);

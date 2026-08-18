@@ -15,8 +15,8 @@ import { absoluteFileUrl, createGalleryPack } from '../functions/api/public/gall
 import { rejectCrossSiteMutation } from '../functions/utils/auth/mutationSecurity.js';
 import { matchesAllowedFileSignature } from '../functions/utils/fileSignature.js';
 import { D1Database } from '../functions/utils/d1Database.js';
-import { hasExplicitAutomationCredential } from '../functions/utils/automationCredential.js';
 import { resolveUploadTarget } from '../functions/upload/memberUploadPolicy.js';
+import { onRequest as legacyDavRoute } from '../functions/dav/[[path]].js';
 
 describe('Discord identity policy', () => {
     it('uses the production callback by default and allows an isolated staging callback', () => {
@@ -106,11 +106,17 @@ describe('Discord identity policy', () => {
         assert.strictEqual(second.list_complete, true);
     });
 
-    it('keeps explicitly authenticated automation uploads separate from browser login', () => {
-        const tokenRequest = new Request('https://example.test/upload', { headers: { Authorization: 'Bearer token' } });
-        assert.strictEqual(hasExplicitAutomationCredential(tokenRequest, new URL(tokenRequest.url)), true);
-        const browserRequest = new Request('https://example.test/upload');
-        assert.strictEqual(hasExplicitAutomationCredential(browserRequest, new URL(browserRequest.url)), false);
+    it('removes ownerless and External upload target behavior', () => {
+        // Legacy anonymous / automation callers no longer choose a storage target.
+        assert.strictEqual(resolveUploadTarget({ config: [] }).channel, 'telegram');
+
+        assert.strictEqual(resolveUploadTarget({ config: [{ id: 'defaultUploadChannel', value: 'external' }] }).channel, 'telegram');
+    });
+
+    it('retires the public WebDAV service without removing WebDAV as a storage backend', () => {
+        const response = legacyDavRoute();
+        assert.strictEqual(response.status, 410);
+        assert.deepStrictEqual(resolveUploadTarget({ config: [{ id: 'defaultUploadChannel', value: 'webdav' }] }).channel, 'webdav');
     });
 
     it('keeps storage selection under administrator control for Discord members', () => {
@@ -123,8 +129,8 @@ describe('Discord identity policy', () => {
             channelName: 'CardServer',
         });
         assert.deepStrictEqual(resolveUploadTarget(pageConfig, 's3', 'automation-choice', null), {
-            channel: 's3',
-            channelName: 'automation-choice',
+            channel: 'discord',
+            channelName: 'CardServer',
         });
     });
 });
