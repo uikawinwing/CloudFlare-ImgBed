@@ -59,6 +59,23 @@ describe('public catalog policy', () => {
         assert.strictEqual(image.name, 'venus_divinity.png');
     });
 
+    it('uses the original Discover thumbnail when resizing is disabled', () => {
+        const image = presentDiscoverFile({
+            id: 'art.png',
+            file_name: 'Art',
+            file_type: 'image/png',
+            timestamp: 1,
+        }, 'https://example.test/api/public/discover');
+        const fallback = parseImageTransform(new URL(image.thumbnailUrl), { imageTransformEnabled: false });
+        assert.strictEqual(fallback.requested, false);
+        assert.strictEqual(fallback.fallback, 'original');
+        assert.strictEqual(fallback.error, undefined);
+
+        const strict = parseImageTransform(new URL('https://example.test/file/art.png?width=720'), { imageTransformEnabled: false });
+        assert.strictEqual(strict.error, 'Image resizing is disabled');
+        assert.strictEqual(strict.errorStatus, 403);
+    });
+
     it('puts the public-only rule in both public SQL queries', async () => {
         const queries = [];
         const env = {
