@@ -1,0 +1,65 @@
+.legacy-tool-host {
+  position: fixed;
+  z-index: 30;
+  inset: 0 0 0 var(--sidebar-width, 280px);
+  overflow: hidden;
+  background: var(--app-bg, #f6f4ef);
+}
+
+.legacy-tool-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--app-bg, #f6f4ef);
+}
+
+.legacy-tool-frame[hidden], .legacy-tool-host[hidden] { display: none !important; }
+
+.legacy-tool-frame iframe {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+  background: var(--app-bg, #f6f4ef);
+}
+
+.legacy-tool-first-load {
+  position: absolute;
+  z-index: 2;
+  top: 18px;
+  right: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border: 1px solid var(--app-border, rgba(0,0,0,.1));
+  border-radius: 999px;
+  background: var(--app-surface-translucent, rgba(255,255,255,.8));
+  color: var(--app-muted, #6d6d73);
+  box-shadow: var(--app-shadow-sm, 0 8px 24px rgba(0,0,0,.08));
+  pointer-events: none;
+  transition: opacity .16s ease, visibility .16s ease;
+  backdrop-filter: blur(12px);
+}
+
+.legacy-tool-first-load span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--app-accent, #7567ee);
+  animation: legacy-tool-pulse 1s ease-in-out infinite alternate;
+}
+
+.legacy-tool-first-load small { font: 600 12px/1.2 Inter, ui-sans-serif, system-ui, sans-serif; }
+.legacy-tool-frame.is-loaded .legacy-tool-first-load { opacity: 0; visibility: hidden; }
+
+@keyframes legacy-tool-pulse { from { opacity: .35; transform: scale(.82); } to { opacity: 1; transform: scale(1); } }
+
+@media (max-width: 720px) {
+  .legacy-tool-host { left: 0; }
+  .legacy-tool-first-load { top: 14px; right: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .legacy-tool-first-load span { animation: none; }
+}
