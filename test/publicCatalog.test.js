@@ -40,35 +40,26 @@ describe('public catalog policy', () => {
         assert.strictEqual(video.thumbnailUrl, null);
     });
 
-    it('emits a fixed WebP thumbnail for Discover images', () => {
+    it('emits a stable reusable thumbnail URL for Discover images', () => {
         const image = presentDiscoverFile({ id: 'art.png', file_name: 'Art', file_type: 'image/png', timestamp: 1 }, 'https://example.test/api/public/discover');
-        assert.strictEqual(image.thumbnailUrl, 'https://example.test/file/art.png?width=720&format=webp&fallback=original');
+        assert.strictEqual(image.thumbnailUrl, 'https://example.test/thumb/art.png');
     });
 
-    it('emits a Discover thumbnail URL accepted by the file image transform parser', () => {
+    it('keeps original and thumbnail URLs separate for nested file ids', () => {
         const image = presentDiscoverFile({
             id: 'users/589790434960867328/55226fd2-d75d-44d7-be34-f392ce2bd2d8.png',
             file_name: 'venus_divinity.png',
             file_type: 'image/png',
             timestamp: 1,
         }, 'https://staging.cloudflare-imgbed-dxx.pages.dev/api/public/discover');
-        const transform = parseImageTransform(new URL(image.thumbnailUrl), { imageTransformEnabled: true });
-        assert.strictEqual(transform.error, undefined);
-        assert.strictEqual(transform.options.width, 720);
-        assert.strictEqual(transform.format, 'webp');
-        assert.strictEqual(transform.outputFormat, 'image/webp');
         assert.match(image.url, /\/file\/users\/589790434960867328\/55226fd2-d75d-44d7-be34-f392ce2bd2d8\.png$/);
+        assert.match(image.thumbnailUrl, /\/thumb\/users\/589790434960867328\/55226fd2-d75d-44d7-be34-f392ce2bd2d8\.png$/);
         assert.strictEqual(image.name, 'venus_divinity.png');
     });
 
-    it('keeps the fixed Discover thumbnail active when arbitrary resizing is disabled', () => {
-        const image = presentDiscoverFile({
-            id: 'art.png',
-            file_name: 'Art',
-            file_type: 'image/png',
-            timestamp: 1,
-        }, 'https://example.test/api/public/discover');
-        const thumbnail = parseImageTransform(new URL(image.thumbnailUrl), { imageTransformEnabled: false });
+    it('keeps the dynamic WebP fallback preset available for legacy thumbnails', () => {
+        const fallbackUrl = new URL('https://example.test/file/art.png?width=720&format=webp&fallback=original');
+        const thumbnail = parseImageTransform(fallbackUrl, { imageTransformEnabled: false });
         assert.strictEqual(thumbnail.requested, true);
         assert.strictEqual(thumbnail.publicThumbnailPreset, true);
         assert.strictEqual(thumbnail.outputFormat, 'image/webp');
