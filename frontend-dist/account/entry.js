@@ -2,25 +2,28 @@ import { mountLegacyShell } from './shell.js';
 
 const entry = document.querySelector('#accountEntry');
 const root = document.documentElement;
+const params = new URLSearchParams(window.location.search);
+const embedded = params.get('embedded') === '1' || window.self !== window.top;
 const loginPath = window.location.pathname === '/login' || window.location.pathname === '/login/';
 const legacyAdminLoginPath = window.location.pathname === '/adminLogin';
 let loginObserver;
 
-function localReturnTo(fallback = '/studio') {
+function localReturnTo(fallback = '/account/?view=files') {
   const value = new URLSearchParams(window.location.search).get('returnTo');
   return value && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') ? value : fallback;
 }
 
+if (embedded) root.classList.add('legacy-embedded');
 root.classList.add('discord-auth-pending');
 entry.hidden = true;
 
 function showAuthenticatedApp(identity) {
   root.classList.remove('discord-auth-pending', 'discord-login-only');
   loginObserver?.disconnect();
-  entry.hidden = false;
+  entry.hidden = embedded;
   entry.href = '/account/?view=files';
   entry.textContent = '我的文件';
-  if (!loginPath && !legacyAdminLoginPath) mountLegacyShell(identity || {});
+  if (!embedded && !loginPath && !legacyAdminLoginPath) mountLegacyShell(identity || {});
 }
 
 function showLegacyApp() {
@@ -36,10 +39,10 @@ function renderDiscordLogin() {
   container.replaceChildren();
 
   const title = document.createElement('h1');
-  title.textContent = '登录后开始上传';
+  title.textContent = '登录后继续';
 
   const note = document.createElement('p');
-  note.textContent = '使用 Discord 验证身份，登录后即可进入上传页面。';
+  note.textContent = '使用 Discord 验证身份，登录后会返回工作区。';
 
   const login = document.createElement('a');
   login.className = 'discord-login-button';
@@ -62,11 +65,13 @@ function showDiscordLogin() {
 }
 
 function handleSignedOut() {
-  if (loginPath) {
+  if (loginPath && !embedded) {
     showDiscordLogin();
     return;
   }
-  window.location.replace(`/login?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`);
+  const target = `/login?returnTo=${encodeURIComponent(localReturnTo(`${window.location.pathname}${window.location.search}${window.location.hash}`))}`;
+  if (embedded && window.top !== window.self) window.top.location.replace(target);
+  else window.location.replace(target);
 }
 
 fetch('/api/user/me', { credentials: 'same-origin' }).then(async response => {
