@@ -1,16 +1,19 @@
 const TOOL_ROUTES = {
   access: { key: 'access', frameKey: 'access', path: '/customerConfig', hash: '', title: '上传访问' },
-  'system-upload': { key: 'system-upload', frameKey: 'system', path: '/systemConfig', hash: '#upload', title: '存储渠道' },
-  'system-page': { key: 'system-page', frameKey: 'system', path: '/systemConfig', hash: '#page', title: '网站设置' },
-  'system-security': { key: 'system-security', frameKey: 'system', path: '/systemConfig', hash: '#security', title: '安全与自动化' },
-  'system-status': { key: 'system-status', frameKey: 'system', path: '/systemConfig', hash: '#status', title: '维护工具' },
+  'system-upload': { key: 'system-upload', frameKey: 'system-upload', path: '/systemConfig', hash: '#upload', title: '存储渠道' },
+  'system-page': { key: 'system-page', frameKey: 'system-page', path: '/systemConfig', hash: '#page', title: '网站设置' },
+  'system-security': { key: 'system-security', frameKey: 'system-security', path: '/systemConfig', hash: '#security', title: '安全与自动化' },
+  'system-status': { key: 'system-status', frameKey: 'system-status', path: '/systemConfig', hash: '#status', title: '维护工具' },
 };
 
+const TOOL_PREWARM_ORDER = ['access', 'system-upload', 'system-page', 'system-security', 'system-status'];
 const main = document.querySelector('#mainContent');
 const appShell = document.querySelector('.app-shell');
 const frames = new Map();
 let host = null;
 let activeTool = TOOL_ROUTES[new URL(location.href).searchParams.get('tool')] || null;
+let prewarmScheduled = false;
+let prewarmStarted = false;
 
 function toolFromHref(value) {
   let url;
@@ -26,10 +29,6 @@ function accountTargetFromHref(value) {
   let url;
   try { url = new URL(value, location.href); } catch { return null; }
   return url.origin === location.origin && /^\/account\/?$/.test(url.pathname) ? url : null;
-}
-
-function systemToolFromHash(hash) {
-  return Object.values(TOOL_ROUTES).find(tool => tool.path === '/systemConfig' && tool.hash === (hash || '#status')) || TOOL_ROUTES['system-status'];
 }
 
 function ensureHost() {
@@ -57,18 +56,9 @@ function syncThemeIntoFrame(iframe) {
   } catch {}
 }
 
-function syncSystemFrameState(iframe) {
-  try {
-    const next = systemToolFromHash(iframe.contentWindow.location.hash);
-    if (!activeTool || activeTool.frameKey !== 'system' || next.key === activeTool.key) return;
-    activeTool = next;
-    applyToolChrome(next);
-    nativeReplace(history.state, '', buildParentToolUrl(next));
-  } catch {}
-}
-
 function ensureFrame(tool) {
   if (frames.has(tool.frameKey)) return frames.get(tool.frameKey);
+
   const wrapper = document.createElement('div');
   wrapper.className = 'legacy-tool-frame';
   wrapper.dataset.toolFrame = tool.frameKey;
@@ -76,25 +66,47 @@ function ensureFrame(tool) {
   wrapper.innerHTML = '<div class="legacy-tool-first-load"><span></span><small>首次载入管理工具…</small></div>';
 
   const iframe = document.createElement('iframe');
-  iframe.title = tool.frameKey === 'system' ? '系统设置' : tool.title;
+  iframe.title = tool.title;
   iframe.loading = 'eager';
   iframe.src = iframeSource(tool);
   iframe.setAttribute('allow', 'clipboard-read; clipboard-write');
   iframe.addEventListener('load', () => {
     wrapper.classList.add('is-loaded');
     syncThemeIntoFrame(iframe);
-    if (tool.frameKey === 'system') {
-      try {
-        iframe.contentWindow.addEventListener('hashchange', () => syncSystemFrameState(iframe));
-        syncSystemFrameState(iframe);
-      } catch {}
-    }
   });
+
   wrapper.append(iframe);
   ensureHost().append(wrapper);
   const entry = { wrapper, iframe };
   frames.set(tool.frameKey, entry);
   return entry;
+}
+
+function hasToolNavigation() {
+  return Boolean(document.querySelector('[data-shell-key="access"], [data-shell-key^="system-"]'));
+}
+
+function startToolPrewarm() {
+  if (prewarmStarted || !hasToolNavigation()) return;
+  prewarmStarted = true;
+
+  TOOL_PREWARM_ORDER.forEach((key, index) => {
+    window.setTimeout(() => {
+      const tool = TOOL_ROUTES[key];
+      if (tool) ensureFrame(tool);
+    }, index * 140);
+  });
+}
+
+function scheduleToolPrewarm() {
+  if (prewarmStarted || prewarmScheduled || !hasToolNavigation()) return;
+  prewarmScheduled = true;
+  const run = () => {
+    prewarmScheduled = false;
+    startToolPrewarm();
+  };
+  if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 450 });
+  else window.setTimeout(run, 300);
 }
 
 function setActiveNav(key) {
@@ -141,32 +153,12 @@ function buildParentToolUrl(tool) {
   return url;
 }
 
-function pointSystemFrame(tool, entry) {
-  if (tool.frameKey !== 'system') return;
-  if (!entry.wrapper.classList.contains('is-loaded')) {
-    const url = new URL(entry.iframe.src, location.href);
-    if (url.hash !== tool.hash) {
-      url.hash = tool.hash;
-      entry.iframe.src = url.href;
-    }
-    return;
-  }
-  try {
-    if (entry.iframe.contentWindow.location.hash !== tool.hash) entry.iframe.contentWindow.location.hash = tool.hash.slice(1);
-  } catch {
-    const url = new URL(entry.iframe.src, location.href);
-    url.hash = tool.hash;
-    entry.iframe.src = url.href;
-  }
-}
-
 function showTool(tool, { historyMode = 'push' } = {}) {
   if (!tool) return;
   activeTool = tool;
   const currentHost = ensureHost();
   const entry = ensureFrame(tool);
   frames.forEach(frame => { frame.wrapper.hidden = frame !== entry; });
-  pointSystemFrame(tool, entry);
   if (main) main.hidden = true;
   currentHost.hidden = false;
   applyToolChrome(tool);
@@ -195,8 +187,15 @@ history.replaceState = (state, title, value) => {
   }
 };
 
+document.addEventListener('pointerover', event => {
+  const link = event.target.closest?.('a[href]');
+  if (!link) return;
+  const tool = toolFromHref(link.href);
+  if (tool) ensureFrame(tool);
+}, true);
+
 document.addEventListener('click', event => {
-  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   const link = event.target.closest('a[href]');
   if (!link || link.target === '_blank' || link.hasAttribute('download')) return;
 
@@ -226,12 +225,12 @@ window.addEventListener('storage', event => {
 });
 
 const shellObserver = new MutationObserver(() => {
+  scheduleToolPrewarm();
   if (!activeTool) return;
   if (main) main.hidden = true;
   applyToolChrome(activeTool);
 });
 shellObserver.observe(document.body, { childList: true, subtree: true });
 
-if (activeTool) {
-  requestAnimationFrame(() => showTool(activeTool, { historyMode: 'replace' }));
-}
+scheduleToolPrewarm();
+if (activeTool) requestAnimationFrame(() => showTool(activeTool, { historyMode: 'replace' }));
