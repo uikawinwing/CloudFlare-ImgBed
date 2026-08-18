@@ -25,6 +25,6 @@ export async function onRequestGet({ request, env }) {
 function json(body, status = 200) {
     return new Response(JSON.stringify(body), {
         status,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json', 'Cache-Control': status < 400 ? 'public, max-age=60' : 'no-store' },
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });
 }
