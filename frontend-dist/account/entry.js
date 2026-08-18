@@ -13,6 +13,17 @@ function localReturnTo(fallback = '/account/?view=files') {
   return value && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') ? value : fallback;
 }
 
+function currentWorkspaceReturnTo() {
+  if (embedded && window.top !== window.self) {
+    try {
+      if (window.top.location.origin === window.location.origin) {
+        return `${window.top.location.pathname}${window.top.location.search}${window.top.location.hash}`;
+      }
+    } catch {}
+  }
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
 if (embedded) root.classList.add('legacy-embedded');
 root.classList.add('discord-auth-pending');
 entry.hidden = true;
@@ -69,7 +80,7 @@ function handleSignedOut() {
     showDiscordLogin();
     return;
   }
-  const target = `/login?returnTo=${encodeURIComponent(localReturnTo(`${window.location.pathname}${window.location.search}${window.location.hash}`))}`;
+  const target = `/login?returnTo=${encodeURIComponent(currentWorkspaceReturnTo())}`;
   if (embedded && window.top !== window.self) window.top.location.replace(target);
   else window.location.replace(target);
 }
@@ -81,7 +92,8 @@ fetch('/api/user/me', { credentials: 'same-origin' }).then(async response => {
     return;
   }
   if (legacyAdminLoginPath) {
-    window.location.replace('/login');
+    if (embedded && window.top !== window.self) window.top.location.replace('/login');
+    else window.location.replace('/login');
     return;
   }
   if (data.authenticated) {
