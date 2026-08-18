@@ -4,6 +4,7 @@ const feedStatus = document.querySelector('#feedStatus');
 const loadMore = document.querySelector('#loadMore');
 const dialogRoot = document.querySelector('#dialogRoot');
 let lastTrigger = null;
+let discoverReady = false;
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 const encodeFilePath = id => String(id).split('/').map(encodeURIComponent).join('/');
@@ -79,7 +80,12 @@ function render() {
 function featured(items) {
   const section = document.querySelector('#featured');
   const hero = document.querySelector('#heroFeature');
+  const rail = document.querySelector('#featuredRail');
   state.featuredItems = items;
+  section.hidden = true;
+  hero.hidden = true;
+  hero.innerHTML = '';
+  rail.innerHTML = '';
   const heroItem = items[0];
   document.querySelector('.hero').classList.toggle('hero-without-feature', !heroItem);
   if (!heroItem) return;
@@ -88,7 +94,7 @@ function featured(items) {
   const railItems = items.slice(1, 4);
   if (railItems.length) {
     section.hidden = false;
-    document.querySelector('#featuredRail').innerHTML = railItems.map(item => cardMarkup(item, true)).join('');
+    rail.innerHTML = railItems.map(item => cardMarkup(item, true)).join('');
   }
 }
 
@@ -102,7 +108,7 @@ async function loadFeed({ reset = false } = {}) {
     const params = new URLSearchParams({ limit: '24' });
     if (state.type !== 'all') params.set('type', state.type);
     if (state.cursor) params.set('cursor', state.cursor);
-    const response = await fetch(`/api/public/discover?${params}`, { headers: { Accept: 'application/json' } });
+    const response = await fetch(`/api/public/discover?${params}`, { cache: 'no-store', headers: { Accept: 'application/json' } });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || '暂时无法读取公开作品。');
     const items = Array.isArray(body.files) ? body.files : [];
@@ -122,13 +128,18 @@ async function loadFeed({ reset = false } = {}) {
 
 async function loadFeatured() {
   try {
-    const response = await fetch('/api/public/discover?limit=4&sort=featured', { headers: { Accept: 'application/json' } });
+    const response = await fetch('/api/public/discover?limit=4&sort=featured', { cache: 'no-store', headers: { Accept: 'application/json' } });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) return;
     featured(Array.isArray(body.files) ? body.files : []);
   } catch {
     featured([]);
   }
+}
+
+async function refreshDiscover() {
+  if (!discoverReady) return;
+  await Promise.all([loadFeatured(), loadFeed({ reset: true })]);
 }
 
 function openMedia(item) {
@@ -156,4 +167,5 @@ document.querySelector('#searchInput').addEventListener('input', render);
 loadMore.addEventListener('click', () => loadFeed());
 document.addEventListener('click', event => { const trigger = event.target.closest('[data-open-id]'); if (trigger) { lastTrigger = trigger; openMedia([...state.featuredItems, ...state.items].find(item => String(item.id) === trigger.dataset.openId)); } });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && dialogRoot.firstChild) closeDialog(); });
-Promise.all([reflectSignInState(), loadFeatured(), loadFeed()]);
+window.addEventListener('focus', refreshDiscover);
+Promise.all([reflectSignInState(), loadFeatured(), loadFeed()]).finally(() => { discoverReady = true; });
