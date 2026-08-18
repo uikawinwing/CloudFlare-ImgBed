@@ -1,3 +1,5 @@
+import { absoluteThumbnailUrl } from './thumbnail.js';
+
 const MAX_PAGE_SIZE = 48;
 
 export const PUBLIC_FILE_SQL = "f.visibility = 'public' AND f.moderation_status = 'active' AND u.status = 'active'";
@@ -76,7 +78,7 @@ export async function listDiscover(env, query, requestUrl) {
 }
 
 export async function listPublicAlbumFiles(env, albumId) {
-    const result = await env.img_d1.prepare(`SELECT f.id, f.file_name, f.timestamp
+    const result = await env.img_d1.prepare(`SELECT f.id, f.file_name, f.file_type, f.timestamp
         FROM album_items ai
         JOIN files f ON f.id = ai.file_id
         JOIN users u ON u.discord_id = f.owner_id
@@ -101,7 +103,7 @@ export function presentDiscoverFile(file, requestUrl) {
             handle: file.creator_handle || null,
         },
         url,
-        thumbnailUrl: isImage ? `${url}?width=720&format=webp&fallback=original` : null,
+        thumbnailUrl: isImage ? absoluteThumbnailUrl(requestUrl, file.id) : null,
     };
 }
 
@@ -113,5 +115,7 @@ export function absoluteFileUrl(requestUrl, fileId) {
     url.hash = '';
     return url.toString();
 }
+
+export { absoluteThumbnailUrl };
 
 export class CatalogRequestError extends Error {}
