@@ -1,3 +1,7 @@
+if (['/studio', '/studio/'].includes(location.pathname)) {
+  location.replace('/account/?view=files&upload=1');
+}
+
 function normalizeVisibilityControls(root = document) {
   root.querySelectorAll?.('.file-visibility').forEach(select => {
     const legacyUnlisted = select.querySelector('option[value="unlisted"]');
@@ -21,6 +25,15 @@ function normalizeVisibilityControls(root = document) {
   });
 }
 
+function normalizeWorkspaceNavigation(root = document) {
+  root.querySelectorAll?.('[data-shell-key="upload"], .legacy-shell-nav-item[href="/studio"], .legacy-shell-nav-item[href="/studio/"]').forEach(node => node.remove());
+}
+
+function normalizeUi(root = document) {
+  normalizeVisibilityControls(root);
+  normalizeWorkspaceNavigation(root);
+}
+
 function toggleUnifiedTheme() {
   const nativeToggle = !location.pathname.startsWith('/account')
     ? document.querySelector('#themeToggle, .toggle-dark-button.desktop-only, .toggle-dark-button')
@@ -40,17 +53,17 @@ document.addEventListener('click', event => {
 const observer = new MutationObserver(records => {
   for (const record of records) {
     record.addedNodes.forEach(node => {
-      if (node.nodeType === Node.ELEMENT_NODE) normalizeVisibilityControls(node);
+      if (node.nodeType === Node.ELEMENT_NODE) normalizeUi(node);
     });
   }
 });
 
 if (document.body) {
-  normalizeVisibilityControls();
+  normalizeUi();
   observer.observe(document.body, { childList: true, subtree: true });
 } else {
   document.addEventListener('DOMContentLoaded', () => {
-    normalizeVisibilityControls();
+    normalizeUi();
     observer.observe(document.body, { childList: true, subtree: true });
   });
 }
