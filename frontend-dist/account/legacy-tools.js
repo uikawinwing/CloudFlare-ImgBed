@@ -63,8 +63,7 @@ function syncSystemFrameState(iframe) {
     if (!activeTool || activeTool.frameKey !== 'system' || next.key === activeTool.key) return;
     activeTool = next;
     applyToolChrome(next);
-    const url = buildParentToolUrl(next);
-    nativeReplace(history.state, '', url);
+    nativeReplace(history.state, '', buildParentToolUrl(next));
   } catch {}
 }
 
@@ -144,6 +143,14 @@ function buildParentToolUrl(tool) {
 
 function pointSystemFrame(tool, entry) {
   if (tool.frameKey !== 'system') return;
+  if (!entry.wrapper.classList.contains('is-loaded')) {
+    const url = new URL(entry.iframe.src, location.href);
+    if (url.hash !== tool.hash) {
+      url.hash = tool.hash;
+      entry.iframe.src = url.href;
+    }
+    return;
+  }
   try {
     if (entry.iframe.contentWindow.location.hash !== tool.hash) entry.iframe.contentWindow.location.hash = tool.hash.slice(1);
   } catch {
@@ -188,14 +195,6 @@ history.replaceState = (state, title, value) => {
   }
 };
 
-function handleAccountLinkWhileToolOpen(event, link) {
-  if (!activeTool) return false;
-  const target = accountTargetFromHref(link.href);
-  if (!target) return false;
-  hideTool(target);
-  return false;
-}
-
 document.addEventListener('click', event => {
   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   const link = event.target.closest('a[href]');
@@ -207,7 +206,11 @@ document.addEventListener('click', event => {
     showTool(tool);
     return;
   }
-  handleAccountLinkWhileToolOpen(event, link);
+
+  if (activeTool) {
+    const target = accountTargetFromHref(link.href);
+    if (target) hideTool(target);
+  }
 }, true);
 
 window.addEventListener('popstate', () => {
