@@ -35,13 +35,6 @@ function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 }
 
-function formatBytes(bytes) {
-  const value = Number(bytes) || 0;
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
-  return `${(value / 1024 ** 2).toFixed(value < 10 * 1024 ** 2 ? 2 : 1)} MB`;
-}
-
 function copyText(value) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
   const input = document.createElement('textarea');
@@ -152,19 +145,18 @@ function patchFilesView() {
     helper.innerHTML = `<div><strong>上传就在这里</strong><span>点击“上传文件”，或把文件拖到页面；也可以直接 Ctrl+V 粘贴图片。</span></div><button type="button" data-integrated-upload-trigger ${uploadState.busy ? 'disabled' : ''}>选择文件</button>`;
   }
 
-  section.querySelector('.integrated-upload-status')?.remove();
-  section.querySelector('.integrated-upload-status.recent')?.remove();
+  section.querySelectorAll('.integrated-upload-status-slot').forEach(node => node.remove());
   const anchor = helper || section.querySelector('.file-toolbar') || section.querySelector('.page-head');
-  if (anchor) {
+  const markup = queueMarkup() || recentMarkup();
+  if (anchor && markup) {
     const status = document.createElement('div');
     status.className = 'integrated-upload-status-slot';
-    status.innerHTML = queueMarkup() || recentMarkup();
-    if (status.firstElementChild) anchor.insertAdjacentElement('afterend', status);
+    status.innerHTML = markup;
+    anchor.insertAdjacentElement('afterend', status);
   }
 }
 
 function renderUploadUi() {
-  document.querySelectorAll('.integrated-upload-status-slot').forEach(node => node.remove());
   patchFilesView();
 }
 
@@ -334,8 +326,9 @@ document.addEventListener('paste', event => {
   uploadFiles(files);
 });
 
+const mainContent = document.querySelector('#mainContent');
 const observer = new MutationObserver(() => patchFilesView());
-observer.observe(document.querySelector('#mainContent') || document.body, { childList: true, subtree: true });
+if (mainContent) observer.observe(mainContent, { childList: true });
 ensureFileInput();
 ensureDropOverlay();
 patchFilesView();
