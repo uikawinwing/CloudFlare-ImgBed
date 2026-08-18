@@ -244,12 +244,15 @@ async function uploadFiles(files) {
   uploadState.busy = false;
   const results = uploadState.queue.map(({ name, size, url, error }) => ({ name, size, url, error }));
   const succeeded = results.filter(item => item.url).length;
-  renderUploadUi();
   if (succeeded) {
+    uploadState.recent = results;
+    uploadState.queue = [];
     saveRecentUploads(results);
-    notify(`${succeeded} 个文件上传完成，正在刷新“我的文件”…`);
-    setTimeout(() => location.reload(), 450);
+    renderUploadUi();
+    notify(`${succeeded} 个文件上传完成，已加入“我的文件”。`);
+    window.dispatchEvent(new CustomEvent('imgbed:files-changed', { detail: { results } }));
   } else {
+    renderUploadUi();
     notify('这批文件没有上传成功，请查看错误信息。', 'error');
   }
 }
