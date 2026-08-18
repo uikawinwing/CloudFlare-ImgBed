@@ -2,6 +2,7 @@ const state = { items: [], featuredItems: [], cursor: null, type: 'all', loading
 const masonry = document.querySelector('#masonry');
 const feedStatus = document.querySelector('#feedStatus');
 const loadMore = document.querySelector('#loadMore');
+const feedSentinel = document.querySelector('#feedSentinel');
 const dialogRoot = document.querySelector('#dialogRoot');
 let lastTrigger = null;
 let discoverReady = false;
@@ -40,7 +41,7 @@ function setStatus(kind, message) {
 
 async function reflectSignInState() {
   try {
-    const response = await fetch('/api/user/me', { headers: { Accept: 'application/json' } });
+    const response = await fetch('/api/user/me', { cache: 'no-store', headers: { Accept: 'application/json' } });
     if (!response.ok) return;
     const body = await response.json();
     if (!body.authenticated) return;
@@ -52,16 +53,18 @@ async function reflectSignInState() {
   } catch {}
 }
 
+function mediaMarkup(item, eager = false) {
+  const title = escapeHtml(titleFor(item));
+  if (isVideo(item)) return `<div class="video-placeholder" aria-hidden="true"><span class="play-symbol"></span></div><span class="type-label">视频</span>`;
+  return `<img src="${escapeHtml(previewUrl(item))}" alt="${title}" loading="${eager ? 'eager' : 'lazy'}" decoding="async">`;
+}
+
 function cardMarkup(item, featured = false) {
   const title = escapeHtml(titleFor(item));
   const creator = escapeHtml(creatorFor(item));
   const album = item.album || item.albumName ? escapeHtml(item.album || item.albumName) : '';
-  const video = isVideo(item);
-  const media = video
-    ? `<div class="video-placeholder" aria-hidden="true"><span class="play-symbol"></span></div><span class="type-label">视频</span>`
-    : `<img src="${escapeHtml(previewUrl(item))}" alt="${title}" loading="lazy" decoding="async">`;
-  if (featured) return `<button class="feature-card" type="button" data-open-id="${escapeHtml(item.id)}"><span class="feature-media" style="aspect-ratio:${ratioFor(item)}">${media}</span><span class="feature-meta"><strong>${title}</strong><small>${creator}${album ? ` · ${album}` : ''}</small></span></button>`;
-  return `<article class="pin"><button class="pin-button" type="button" data-open-id="${escapeHtml(item.id)}"><span class="pin-media" style="aspect-ratio:${ratioFor(item)}">${media}</span><span class="pin-info"><strong class="pin-title">${title}</strong><span class="pin-by"><i aria-hidden="true">${escapeHtml(initials(creatorFor(item)))}</i>${creator}${album ? ` · ${album}` : ''}</span></span></button></article>`;
+  if (featured) return `<button class="feature-card" type="button" data-open-id="${escapeHtml(item.id)}"><span class="feature-media">${mediaMarkup(item)}</span><span class="feature-meta"><strong>${title}</strong><small>${creator}${album ? ` · ${album}` : ''}</small></span></button>`;
+  return `<article class="pin"><button class="pin-button" type="button" data-open-id="${escapeHtml(item.id)}"><span class="pin-media" style="aspect-ratio:${ratioFor(item)}">${mediaMarkup(item)}</span><span class="pin-info"><strong class="pin-title">${title}</strong><span class="pin-by"><i aria-hidden="true">${escapeHtml(initials(creatorFor(item)))}</i>${creator}${album ? ` · ${album}` : ''}</span></span></button></article>`;
 }
 
 function render() {
@@ -72,7 +75,7 @@ function render() {
   });
   masonry.innerHTML = visible.map(item => cardMarkup(item)).join('');
   if (!state.loading && !visible.length && state.items.length) setStatus('empty', '没有符合这个搜索条件的公开作品。');
-  else if (!state.loading && !state.items.length) setStatus('empty', '公开作品正在准备中。第一批作品发布后，会在这里出现。');
+  else if (!state.loading && !state.items.length) setStatus('empty', '还没有公开作品。第一批作品发布后，会在这里出现。');
   else if (!state.loading) setStatus('', '');
   loadMore.hidden = state.done || !state.items.length;
 }
@@ -82,26 +85,27 @@ function featured(items) {
   const hero = document.querySelector('#heroFeature');
   const rail = document.querySelector('#featuredRail');
   state.featuredItems = items;
-  section.hidden = true;
   hero.hidden = true;
   hero.innerHTML = '';
   rail.innerHTML = '';
   const heroItem = items[0];
-  document.querySelector('.hero').classList.toggle('hero-without-feature', !heroItem);
+  section.hidden = !heroItem;
   if (!heroItem) return;
+
   hero.hidden = false;
-  hero.innerHTML = `<button type="button" data-open-id="${escapeHtml(heroItem.id)}"><span class="hero-media" style="aspect-ratio:${ratioFor(heroItem)}">${isVideo(heroItem) ? '<span class="video-placeholder"><span class="play-symbol"></span></span>' : `<img src="${escapeHtml(previewUrl(heroItem))}" alt="${escapeHtml(titleFor(heroItem))}" loading="eager" decoding="async">`}</span><span class="hero-feature-overlay"><small>公开作品</small><strong>${escapeHtml(titleFor(heroItem))}</strong><span>${escapeHtml(creatorFor(heroItem))}</span></span></button>`;
-  const railItems = items.slice(1, 4);
-  if (railItems.length) {
-    section.hidden = false;
-    rail.innerHTML = railItems.map(item => cardMarkup(item, true)).join('');
-  }
+  hero.innerHTML = `<button type="button" data-open-id="${escapeHtml(heroItem.id)}"><span class="hero-media">${mediaMarkup(heroItem, true)}</span><span class="hero-feature-overlay"><small>精选推荐</small><strong>${escapeHtml(titleFor(heroItem))}</strong><span>${escapeHtml(creatorFor(heroItem))}</span></span></button>`;
+  rail.innerHTML = items.slice(1, 5).map(item => cardMarkup(item, true)).join('');
 }
 
 async function loadFeed({ reset = false } = {}) {
   if (state.loading || (!reset && state.done)) return;
   state.loading = true;
-  if (reset) { state.items = []; state.cursor = null; state.done = false; masonry.innerHTML = ''; }
+  if (reset) {
+    state.items = [];
+    state.cursor = null;
+    state.done = false;
+    masonry.innerHTML = '';
+  }
   setStatus('loading', '正在读取公开作品…');
   loadMore.disabled = true;
   try {
@@ -128,9 +132,9 @@ async function loadFeed({ reset = false } = {}) {
 
 async function loadFeatured() {
   try {
-    const response = await fetch('/api/public/discover?limit=4&sort=featured', { cache: 'no-store', headers: { Accept: 'application/json' } });
+    const response = await fetch('/api/public/discover?limit=5&sort=featured', { cache: 'no-store', headers: { Accept: 'application/json' } });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) return;
+    if (!response.ok) return featured([]);
     featured(Array.isArray(body.files) ? body.files : []);
   } catch {
     featured([]);
@@ -152,20 +156,50 @@ function openMedia(item) {
   dialogRoot.innerHTML = `<div class="dialog-backdrop" data-close-dialog><section class="media-dialog" role="dialog" aria-modal="true" aria-labelledby="mediaTitle" tabindex="-1"><button class="dialog-close" type="button" data-close-dialog aria-label="关闭预览">×</button><div class="dialog-visual">${media}</div><div class="dialog-panel"><p class="dialog-kicker">公开作品</p><h2 id="mediaTitle">${escapeHtml(title)}</h2><p class="dialog-by">${escapeHtml(creatorFor(item))}${handle ? ` · @${escapeHtml(handle)}` : ''}</p><div class="dialog-actions"><button class="text-button" type="button" data-copy-link>复制资源链接</button><a class="primary-button" href="${escapeHtml(originalUrl(item))}" target="_blank" rel="noopener">打开原文件</a></div></div></section></div>`;
   const dialog = dialogRoot.querySelector('.media-dialog');
   dialog.focus();
-  dialogRoot.querySelectorAll('[data-close-dialog]').forEach(button => button.addEventListener('click', event => { if (event.target === event.currentTarget || event.currentTarget.matches('button')) closeDialog(); }));
-  dialogRoot.querySelector('[data-copy-link]').addEventListener('click', async event => { await copyText(new URL(originalUrl(item), location.origin).href); event.currentTarget.textContent = '已复制'; });
+  dialogRoot.querySelectorAll('[data-close-dialog]').forEach(button => button.addEventListener('click', event => {
+    if (event.target === event.currentTarget || event.currentTarget.matches('button')) closeDialog();
+  }));
+  dialogRoot.querySelector('[data-copy-link]').addEventListener('click', async event => {
+    await copyText(new URL(originalUrl(item), location.origin).href);
+    event.currentTarget.textContent = '已复制';
+  });
 }
 
-function closeDialog() { dialogRoot.innerHTML = ''; lastTrigger?.focus(); lastTrigger = null; }
+function closeDialog() {
+  dialogRoot.innerHTML = '';
+  lastTrigger?.focus();
+  lastTrigger = null;
+}
 
 document.querySelectorAll('[data-type]').forEach(button => button.addEventListener('click', () => {
   state.type = button.dataset.type;
-  document.querySelectorAll('[data-type]').forEach(node => { const active = node === button; node.classList.toggle('is-active', active); node.setAttribute('aria-pressed', String(active)); });
+  document.querySelectorAll('[data-type]').forEach(node => {
+    const active = node === button;
+    node.classList.toggle('is-active', active);
+    node.setAttribute('aria-pressed', String(active));
+  });
   loadFeed({ reset: true });
 }));
+
 document.querySelector('#searchInput').addEventListener('input', render);
 loadMore.addEventListener('click', () => loadFeed());
-document.addEventListener('click', event => { const trigger = event.target.closest('[data-open-id]'); if (trigger) { lastTrigger = trigger; openMedia([...state.featuredItems, ...state.items].find(item => String(item.id) === trigger.dataset.openId)); } });
-document.addEventListener('keydown', event => { if (event.key === 'Escape' && dialogRoot.firstChild) closeDialog(); });
+document.addEventListener('click', event => {
+  const trigger = event.target.closest('[data-open-id]');
+  if (!trigger) return;
+  lastTrigger = trigger;
+  openMedia([...state.featuredItems, ...state.items].find(item => String(item.id) === trigger.dataset.openId));
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && dialogRoot.firstChild) closeDialog();
+});
 window.addEventListener('focus', refreshDiscover);
-Promise.all([reflectSignInState(), loadFeatured(), loadFeed()]).finally(() => { discoverReady = true; });
+
+Promise.all([reflectSignInState(), loadFeatured(), loadFeed()]).finally(() => {
+  discoverReady = true;
+  if ('IntersectionObserver' in window && feedSentinel) {
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting) && !state.loading && !state.done) loadFeed();
+    }, { rootMargin: '700px 0px' });
+    observer.observe(feedSentinel);
+  }
+});
