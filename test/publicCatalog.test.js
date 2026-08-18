@@ -14,19 +14,18 @@ import { parseImageTransform } from '../functions/file/imageTransform.js';
 describe('public catalog policy', () => {
     const activeOwner = { status: 'active' };
 
-    it('excludes private and unlisted files from every public catalog', () => {
+    it('uses public visibility as the Discover eligibility rule', () => {
         assert.strictEqual(isPublicCatalogFile({ visibility: 'private', moderation_status: 'active', discover_eligible: 1 }, activeOwner), false);
         assert.strictEqual(isPublicCatalogFile({ visibility: 'unlisted', moderation_status: 'active', discover_eligible: 1 }, activeOwner), false);
         assert.strictEqual(isPublicCatalogFile({ visibility: 'public', moderation_status: 'active', discover_eligible: 1 }, activeOwner), true);
-        assert.strictEqual(isPublicCatalogFile({ visibility: 'public', moderation_status: 'active', discover_eligible: 0 }, activeOwner, { discover: true }), false);
+        assert.strictEqual(isPublicCatalogFile({ visibility: 'public', moderation_status: 'active', discover_eligible: 0 }, activeOwner), true);
     });
 
-    it('only enables Discover for public files', () => {
-        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'private', DiscoverEligible: false }, { visibility: 'public', discoverEligible: true }), { visibility: 'public', discoverEligible: 1 });
+    it('automatically includes public files in Discover', () => {
+        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'private', DiscoverEligible: false }, { visibility: 'public' }), { visibility: 'public', discoverEligible: 1 });
         assert.deepStrictEqual(resolveFilePublication({ Visibility: 'public', DiscoverEligible: true }, { visibility: 'unlisted' }), { visibility: 'unlisted', discoverEligible: 0 });
-        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'public', DiscoverEligible: '0' }, { visibility: 'public' }), { visibility: 'public', discoverEligible: 0 });
-        assert.strictEqual(resolveFilePublication({ Visibility: 'public', DiscoverEligible: false }, { visibility: 'unlisted', discoverEligible: true }), null);
-        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'public', DiscoverEligible: true }, { visibility: 'private', discoverEligible: false }), { visibility: 'private', discoverEligible: 0 });
+        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'public', DiscoverEligible: '0' }, { visibility: 'public', discoverEligible: false }), { visibility: 'public', discoverEligible: 1 });
+        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'public', DiscoverEligible: true }, { visibility: 'private' }), { visibility: 'private', discoverEligible: 0 });
     });
 
     it('uses stable opaque cursors for the recent feed', () => {
@@ -93,6 +92,6 @@ describe('public catalog policy', () => {
             assert.match(sql, /f\.moderation_status = 'active'/);
             assert.match(sql, /u\.status = 'active'/);
         }
-        assert.match(queries[0], /f\.discover_eligible = 1/);
+        assert.doesNotMatch(queries[0], /f\.discover_eligible = 1/);
     });
 });
