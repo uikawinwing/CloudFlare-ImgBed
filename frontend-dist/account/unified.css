@@ -1,0 +1,100 @@
+:root {
+  --bg: var(--app-bg);
+  --bg-deep: var(--app-bg-deep);
+  --surface: var(--app-surface-translucent);
+  --surface-strong: var(--app-surface);
+  --surface-hover: var(--app-surface-soft);
+  --border: var(--app-border);
+  --border-strong: var(--app-border-strong);
+  --text: var(--app-text);
+  --muted: var(--app-muted);
+  --muted-strong: var(--app-muted-strong);
+  --accent: var(--app-accent);
+  --accent-hover: var(--app-accent-hover);
+  --accent-soft: var(--app-accent-soft);
+  --danger: var(--app-danger);
+  --success: var(--app-success);
+  --focus: var(--app-accent);
+  --radius-sm: var(--app-radius-sm);
+  --radius-md: var(--app-radius-md);
+  --radius-lg: var(--app-radius-lg);
+
+  --legacy-shell-bg: var(--app-bg-deep);
+  --legacy-shell-surface: var(--app-surface-translucent);
+  --legacy-shell-border: var(--app-border);
+  --legacy-shell-text: var(--app-text);
+  --legacy-shell-muted: var(--app-muted);
+  --legacy-shell-accent: var(--app-accent);
+  --legacy-shell-accent-soft: var(--app-accent-soft);
+}
+
+html, body { background: var(--app-bg) !important; color: var(--app-text); }
+body::before { background-image: var(--account-wallpaper, radial-gradient(circle at 70% 8%, var(--app-surface-soft) 0, var(--app-bg) 48%, var(--app-bg-deep) 100%)) !important; }
+:root[data-theme="light"] body::after { background: linear-gradient(90deg, rgba(246,244,239,.84), rgba(246,244,239,.72) 44%, rgba(246,244,239,.88)) !important; }
+:root[data-theme="dark"] body::after { background: linear-gradient(90deg, rgba(5,12,22,.66), rgba(5,12,22,.42) 42%, rgba(5,12,22,.72)) !important; }
+
+.main { color: var(--app-text); }
+.page-title h1, .album-body h2, .dialog-head h2, .empty-state h2, .error-state h2 { color: var(--app-text-strong); }
+.page-title p, .album-meta, .album-visibility, .media-meta, .field small, .dialog-head p { color: var(--app-muted); }
+
+.button, .search-control, .select-control, .segmented, .file-visibility, .file-action, .icon-button {
+  border-color: var(--app-border) !important;
+  background: var(--app-surface-translucent) !important;
+  color: var(--app-text) !important;
+  box-shadow: none;
+}
+.button:hover, .file-action:hover, .icon-button:hover { border-color: var(--app-border-strong) !important; background: var(--app-surface-soft) !important; }
+.button.primary { border-color: var(--app-accent) !important; background: var(--app-accent) !important; color: white !important; box-shadow: 0 10px 28px color-mix(in srgb, var(--app-accent) 20%, transparent); }
+.button.primary:hover { background: var(--app-accent-hover) !important; }
+.button.danger { color: var(--app-danger) !important; }
+.segmented button { color: var(--app-muted); }
+.segmented button.active { background: var(--app-accent-soft) !important; color: var(--app-text) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-accent) 35%, transparent); }
+.search-control:focus-within { border-color: var(--app-accent) !important; box-shadow: 0 0 0 3px var(--app-accent-soft) !important; }
+.search-control input, .field input, .field textarea { color: var(--app-text) !important; }
+
+.selection-bar, .notice-panel, .admin-tools, .media-card, .album-row, .moderation-table, .user-row, .audit-row, .dialog, .empty-state, .error-state {
+  border-color: var(--app-border) !important;
+  background: var(--app-surface-translucent) !important;
+  box-shadow: var(--app-shadow-sm) !important;
+  backdrop-filter: blur(18px);
+}
+.media-card, .album-row { border-radius: var(--app-radius-md) !important; }
+.media-card:hover, .album-row:hover { border-color: var(--app-border-strong) !important; }
+.media-card.selected { border-color: var(--app-accent) !important; box-shadow: 0 0 0 1px var(--app-accent), var(--app-shadow-sm) !important; }
+.media-frame, .album-cover, .album-item-thumb, .moderation-thumb { background: #050910 !important; }
+.media-info { background: transparent; }
+.file-visibility-help { color: var(--app-muted) !important; }
+.file-discover, .discover-option { accent-color: var(--app-accent); }
+.quota-track { background: color-mix(in srgb, var(--app-text) 10%, transparent) !important; }
+.quota-bar { background: linear-gradient(90deg, var(--app-accent), color-mix(in srgb, var(--app-accent) 72%, white)) !important; }
+
+.dialog-backdrop { background: rgba(2, 6, 12, .66) !important; backdrop-filter: blur(12px); }
+.dialog { border-radius: var(--app-radius-lg) !important; }
+.toast { border-color: var(--app-border) !important; background: var(--app-surface) !important; color: var(--app-text) !important; box-shadow: var(--app-shadow-md) !important; }
+
+.legacy-shell { border-color: var(--app-border) !important; background: color-mix(in srgb, var(--app-bg-deep) 96%, transparent) !important; box-shadow: 16px 0 48px color-mix(in srgb, #000 18%, transparent) !important; }
+.legacy-shell-brand { border-color: var(--app-border) !important; }
+.legacy-shell-brand a { color: var(--app-text) !important; }
+.legacy-shell-mark { border-color: color-mix(in srgb, var(--app-accent) 35%, transparent) !important; background: var(--app-accent-soft) !important; color: var(--app-accent) !important; }
+.legacy-shell-group > p, .legacy-shell-utilities > p { color: var(--app-muted) !important; }
+.legacy-shell-nav-item, .legacy-shell-utilities button { color: var(--app-muted-strong) !important; }
+.legacy-shell-nav-item:hover, .legacy-shell-utilities button:hover { background: var(--app-surface-soft) !important; color: var(--app-text) !important; }
+.legacy-shell-nav-item.is-active { background: var(--app-accent-soft) !important; color: var(--app-text) !important; box-shadow: inset 2px 0 0 var(--app-accent) !important; }
+.legacy-shell-account { border-color: var(--app-border) !important; background: var(--app-surface-translucent) !important; }
+.legacy-shell-account-button { color: var(--app-text) !important; }
+.legacy-shell-account-button small { color: var(--app-muted) !important; }
+.legacy-shell-account-menu { border-color: var(--app-border) !important; background: var(--app-surface) !important; box-shadow: var(--app-shadow-md) !important; }
+.legacy-shell-account-menu a { color: var(--app-text) !important; }
+.legacy-shell-account-menu a:hover, .legacy-shell-account-menu button:hover { background: var(--app-surface-soft) !important; }
+.legacy-shell-toggle { border-color: var(--app-border) !important; background: var(--app-surface-translucent) !important; color: var(--app-text) !important; }
+.legacy-upload-destination, .legacy-image-processing-button { border-color: var(--app-border) !important; background: var(--app-surface-translucent) !important; color: var(--app-text) !important; }
+.legacy-destination-change { border-color: color-mix(in srgb, var(--app-accent) 35%, transparent) !important; background: var(--app-accent-soft) !important; color: var(--app-accent) !important; }
+
+:root[data-theme="light"] .legacy-shell { background: rgba(248, 247, 243, .96) !important; }
+:root[data-theme="light"] .legacy-shell-account-menu { background: #ffffff !important; }
+:root[data-theme="light"] .legacy-shell-backdrop { background: rgba(20, 22, 28, .28) !important; }
+
+@media (max-width: 720px) {
+  .main { padding-top: 62px !important; }
+  .legacy-shell { background: color-mix(in srgb, var(--app-bg-deep) 98%, transparent) !important; }
+}
