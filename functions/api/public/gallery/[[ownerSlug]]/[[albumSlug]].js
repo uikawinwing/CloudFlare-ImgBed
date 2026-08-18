@@ -1,4 +1,8 @@
-import { absoluteFileUrl as catalogFileUrl, listPublicAlbumFiles } from '../../../../utils/publicCatalog.js';
+import {
+    absoluteFileUrl as catalogFileUrl,
+    absoluteThumbnailUrl as catalogThumbnailUrl,
+    listPublicAlbumFiles,
+} from '../../../../utils/publicCatalog.js';
 
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -32,12 +36,19 @@ export function createGalleryPack(album, albumSlug, files, requestUrl) {
         gallery: files.map((file) => ({
             title: file.file_name || file.id,
             sources: [absoluteFileUrl(requestUrl, file.id)],
+            thumbnail: String(file.file_type || '').startsWith('image/')
+                ? absoluteThumbnailUrl(requestUrl, file.id)
+                : null,
         })),
     };
 }
 
 export function absoluteFileUrl(requestUrl, fileId) {
     return catalogFileUrl(requestUrl, fileId);
+}
+
+export function absoluteThumbnailUrl(requestUrl, fileId) {
+    return catalogThumbnailUrl(requestUrl, fileId);
 }
 
 function makeEtag(album, files, lastModifiedAt) {
