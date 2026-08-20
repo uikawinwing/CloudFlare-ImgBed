@@ -8,8 +8,8 @@ export async function onRequestGet({ request, env }) {
     if (!state || state !== getCookie(request, 'discord_oauth_state') || !code) return new Response('Invalid OAuth state', { status: 400 });
     try {
         const token = await exchangeDiscordCode(env, code);
-        const { user, roles } = await fetchEligibleDiscordUser(token.access_token);
-        const identity = await upsertDiscordUser(env, user, roles);
+        const { user } = await fetchEligibleDiscordUser(token.access_token);
+        const identity = await upsertDiscordUser(env, user);
         const { cookie } = await createDiscordSession(env, identity);
         const headers = new Headers({ Location: '/my-files', 'Set-Cookie': cookie });
         headers.append('Set-Cookie', buildCookie('discord_oauth_state', '', 0));
