@@ -2,7 +2,7 @@ import { userAuthCheck, UnauthorizedResponse } from "../utils/auth/userAuth";
 import { fetchUploadConfig, fetchSecurityConfig, fetchPageConfig } from "../utils/sysConfig";
 import {
     createResponse, getUploadIp, getIPAddress, resolveFileExt,
-    moderateContent, purgeCDNCache, isBlockedUploadIp, buildUniqueFileId, endUpload, getImageDimensions
+    moderateContent, moderateContentDetailed, purgeCDNCache, isBlockedUploadIp, buildUniqueFileId, endUpload, getImageDimensions
 } from "./uploadTools";
 import { resolveStorageFileName, buildHuggingFaceFilePath } from "./uploadNaming.js";
 import { initializeChunkedUpload, handleChunkUpload, uploadLargeFileToTelegram, handleCleanupRequest } from "./chunkUpload";
@@ -15,7 +15,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getDatabase } from '../utils/databaseAdapter.js';
 import { assertUploadAllowed, getDiscordIdentity, isDiscordAuthConfigured, releaseUploadReservation } from '../utils/auth/discordIdentity.js';
 import { rejectCrossSiteMutation } from '../utils/auth/mutationSecurity.js';
-import { matchesAllowedFileSignature } from '../utils/fileSignature.js';
+import { matchesAllowedFileSignature, validateDiscordAttachment, validateImageDimensions } from '../utils/fileSignature.js';
 import { resolveUploadTarget } from './memberUploadPolicy.js';
 
 
@@ -207,6 +207,10 @@ async function processFileUpload(context, formdata = null) {
         } catch (error) {
             console.error('Error reading image dimensions:', error);
         }
+        const imageDimensionError = validateImageDimensions(imageDimensions);
+        if (imageDimensionError) {
+            return createResponse(`Error: ${imageDimensionError}`, { status: 400 });
+        }
     }
 
 
@@ -326,10 +330,14 @@ async function processFileUpload(context, formdata = null) {
 }
 
 // 构建上传成功响应，自动附带 publicUrl（如果已配置）
-function buildUploadResponse(context, returnLink) {
+function buildUploadResponse(context, returnLink, metadata = null) {
     const result = { src: returnLink };
     if (context.publicUrl) {
         result.publicUrl = context.publicUrl;
+    }
+    if (metadata?.ModerationStatus && metadata.ModerationStatus !== 'active') {
+        result.moderationStatus = metadata.ModerationStatus;
+        result.warning = 'Upload stored but withheld from public access pending moderation review';
     }
     return createResponse(JSON.stringify([result]), {
         headers: {
@@ -658,7 +666,17 @@ async function uploadFileToDiscord(context, fullId, metadata, returnLink) {
         const fileInfo = discordAPI.getFileInfo(response);
 
         if (!fileInfo) {
+            if (response?.id) await discordAPI.deleteMessage(discordChannel.channelId, response.id);
             throw new Error('Failed to get file info from Discord response');
+        }
+        const attachmentError = validateDiscordAttachment(fileInfo, {
+            size: fileSize,
+            fileType: metadata.FileType,
+            fileName: storageFileName,
+        });
+        if (attachmentError) {
+            await discordAPI.deleteMessage(discordChannel.channelId, fileInfo.message_id);
+            throw new Error(attachmentError);
         }
 
         // 更新 metadata
@@ -674,7 +692,11 @@ async function uploadFileToDiscord(context, fullId, metadata, returnLink) {
         if (discordChannel.proxyUrl) {
             moderateUrl = fileInfo.url.replace('https://cdn.discordapp.com', `https://${discordChannel.proxyUrl}`);
         }
-        metadata.Label = await moderateContent(env, moderateUrl);
+        const moderation = await moderateContentDetailed(env, moderateUrl);
+        metadata.Label = moderation.label;
+        if (moderation.status === 'failed') {
+            metadata.ModerationStatus = 'quarantined';
+        }
 
         // 写入 KV 数据库
         try {
@@ -687,7 +709,7 @@ async function uploadFileToDiscord(context, fullId, metadata, returnLink) {
         waitUntil(endUpload(context, fullId, metadata));
 
         // 返回成功响应
-        return buildUploadResponse(context, returnLink);
+        return buildUploadResponse(context, returnLink, metadata);
 
     } catch (error) {
         console.error('Discord upload error:', error.message);

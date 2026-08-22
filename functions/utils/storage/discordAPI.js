@@ -1,3 +1,5 @@
+import { isTrustedDiscordAttachmentUrl } from '../fileSignature.js';
+
 /**
  * Discord API 封装类
  * 用于上传文件到 Discord 频道并获取文件
@@ -61,6 +63,10 @@ export class DiscordAPI {
             // Discord 消息中的附件在 attachments 数组中
             if (responseData.attachments && responseData.attachments.length > 0) {
                 const attachment = responseData.attachments[0];
+                if (!isTrustedDiscordAttachmentUrl(attachment.url)) {
+                    console.error('Discord returned an untrusted attachment URL');
+                    return null;
+                }
                 return {
                     message_id: responseData.id,
                     attachment_id: attachment.id,
@@ -135,7 +141,9 @@ export class DiscordAPI {
         const message = await this.getMessage(channelId, messageId);
         
         if (message && message.attachments && message.attachments.length > 0) {
-            return message.attachments[0].url;
+            const fileUrl = message.attachments[0].url;
+            if (isTrustedDiscordAttachmentUrl(fileUrl)) return fileUrl;
+            console.error('Discord returned an untrusted attachment URL');
         }
 
         return null;

@@ -1,3 +1,5 @@
+import { ALLOWED_UPLOAD_TYPES, normalizeMediaType } from '../utils/fileSignature.js';
+
 /* ======== 文件读取工具函数 ======== */
 
 // 判断请求域名是否在允许的域名列表中
@@ -56,10 +58,13 @@ export const FILE_CACHE_CONTROL = {
 
 // 公共响应头设置函数
 export function setCommonHeaders(headers, encodedFileName, fileType, cacheControl = FILE_CACHE_CONTROL.PUBLIC) {
-    headers.set('Content-Disposition', `inline; filename="${encodedFileName}"; filename*=UTF-8''${encodedFileName}`);
+    const normalizedType = normalizeMediaType(fileType);
+    const disposition = ALLOWED_UPLOAD_TYPES.has(normalizedType) ? 'inline' : 'attachment';
+    headers.set('Content-Disposition', `${disposition}; filename="${encodedFileName}"; filename*=UTF-8''${encodedFileName}`);
     headers.set('Access-Control-Allow-Origin', '*');
     headers.set('Accept-Ranges', 'bytes');
     headers.set('Vary', 'Range');
+    headers.set('X-Content-Type-Options', 'nosniff');
 
     if (fileType) {
         headers.set('Content-Type', fileType);
@@ -86,6 +91,7 @@ export function handleHeadRequest(headers, etag = null) {
     responseHeaders.set('Access-Control-Allow-Origin', headers.get('Access-Control-Allow-Origin') || '*');
     responseHeaders.set('Accept-Ranges', headers.get('Accept-Ranges') || 'bytes');
     responseHeaders.set('Cache-Control', headers.get('Cache-Control') || 'public, max-age=2592000');
+    responseHeaders.set('X-Content-Type-Options', headers.get('X-Content-Type-Options') || 'nosniff');
 
     if (etag) {
         responseHeaders.set('ETag', etag);

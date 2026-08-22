@@ -1,4 +1,5 @@
 import { createSession, validateSession } from './sessionManager.js';
+import { ALLOWED_UPLOAD_TYPES } from '../fileSignature.js';
 
 export const DISCORD_OWNER_ID = '589790434960867328';
 export const DISCORD_GUILD_ID = '1134557553011998840';
@@ -6,7 +7,7 @@ export const DISCORD_REQUIRED_ROLE_ID = '1335363403870502912';
 export const DISCORD_CALLBACK_URL = 'https://cloudflare-imgbed-dxx.pages.dev/api/auth/discord/callback';
 export const USER_QUOTA_BYTES = 200 * 1024 * 1024;
 export const MAX_UPLOAD_BYTES = 95 * 1024 * 1024;
-export const ALLOWED_UPLOAD_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'video/mp4']);
+export { ALLOWED_UPLOAD_TYPES };
 
 export function isDiscordAuthConfigured(env) {
     return Boolean(env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET);

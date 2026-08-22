@@ -12,14 +12,17 @@ import {
 } from '../functions/utils/auth/discordIdentity.js';
 import { normalizeSlug } from '../functions/api/user/albums/index.js';
 import { normalizeAlbumIdParam } from '../functions/api/user/albums/[[id]]/items.js';
-import { absoluteFileUrl, createGalleryPack, onRequestGet as publicGalleryGet } from '../functions/api/public/gallery/[[ownerSlug]]/[[albumSlug]].js';
+import { absoluteFileUrl, createGalleryPack, onRequestGet as publicGalleryGet } from '../functions/api/public/gallery/[ownerSlug]/[albumSlug].js';
+import { onRequestGet as legacyPublicGalleryGet } from '../functions/api/public/gallery/[[ownerSlug]]/[[albumSlug]].js';
 import { normalizeCharInfoCharacterName, validateCharInfoCharacterName } from '../functions/utils/charInfoGallery.js';
 import { rejectCrossSiteMutation } from '../functions/utils/auth/mutationSecurity.js';
 import { matchesAllowedFileSignature } from '../functions/utils/fileSignature.js';
 import { D1Database } from '../functions/utils/d1Database.js';
 import { resolveUploadTarget } from '../functions/upload/memberUploadPolicy.js';
 import { onRequest as legacyDavRoute } from '../functions/dav/[[path]].js';
-import { onRequestGet as publicGalleryPageGet } from '../functions/gallery/[[ownerSlug]]/[[albumSlug]].js';
+import { onRequestGet as publicGalleryPageGet } from '../functions/gallery/[ownerSlug]/[albumSlug].js';
+import { onRequestGet as legacyPublicGalleryPageGet } from '../functions/gallery/[[ownerSlug]]/[[albumSlug]].js';
+
 
 describe('Discord identity policy', () => {
     it('uses the production callback by default and allows an isolated staging callback', () => {
@@ -63,7 +66,12 @@ describe('Discord identity policy', () => {
         assert.strictEqual(normalizeAlbumIdParam('album-id/extra'), null);
     });
 
-    it('normalizes catch-all public gallery slugs before binding them to D1', async () => {
+    it('routes public galleries by URL even when catch-all params are malformed', async () => {
+        assert.strictEqual(existsSync(new URL('../functions/api/public/gallery/[ownerSlug]/[albumSlug].js', import.meta.url)), true);
+        assert.strictEqual(existsSync(new URL('../functions/gallery/[ownerSlug]/[albumSlug].js', import.meta.url)), true);
+        assert.strictEqual(legacyPublicGalleryGet, publicGalleryGet);
+        assert.strictEqual(legacyPublicGalleryPageGet, publicGalleryPageGet);
+
         const bindings = [];
         const env = {
             img_d1: {
@@ -77,14 +85,14 @@ describe('Discord identity policy', () => {
                 },
             },
         };
-        const params = { ownerSlug: ['master'], albumSlug: ['summer'] };
-        const apiResponse = await publicGalleryGet({ request: new Request('https://example.test/api/public/gallery/master/summer'), env, params });
-        const pageResponse = await publicGalleryPageGet({ env, params });
+        const malformedParams = { ownerSlug: ['uika', 'siren'], albumSlug: [] };
+        const apiResponse = await publicGalleryGet({ request: new Request('https://example.test/api/public/gallery/uika/siren'), env, params: malformedParams });
+        const pageResponse = await publicGalleryPageGet({ request: new Request('https://example.test/gallery/uika/siren'), env, params: malformedParams });
         assert.strictEqual(apiResponse.status, 404);
         assert.strictEqual(pageResponse.status, 200);
-        assert.deepStrictEqual(bindings, [['master', 'summer'], ['master', 'summer']]);
+        assert.deepStrictEqual(bindings, [['uika', 'siren'], ['uika', 'siren']]);
 
-        const invalidResponse = await publicGalleryGet({ request: new Request('https://example.test/api/public/gallery/master/extra/summer'), env, params: { ownerSlug: ['master', 'extra'], albumSlug: ['summer'] } });
+        const invalidResponse = await publicGalleryGet({ request: new Request('https://example.test/api/public/gallery/uika/siren/extra'), env, params: malformedParams });
         assert.strictEqual(invalidResponse.status, 404);
         assert.strictEqual(bindings.length, 2);
     });

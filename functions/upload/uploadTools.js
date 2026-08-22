@@ -2,6 +2,7 @@ import { fetchSecurityConfig } from "../utils/sysConfig";
 import { purgeCFCache, purgeRandomFileListCache, purgePublicFileListCache } from "../utils/purgeCache";
 import { addFileToIndex } from "../utils/indexManager.js";
 import { getDatabase } from '../utils/databaseAdapter.js';
+import { canonicalExtensionForMediaType } from '../utils/fileSignature.js';
 
 // 统一的响应创建函数
 export function createResponse(body, options = {}) {
@@ -367,6 +368,18 @@ export async function moderateContent(env, url) {
     return label;
 }
 
+export async function moderateContentDetailed(env, url) {
+    const securityConfig = await fetchSecurityConfig(env);
+    const uploadModerate = securityConfig.upload.moderate;
+    const enabled = Boolean(uploadModerate && uploadModerate.enabled);
+    const label = await moderateContent(env, url);
+
+    if (!enabled) return { label, status: 'disabled' };
+    return label === 'None'
+        ? { label, status: 'failed' }
+        : { label, status: 'checked' };
+}
+
 // 清除CDN缓存
 export async function purgeCDNCache(env, cdnUrl, url, normalizedFolder) {
     if (env.dev_mode === 'true') {
@@ -437,7 +450,7 @@ export async function buildUniqueFileId(context, fileName, fileType = 'applicati
     const ownerId = String(context?.discordIdentity?.id || '').trim();
     if (!ownerId) throw new Error('Owned upload identity is required');
 
-    const fileExt = resolveFileExt(fileName, fileType);
+    const fileExt = canonicalExtensionForMediaType(fileType) || resolveFileExt(fileName, fileType);
     return `users/${ownerId}/${crypto.randomUUID()}.${fileExt}`;
 }
 
