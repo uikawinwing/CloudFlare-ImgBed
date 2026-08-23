@@ -1,4 +1,5 @@
-import { createGalleryPack } from '../gallery/[ownerSlug]/[albumSlug].js';
+import { charInfoVisualStorageKey } from '../../../utils/charInfoVisualConfig.js';
+import { createCharInfoVisualPack } from '../../../utils/charInfoVisualPack.js';
 import { listPublicAlbumFiles } from '../../../utils/publicCatalog.js';
 
 const CORS_HEADERS = {
@@ -22,15 +23,20 @@ export async function onRequestGet({ request, env, params }) {
     ).bind(albumId).first();
     if (!album) return json({ error: 'Gallery not found' }, 404);
 
-    const files = await listPublicAlbumFiles(env, album.id);
+    const [files, visualRow] = await Promise.all([
+        listPublicAlbumFiles(env, album.id),
+        env.img_d1.prepare('SELECT value FROM other_data WHERE key = ?').bind(charInfoVisualStorageKey(album.id)).first(),
+    ]);
+    const storedVisualConfig = typeof visualRow?.value === 'string' ? visualRow.value : null;
+
     let pack;
     try {
-        pack = createGalleryPack(album, '', files, request.url);
+        pack = createCharInfoVisualPack({ album, files, storedVisualConfig, requestUrl: request.url });
     } catch (error) {
         return json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }
 
-    const etag = makeEtag(album, files);
+    const etag = makeEtag(album, files, storedVisualConfig);
     const lastModifiedAt = Math.max(Number(album.updated_at) || 0, ...files.map((file) => Number(file.timestamp) || 0));
     const headers = publicHeaders(etag, lastModifiedAt);
     if (request.headers.get('If-None-Match') === etag) return new Response(null, { status: 304, headers });
@@ -59,13 +65,14 @@ function normalizeAlbumId(value) {
     return normalized;
 }
 
-function makeEtag(album, files) {
+function makeEtag(album, files, storedVisualConfig) {
     const signature = [
         album.id || '',
         album.public_handle || '',
         album.char_info_character_name || '',
         album.name || '',
         album.description || '',
+        storedVisualConfig || '',
         ...files.map((file) => `${file.id}:${file.file_name || ''}:${file.file_type || ''}:${file.timestamp || ''}`),
     ].join('|');
     return `W/\"${album.id}:${hashString(signature)}\"`;
