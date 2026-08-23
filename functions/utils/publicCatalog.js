@@ -12,11 +12,8 @@ export function isPublicCatalogFile(file, owner) {
 
 export function resolveFilePublication(metadata, payload) {
     const visibility = payload.visibility === undefined ? (metadata.Visibility || 'private') : payload.visibility;
-    if (!['private', 'unlisted', 'public'].includes(visibility)) return null;
-    return {
-        visibility,
-        discoverEligible: visibility === 'public' ? 1 : 0,
-    };
+    if (!['private', 'public'].includes(visibility)) return null;
+    return { visibility };
 }
 
 export function parseDiscoverQuery(url) {
