@@ -35,8 +35,9 @@ export async function onRequestPatch(context) {
     if (file.metadata?.OwnerId !== identity.id) return json({ error: 'Only the owner can change this file' }, 403);
     const payload = await context.request.json();
     const publication = resolveFilePublication(file.metadata, payload);
-    if (!publication) return json({ error: 'Discover can only be enabled for public files' }, 400);
-    const { visibility, discoverEligible } = publication;
+    if (!publication) return json({ error: 'Visibility must be private or public' }, 400);
+    const { visibility } = publication;
+    const discoverEligible = visibility === 'public' ? 1 : 0;
     let metadata = { ...file.metadata, Visibility: visibility, DiscoverEligible: discoverEligible };
 
     let thumbnailReady = hasPermanentThumbnail(metadata);
@@ -68,7 +69,6 @@ export async function onRequestPatch(context) {
         success: true,
         fileId,
         visibility,
-        discoverEligible: Boolean(discoverEligible),
         thumbnailUrl,
         thumbnailReady,
         thumbnailCreated,
