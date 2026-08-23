@@ -13,15 +13,30 @@ function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 }
 
+function mediaExtension(url) {
+  try {
+    const match = new URL(url).pathname.toLowerCase().match(/\.([a-z0-9]+)$/);
+    return match?.[1] || '';
+  } catch {
+    const match = String(url).toLowerCase().match(/\.([a-z0-9]+)(?:[?#]|$)/);
+    return match?.[1] || '';
+  }
+}
+
 function isVideo(url) {
-  try { return new URL(url).pathname.toLowerCase().endsWith('.mp4'); } catch { return String(url).toLowerCase().includes('.mp4'); }
+  return ['mp4', 'webm'].includes(mediaExtension(url));
+}
+
+function videoLabel(url) {
+  const extension = mediaExtension(url);
+  return extension === 'webm' ? 'WEBM' : 'MP4';
 }
 
 function itemMedia(item, cover = false) {
   const original = item.sources?.[0] || '';
   const src = !isVideo(original) && item.thumbnail ? item.thumbnail : original;
   const label = cover ? albumName : (item.title || '图库项目');
-  if (isVideo(original)) return `<video src="${escapeHtml(original)}" muted loop playsinline preload="metadata" aria-label="${escapeHtml(label)}"></video>${cover ? '' : '<span class="play" aria-hidden="true"></span><span class="type-label">MP4</span>'}`;
+  if (isVideo(original)) return `<video src="${escapeHtml(original)}" muted loop playsinline preload="metadata" aria-label="${escapeHtml(label)}"></video>${cover ? '' : `<span class="play" aria-hidden="true"></span><span class="type-label">${videoLabel(original)}</span>`}`;
   return `<img src="${escapeHtml(src)}" alt="${escapeHtml(label)}" ${cover ? '' : 'loading="lazy"'} decoding="async">`;
 }
 
