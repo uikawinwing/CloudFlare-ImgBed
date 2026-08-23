@@ -14,18 +14,16 @@ import { parseImageTransform, transformImageRequestViaUrl } from '../functions/f
 describe('public catalog policy', () => {
     const activeOwner = { status: 'active' };
 
-    it('uses public visibility as the Discover eligibility rule', () => {
-        assert.strictEqual(isPublicCatalogFile({ visibility: 'private', moderation_status: 'active', discover_eligible: 1 }, activeOwner), false);
-        assert.strictEqual(isPublicCatalogFile({ visibility: 'unlisted', moderation_status: 'active', discover_eligible: 1 }, activeOwner), false);
-        assert.strictEqual(isPublicCatalogFile({ visibility: 'public', moderation_status: 'active', discover_eligible: 1 }, activeOwner), true);
-        assert.strictEqual(isPublicCatalogFile({ visibility: 'public', moderation_status: 'active', discover_eligible: 0 }, activeOwner), true);
+    it('uses public visibility as the Discover rule', () => {
+        assert.strictEqual(isPublicCatalogFile({ visibility: 'private', moderation_status: 'active' }, activeOwner), false);
+        assert.strictEqual(isPublicCatalogFile({ visibility: 'public', moderation_status: 'active' }, activeOwner), true);
     });
 
-    it('automatically includes public files in Discover', () => {
-        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'private', DiscoverEligible: false }, { visibility: 'public' }), { visibility: 'public', discoverEligible: 1 });
-        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'public', DiscoverEligible: true }, { visibility: 'unlisted' }), { visibility: 'unlisted', discoverEligible: 0 });
-        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'public', DiscoverEligible: '0' }, { visibility: 'public', discoverEligible: false }), { visibility: 'public', discoverEligible: 1 });
-        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'public', DiscoverEligible: true }, { visibility: 'private' }), { visibility: 'private', discoverEligible: 0 });
+    it('only accepts private or public visibility', () => {
+        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'private' }, { visibility: 'public' }), { visibility: 'public' });
+        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'public' }, { visibility: 'private' }), { visibility: 'private' });
+        assert.deepStrictEqual(resolveFilePublication({ Visibility: 'public' }, {}), { visibility: 'public' });
+        assert.strictEqual(resolveFilePublication({ Visibility: 'private' }, { visibility: 'unlisted' }), null);
     });
 
     it('uses stable opaque cursors for the recent feed', () => {
