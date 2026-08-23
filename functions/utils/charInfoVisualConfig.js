@@ -13,8 +13,9 @@ function cleanFileId(value) {
 }
 
 function cleanColor(value) {
-    const color = cleanText(value, 7).toUpperCase();
-    return color && HEX_PATTERN.test(color) ? color : '';
+    if (typeof value !== 'string') return '';
+    const color = value.trim().toUpperCase();
+    return HEX_PATTERN.test(color) ? color : '';
 }
 
 function cleanStorySections(value) {
