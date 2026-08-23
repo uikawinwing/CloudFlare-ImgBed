@@ -54,10 +54,13 @@ describe('CharInfo visual config', () => {
     it('rejects invalid colors and a hidden main portrait', () => {
         const result = validateCharInfoVisualConfig({
             raceColor: 'red',
+            tierColor: '#AABBCCEXTRA',
             mainFileId: 'main.webp',
             viewerHiddenFileIds: ['main.webp'],
         });
-        assert.ok(result.errors.some(error => error.includes('#RRGGBB')));
+        assert.strictEqual(result.config.raceColor, '');
+        assert.strictEqual(result.config.tierColor, '');
+        assert.ok(result.errors.filter(error => error.includes('#RRGGBB')).length >= 2);
         assert.ok(result.errors.some(error => error.includes('Main portrait')));
     });
 
