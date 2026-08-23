@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#121212">
+  <meta name="description" content="在 ImgBed 中管理 CharInfo 的 EJS 视觉资料与图库">
+  <link rel="icon" href="/static/media/logo.png">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('imgbed-theme')||((matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light')}catch{}</script>
+  <link rel="stylesheet" href="/theme.css">
+  <link rel="stylesheet" href="/charinfo/charinfo.css">
+  <title>CharInfo Visual Studio · CloudFlare ImgBed</title>
+</head>
+<body>
+  <header class="studio-topbar">
+    <a class="button ghost" href="/account/?view=albums">← 我的图库</a>
+    <div class="studio-title">
+      <strong>CharInfo Visual Studio</strong>
+      <span>只管理 EJS Visual Profile，不修改角色正文、MVU、技能或世界书内容。</span>
+    </div>
+    <button class="button primary" id="saveButton" type="button" disabled>保存视觉资料</button>
+  </header>
+
+  <main class="studio-shell" id="studioRoot" aria-busy="true">
+    <aside class="studio-sidebar">
+      <section class="panel">
+        <div class="section-head compact"><div><h2>角色图库</h2><p>一个 Album 对应一个固定视觉身份。</p></div></div>
+        <label class="field"><span>选择 Album</span><select id="albumSelect" disabled></select></label>
+        <button class="button full" id="newAlbumToggle" type="button">＋ 新建 CharInfo Album</button>
+        <form class="new-album-form" id="newAlbumForm" hidden>
+          <label class="field"><span>Album 名称</span><input id="newAlbumName" maxlength="80" required placeholder="例如：瑟涟 · CharInfo"></label>
+          <label class="field"><span>角色完整姓名</span><input id="newCharacterName" maxlength="80" required placeholder="必须与 CharInfo 角色名一致"></label>
+          <div class="inline-actions"><button class="button primary" type="submit">创建</button><button class="button ghost" id="cancelNewAlbum" type="button">取消</button></div>
+        </form>
+      </section>
+
+      <section class="panel safety-panel">
+        <strong>安全边界</strong>
+        <p>这里保存的资料以后只会 overlay 到 CharInfo 的 EJS visual layer。Remote resolver 不允许写 Worldbook、MVU 或其他角色内容。</p>
+      </section>
+    </aside>
+
+    <div class="studio-main">
+      <div class="loading-card" id="loadingCard"><span class="spinner"></span><p>正在读取 ImgBed 账户与图库…</p></div>
+      <div id="editor" hidden>
+        <section class="panel">
+          <div class="section-head"><div><h1>视觉资料</h1><p>保留你原本 Creator Editor 的 EJS profile 字段，但不再输出 EJS，也不编辑 Worldbook。</p></div><span class="save-state" id="saveState">尚未修改</span></div>
+          <div class="grid two">
+            <label class="field"><span>角色完整姓名 <b>*</b></span><input id="characterName" maxlength="80" autocomplete="off"></label>
+            <label class="field"><span>登场台词</span><input id="entranceQuote" maxlength="4000" autocomplete="off"></label>
+            <label class="field"><span>性别</span><input id="sex" maxlength="80" autocomplete="off"></label>
+            <label class="field"><span>种族</span><input id="race" maxlength="120" autocomplete="off"></label>
+            <label class="field"><span>作者</span><input id="author" maxlength="120" autocomplete="off"></label>
+            <label class="field"><span>版本 / 更新标记</span><input id="profileVersion" maxlength="80" autocomplete="off"></label>
+            <label class="field full"><span>作者说明</span><textarea id="authorNote" maxlength="4000" rows="3"></textarea></label>
+          </div>
+          <div class="color-grid">
+            <label class="field"><span>种族颜色</span><div class="color-input"><input id="raceColorPicker" type="color" value="#A9DBC3"><input id="raceColor" maxlength="7" placeholder="#A9DBC3"></div></label>
+            <label class="field"><span>阶层颜色</span><div class="color-input"><input id="tierColorPicker" type="color" value="#B7D9E8"><input id="tierColor" maxlength="7" placeholder="#B7D9E8"></div></label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head"><div><h2>角色故事</h2><p>这是现有 EJS Visual Profile 的 metadata.story_sections，不会写进角色正文。</p></div><button class="button" id="addStory" type="button">＋ 添加段落</button></div>
+          <div class="story-list" id="storyList"></div>
+        </section>
+
+        <section class="panel gallery-panel">
+          <div class="section-head"><div><h2>Gallery</h2><p>直接上传到 ImgBed；成功后自动加入当前 Album，不再复制粘贴图片 URL。</p></div><div class="inline-actions"><input id="fileInput" type="file" multiple hidden accept="image/jpeg,image/png,image/gif,image/webp,image/avif,video/mp4,video/webm"><button class="button primary" id="uploadButton" type="button">＋ 上传媒体</button></div></div>
+          <button class="upload-drop" id="uploadDrop" type="button"><strong>拖图片 / MP4 / WebM 到这里</strong><span>或点击选择文件；单个文件上限沿用 ImgBed 的 95 MB。</span><small id="uploadStatus"></small></button>
+
+          <div class="gallery-role-grid">
+            <label class="field"><span>主立绘</span><select id="mainFile"></select></label>
+            <label class="field"><span>状态栏头像</span><select id="avatarFile"></select><small>只允许图片。</small></label>
+            <label class="field"><span>角色库封面</span><select id="coverFile"></select><small>只允许图片。</small></label>
+          </div>
+          <div class="gallery-list" id="galleryList"></div>
+        </section>
+
+        <section class="panel preview-panel">
+          <div class="section-head"><div><h2>快速预览</h2><p>只预览 visual layer；不会读取或模拟角色技能、数值与 MVU。</p></div></div>
+          <div class="visual-preview" id="visualPreview"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+  <script type="module" src="/theme.js"></script>
+  <script type="module" src="/charinfo/charinfo.js"></script>
+</body>
+</html>
