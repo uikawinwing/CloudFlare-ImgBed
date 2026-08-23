@@ -62,6 +62,14 @@ function previewUrl(file) {
   return isImage && file.visibility === 'public' ? thumbnailUrl(file) : fileUrl(file);
 }
 
+function isVideoFile(file) {
+  return String(file?.file_type || '').startsWith('video/');
+}
+
+function videoTypeLabel(file) {
+  return String(file?.file_type || '').toLowerCase() === 'video/webm' ? 'WEBM' : 'MP4';
+}
+
 async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
@@ -209,7 +217,7 @@ async function loadAlbums(includeItems = true) {
 }
 
 function fileCard(file) {
-  const isVideo = file.file_type === 'video/mp4';
+  const isVideo = isVideoFile(file);
   const selected = state.selected.has(file.id);
   const src = fileUrl(file);
   const preview = previewUrl(file);
@@ -221,7 +229,7 @@ function fileCard(file) {
   return `<article class="media-card${selected ? ' selected' : ''}" data-file-id="${escapeHtml(file.id)}">
     <input class="media-select" type="checkbox" aria-label="选择 ${escapeHtml(mediaLabel)}" ${selected ? 'checked' : ''}>
     <button class="media-frame" type="button" aria-label="预览 ${escapeHtml(mediaLabel)}">
-      ${isVideo ? `<video src="${src}" muted loop playsinline preload="metadata"></video><span class="play" aria-hidden="true"></span><span class="media-type">MP4</span>` : `<img src="${escapeHtml(preview)}" alt="${escapeHtml(mediaLabel)}" loading="lazy" decoding="async">`}
+      ${isVideo ? `<video src="${src}" muted loop playsinline preload="metadata"></video><span class="play" aria-hidden="true"></span><span class="media-type">${videoTypeLabel(file)}</span>` : `<img src="${escapeHtml(preview)}" alt="${escapeHtml(mediaLabel)}" loading="lazy" decoding="async">`}
     </button>
     <div class="media-info">
       <p class="media-name" title="${escapeHtml(file.file_name || file.id)}">${escapeHtml(file.file_name || file.id)}</p>
@@ -235,7 +243,7 @@ function fileCard(file) {
 function visibleFiles() {
   const query = state.fileQuery.trim().toLocaleLowerCase('zh-CN');
   return state.files
-    .filter(file => state.filter === 'all' || (state.filter === 'video' ? file.file_type === 'video/mp4' : file.file_type !== 'video/mp4'))
+    .filter(file => state.filter === 'all' || (state.filter === 'video' ? isVideoFile(file) : !isVideoFile(file)))
     .filter(file => !query || String(file.file_name || file.id).toLocaleLowerCase('zh-CN').includes(query))
     .sort((a, b) => {
       if (state.fileSort === 'oldest') return Number(a.timestamp || 0) - Number(b.timestamp || 0);
@@ -251,7 +259,7 @@ function renderFiles() {
   const filtered = visibleFiles();
   main.innerHTML = `<section class="page-section">
     <header class="page-head">
-      <div class="page-title"><h1>我的文件</h1><p>集中管理上传的图片、动图和 MP4 视频。</p></div>
+      <div class="page-title"><h1>我的文件</h1><p>集中管理上传的图片、动图、MP4 和 WebM 视频。</p></div>
       <div class="head-actions">
         <div class="quota" aria-label="个人容量">
           <div class="quota-copy"><span>${quota ? `已使用 ${formatBytes(used)} / 200 MB` : `已使用 ${formatBytes(used)}`}</span><span>${quota ? `${Math.min(100, Math.round(used / quota * 100))}%` : '所有者不限额'}</span></div>
@@ -273,7 +281,7 @@ function renderFiles() {
       <div class="selection-copy"><strong>已选择 ${state.selected.size} 项</strong><button class="button ghost" id="clearSelection" type="button">取消选择</button></div>
       <div class="selection-actions"><button class="button" id="addToAlbum" type="button">${icons.folder}加入图库</button><button class="button danger" id="deleteSelected" type="button">${icons.trash}永久删除</button></div>
     </div>` : ''}
-    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '试试更换筛选条件或搜索词。' : '点击上传文件，或直接拖拽 / Ctrl+V 粘贴 JPG、PNG、GIF、WebP、AVIF 或 MP4。'}</p>${state.files.length ? '' : `<button class="button primary" type="button" data-integrated-upload-trigger>${icons.upload}上传第一个文件</button>`}</div>`}
+    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '试试更换筛选条件或搜索词。' : '点击上传文件，或直接拖拽 / Ctrl+V 粘贴 JPG、PNG、GIF、WebP、AVIF、MP4 或 WebM。'}</p>${state.files.length ? '' : `<button class="button primary" type="button" data-integrated-upload-trigger>${icons.upload}上传第一个文件</button>`}</div>`}
   </section>`;
   bindFileEvents();
   observeVideos();
@@ -282,7 +290,7 @@ function renderFiles() {
 function albumRow(album) {
   const items = album.items || [];
   const cover = items.find(item => item.moderation_status !== 'quarantined');
-  const coverMedia = cover ? (cover.file_type === 'video/mp4' ? `<video src="${fileUrl(cover)}" muted loop playsinline preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(cover))}" alt="${escapeHtml(cover.file_name || album.name)}" loading="lazy" decoding="async">`) : `<span class="empty-icon">${icons.image}</span>`;
+  const coverMedia = cover ? (isVideoFile(cover) ? `<video src="${fileUrl(cover)}" muted loop playsinline preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(cover))}" alt="${escapeHtml(cover.file_name || album.name)}" loading="lazy" decoding="async">`) : `<span class="empty-icon">${icons.image}</span>`;
   const canShare = album.visibility === 'public' && state.user.publicHandle;
   const canShareCharInfo = canShare && Boolean(album.charInfoCharacterName);
   const shareUrl = canShare ? `${location.origin}/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
@@ -331,14 +339,14 @@ async function loadAdminData() {
 }
 
 function moderationRow(file) {
-  const isVideo = file.file_type === 'video/mp4';
+  const isVideo = isVideoFile(file);
   const canRestore = ['admin', 'owner'].includes(state.user.role);
   const status = file.moderation_status === 'quarantined' ? '已撤下' : file.moderation_status === 'deleting' ? '删除处理中' : '正常';
   return `<article class="moderation-row" data-file-id="${escapeHtml(file.id)}">
     <button class="moderation-thumb" type="button" data-preview-admin aria-label="预览 ${escapeHtml(file.file_name || file.id)}">${isVideo ? `<video src="${fileUrl(file)}" muted playsinline preload="metadata"></video>` : `<img src="${fileUrl(file)}" alt="" loading="lazy">`}</button>
     <div class="moderation-copy file-column"><strong>${escapeHtml(file.file_name || file.id)}</strong><span>${escapeHtml(file.id)}</span></div>
     <div class="moderation-copy owner-column"><strong>${escapeHtml(file.owner_name || '未绑定账号')}</strong><span>${escapeHtml(file.owner_id || '旧文件')}</span></div>
-    <div class="moderation-copy type-column"><strong>${isVideo ? '视频 / MP4' : '图片'}</strong><span>${formatBytes(file.file_size_bytes)}</span></div>
+    <div class="moderation-copy type-column"><strong>${isVideo ? `视频 / ${videoTypeLabel(file)}` : '图片'}</strong><span>${formatBytes(file.file_size_bytes)}</span></div>
     <time class="moderation-time">${formatDate(file.timestamp)}</time>
     <span class="status-chip ${file.moderation_status === 'active' ? 'success' : 'danger'}">${status}</span>
     <div class="moderation-actions">${file.moderation_status === 'active' ? '<button class="button" type="button" data-quarantine>先撤下</button>' : ''}${file.moderation_status === 'quarantined' && canRestore ? '<button class="button" type="button" data-restore>恢复</button><button class="button danger" type="button" data-hard-delete>永久删除</button>' : ''}</div>
@@ -485,7 +493,7 @@ async function ensurePublicHandle() {
 }
 
 function previewFile(file) {
-  const isVideo = file.file_type === 'video/mp4';
+  const isVideo = isVideoFile(file);
   openDialog(`<div class="dialog-head"><div><h2>${escapeHtml(file.file_name || file.id)}</h2><p style="color:var(--muted);margin:6px 0 0">${formatBytes(file.file_size_bytes)}</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
     <div class="dialog-body"><div class="media-frame" style="aspect-ratio:16/10;border-radius:12px">${isVideo ? `<video src="${fileUrl(file)}" autoplay muted loop playsinline controls></video>` : `<img src="${fileUrl(file)}" alt="${escapeHtml(file.file_name || '')}">`}</div></div>`, { wide: true });
 }
@@ -676,7 +684,7 @@ function bindAlbumEvents() {
 function manageAlbumItems(album) {
   const items = [...(album.items || [])].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
   const rows = items.map((item, index) => `<article class="album-item-row" data-file-id="${escapeHtml(item.id)}">
-    <div class="album-item-thumb">${item.file_type === 'video/mp4' ? `<video src="${fileUrl(item)}" muted playsinline preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(item.file_name || item.id)}" loading="lazy" decoding="async">`}</div>
+    <div class="album-item-thumb">${isVideoFile(item) ? `<video src="${fileUrl(item)}" muted playsinline preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(item.file_name || item.id)}" loading="lazy" decoding="async">`}</div>
     <div class="album-item-copy"><strong>${escapeHtml(item.file_name || item.id)}</strong><span>${formatBytes(item.file_size_bytes)}</span></div>
     <div class="album-item-actions"><button class="icon-button" type="button" data-move-up aria-label="上移" ${index === 0 ? 'disabled' : ''}>↑</button><button class="icon-button" type="button" data-move-down aria-label="下移" ${index === items.length - 1 ? 'disabled' : ''}>↓</button><button class="button danger" type="button" data-remove-item>移出图库</button></div>
   </article>`).join('');
