@@ -44,7 +44,7 @@ describe('Discord identity policy', () => {
     });
 
     it('limits Discord uploads to the agreed formats and sizes', () => {
-        assert.deepStrictEqual([...ALLOWED_UPLOAD_TYPES].sort(), ['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp', 'video/mp4']);
+        assert.deepStrictEqual([...ALLOWED_UPLOAD_TYPES].sort(), ['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm']);
         assert.strictEqual(MAX_UPLOAD_BYTES, 95 * 1024 * 1024);
         assert.strictEqual(USER_QUOTA_BYTES, 200 * 1024 * 1024);
     });
@@ -101,6 +101,7 @@ describe('Discord identity policy', () => {
         const pack = createGalleryPack({ id: 'album-id', public_handle: 'master', discord_id: 'discord-id', username: 'Master', char_info_character_name: '维奥莱塔·马克西姆·奥古斯塔' }, 'summer', [
             { id: 'folder/a b.png', file_name: 'First image.png', file_type: 'image/png', timestamp: 1 },
             { id: 'second.mp4', file_name: 'Second video.mp4', file_type: 'video/mp4', timestamp: 2 },
+            { id: 'third.webm', file_name: 'Third video.webm', file_type: 'video/webm', timestamp: 3 },
         ], 'http://example.test/api/public/gallery/master/summer');
         assert.strictEqual(pack.format, 'char-info-gallery-pack');
         assert.strictEqual(pack.packId, 'master');
@@ -109,6 +110,7 @@ describe('Discord identity policy', () => {
         assert.deepStrictEqual(pack.gallery, [
             { title: 'First image.png', sources: ['https://example.test/file/folder/a%20b.png'], thumbnail: 'https://example.test/thumb/folder/a%20b.png' },
             { title: 'Second video.mp4', sources: ['https://example.test/file/second.mp4'], thumbnail: null },
+            { title: 'Third video.webm', sources: ['https://example.test/file/third.webm'], thumbnail: null },
         ]);
         assert.strictEqual(absoluteFileUrl('http://example.test/x', 'a.png'), 'https://example.test/file/a.png');
     });
@@ -130,9 +132,20 @@ describe('Discord identity policy', () => {
 
     it('checks file bytes instead of trusting the browser MIME label', async () => {
         const png = new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0])]);
+        const webm = new Blob([new Uint8Array([
+            0x1a, 0x45, 0xdf, 0xa3, 0x9f,
+            0x42, 0x86, 0x81, 0x01,
+            0x42, 0xf7, 0x81, 0x01,
+            0x42, 0xf2, 0x81, 0x04,
+            0x42, 0xf3, 0x81, 0x08,
+            0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6d,
+        ])]);
+        const fakeWebm = new Blob([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x02, 0x03, 0x04])]);
         const fake = new Blob([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])]);
         assert.strictEqual(await matchesAllowedFileSignature(png, 'image/png'), true);
         assert.strictEqual(await matchesAllowedFileSignature(fake, 'image/png'), false);
+        assert.strictEqual(await matchesAllowedFileSignature(webm, 'video/webm'), true);
+        assert.strictEqual(await matchesAllowedFileSignature(fakeWebm, 'video/webm'), false);
     });
 
     it('paginates more than 1000 D1 sessions without losing revocation candidates', async () => {
