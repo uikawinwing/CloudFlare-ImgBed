@@ -5,6 +5,7 @@ export const ALLOWED_UPLOAD_TYPES = new Set([
     'image/webp',
     'image/avif',
     'video/mp4',
+    'video/webm',
 ]);
 
 const CANONICAL_EXTENSIONS = Object.freeze({
@@ -14,6 +15,7 @@ const CANONICAL_EXTENSIONS = Object.freeze({
     'image/webp': 'webp',
     'image/avif': 'avif',
     'video/mp4': 'mp4',
+    'video/webm': 'webm',
 });
 
 const TRUSTED_DISCORD_ATTACHMENT_HOSTS = new Set([
@@ -56,11 +58,17 @@ function matchesMp4Signature(bytes) {
     return brands.some(brand => MP4_BRANDS.has(brand));
 }
 
+function matchesWebmSignature(bytes) {
+    if (bytes.length < 12) return false;
+    if (bytes[0] !== 0x1a || bytes[1] !== 0x45 || bytes[2] !== 0xdf || bytes[3] !== 0xa3) return false;
+    return bytesToAscii(bytes, 0, bytes.length).includes('webm');
+}
+
 export async function matchesAllowedFileSignature(file, fileType) {
     const normalizedType = normalizeMediaType(fileType);
     if (!ALLOWED_UPLOAD_TYPES.has(normalizedType)) return false;
 
-    const bytes = new Uint8Array(await file.slice(0, 64).arrayBuffer());
+    const bytes = new Uint8Array(await file.slice(0, 256).arrayBuffer());
     if (normalizedType === 'image/jpeg') return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
     if (normalizedType === 'image/png') return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
     if (normalizedType === 'image/gif') return bytesToAscii(bytes, 0, 4) === 'GIF8';
@@ -69,6 +77,7 @@ export async function matchesAllowedFileSignature(file, fileType) {
         return bytesToAscii(bytes, 4, 8) === 'ftyp' && ['avif', 'avis'].includes(bytesToAscii(bytes, 8, 12));
     }
     if (normalizedType === 'video/mp4') return matchesMp4Signature(bytes);
+    if (normalizedType === 'video/webm') return matchesWebmSignature(bytes);
     return false;
 }
 
