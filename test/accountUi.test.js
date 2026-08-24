@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../frontend-dist/account/account.js', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../frontend-dist/account/account.css', import.meta.url), 'utf8');
 const discoverSource = readFileSync(new URL('../frontend-dist/discover/discover.js', import.meta.url), 'utf8');
-const discoverPage = readFileSync(new URL('../frontend-dist/discover/index.html', import.meta.url), 'utf8');
+const discoverPage = readFileSync(new URL('../frontend-dist/index.html', import.meta.url), 'utf8');
 
 describe('account media and album UI', () => {
   it('lets selected files be added to a newly created album from the picker', () => {
