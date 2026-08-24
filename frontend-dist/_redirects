@@ -1,5 +1,7 @@
 /studio /account/?view=files&upload=1 302
 /studio/ /account/?view=files&upload=1 302
+/charinfo/worldbook /charinfo/ 302
+/charinfo/worldbook/ /charinfo/ 302
 /login /legacy 200
 /login/ /login 302
 /adminLogin /legacy 200
