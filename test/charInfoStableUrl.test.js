@@ -1,7 +1,27 @@
 import assert from 'assert';
 import { onRequestGet as stableCharInfoGet } from '../functions/api/public/charinfo/[albumId].js';
+import { createCharInfoVisualPack } from '../functions/utils/charInfoVisualPack.js';
 
 describe('stable CharInfo visual URL', () => {
+    it('uses the first album image as the default avatar and preview cover', () => {
+        const pack = createCharInfoVisualPack({
+            album: {
+                id: 'album-id',
+                char_info_character_name: '克瑞西达',
+                public_handle: 'master',
+            },
+            files: [
+                { id: 'intro.webm', file_name: 'Intro.webm', file_type: 'video/webm', visibility: 'public' },
+                { id: 'portrait.png', file_name: 'Portrait.png', file_type: 'image/png', visibility: 'public' },
+            ],
+            storedVisualConfig: null,
+            requestUrl: 'https://example.test/api/public/charinfo/album-id',
+        });
+
+        assert.strictEqual(pack.visual.avatarUrl, 'https://example.test/file/portrait.png');
+        assert.strictEqual(pack.visual.coverUrl, 'https://example.test/file/portrait.png');
+    });
+
     it('keeps one album UUID URL while visual settings and gallery contents update', async () => {
         const album = {
             id: 'album-id',
@@ -82,7 +102,7 @@ describe('stable CharInfo visual URL', () => {
         assert.strictEqual(firstPack.profileId, 'album-id');
         assert.strictEqual(firstPack.visual.entranceQuote, 'Hello');
         assert.strictEqual(firstPack.visual.avatarUrl, 'https://example.test/file/first.png');
-        assert.strictEqual(firstPack.visual.coverUrl, null, 'non-public files must never be resolved into public visual URLs');
+        assert.strictEqual(firstPack.visual.coverUrl, 'https://example.test/file/first.png', 'an unavailable cover selection falls back to the first album image');
         assert.strictEqual('skills' in firstPack.visual, false);
         assert.strictEqual('mvu' in firstPack.visual, false);
         assert.deepStrictEqual(firstPack.gallery.map((item) => item.title), ['First.png', 'Second.webm']);

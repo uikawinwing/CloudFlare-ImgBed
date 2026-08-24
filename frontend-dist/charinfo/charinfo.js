@@ -146,6 +146,7 @@ function fillFields() {
   $('#tierColor').value = state.config.tierColor;
   $('#raceColorPicker').value = state.config.raceColor || DEFAULT_RACE_COLOR;
   $('#tierColorPicker').value = state.config.tierColor || DEFAULT_TIER_COLOR;
+  $('#worldbookEditorLink').href = `/charinfo/worldbook/?album=${encodeURIComponent(state.album?.id || '')}`;
 }
 
 function sanitizeConfigAgainstItems() {
@@ -160,6 +161,9 @@ function sanitizeConfigAgainstItems() {
   if (state.config.mainFileId) {
     state.config.viewerHiddenFileIds = state.config.viewerHiddenFileIds.filter(id => id !== state.config.mainFileId);
   }
+  const firstImage = state.items.find(isImage);
+  if (firstImage && !state.config.avatarFileId) state.config.avatarFileId = firstImage.id;
+  if (firstImage && !state.config.coverFileId) state.config.coverFileId = state.config.avatarFileId;
 }
 
 function renderAlbumSelect(selectedId = state.album?.id) {

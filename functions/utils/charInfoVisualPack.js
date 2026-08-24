@@ -6,7 +6,7 @@ export const CHAR_INFO_VISUAL_PACK_FORMAT = 'char-info-visual-pack';
 export const CHAR_INFO_VISUAL_PACK_VERSION = 1;
 
 export function parsePublicVisualConfig(storedValue) {
-    if (typeof storedValue !== 'string' || !storedValue.trim()) return null;
+    if (typeof storedValue !== 'string' || !storedValue.trim()) return normalizeCharInfoVisualConfig({});
     try {
         const parsed = JSON.parse(storedValue);
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
@@ -55,12 +55,14 @@ function buildGalleryItem(file, visualConfig, requestUrl) {
 }
 
 function buildVisualPayload(config, fileById, requestUrl) {
+    const fallbackImageUrl = firstImageUrl(fileById, requestUrl);
+    const avatarUrl = imageUrlFor(config.avatarFileId, fileById, requestUrl) || fallbackImageUrl;
     return {
         entranceQuote: config.entranceQuote,
         raceColor: config.raceColor,
         tierColor: config.tierColor,
-        avatarUrl: imageUrlFor(config.avatarFileId, fileById, requestUrl),
-        coverUrl: imageUrlFor(config.coverFileId, fileById, requestUrl),
+        avatarUrl,
+        coverUrl: imageUrlFor(config.coverFileId, fileById, requestUrl) || avatarUrl,
         metadata: {
             author: config.metadata.author,
             version: config.metadata.version,
@@ -70,6 +72,13 @@ function buildVisualPayload(config, fileById, requestUrl) {
             story_sections: config.metadata.story_sections,
         },
     };
+}
+
+function firstImageUrl(fileById, requestUrl) {
+    for (const file of fileById.values()) {
+        if (String(file.file_type || '').startsWith('image/')) return absoluteFileUrl(requestUrl, file.id);
+    }
+    return null;
 }
 
 function imageUrlFor(fileId, fileById, requestUrl) {

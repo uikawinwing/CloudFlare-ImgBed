@@ -16,9 +16,9 @@
     <a class="button ghost" href="/account/?view=albums">← 我的图库</a>
     <div class="studio-title">
       <strong>CharInfo Visual Studio</strong>
-      <span>只管理 EJS Visual Profile，不修改角色正文、MVU、技能或世界书内容。</span>
+      <span>管理 Album 视觉资料；世界书编辑与打包请使用右侧入口。</span>
     </div>
-    <button class="button primary" id="saveButton" type="button" disabled>保存视觉资料</button>
+    <div class="inline-actions"><a class="button" id="worldbookEditorLink" href="/charinfo/worldbook/">世界书打包</a><button class="button primary" id="saveButton" type="button" disabled>保存视觉资料</button></div>
   </header>
 
   <main class="studio-shell" id="studioRoot" aria-busy="true">
@@ -44,7 +44,7 @@
       <div class="loading-card" id="loadingCard"><span class="spinner"></span><p>正在读取 ImgBed 账户与图库…</p></div>
       <div id="editor" hidden>
         <section class="panel">
-          <div class="section-head"><div><h1>视觉资料</h1><p>保留你原本 Creator Editor 的 EJS profile 字段，但不再输出 EJS，也不编辑 Worldbook。</p></div><span class="save-state" id="saveState">尚未修改</span></div>
+          <div class="section-head"><div><h1>视觉资料</h1><p>保存后可在“世界书打包”页将同一 Album 写入并下载编辑后的世界书。</p></div><span class="save-state" id="saveState">尚未修改</span></div>
           <div class="grid two">
             <label class="field"><span>角色完整姓名 <b>*</b></span><input id="characterName" maxlength="80" autocomplete="off"></label>
             <label class="field"><span>登场台词</span><input id="entranceQuote" maxlength="4000" autocomplete="off"></label>
