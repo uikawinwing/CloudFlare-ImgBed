@@ -292,15 +292,18 @@ function albumRow(album) {
     <div class="album-body">
       <h2>${escapeHtml(album.name)}</h2>
       <div class="album-meta"><span>${items.length} 个项目</span><span>最近更新：${formatDate(album.updated_at)}</span></div>
-      <p class="album-visibility">${album.visibility === 'public' ? '会显示在发现页' : '不会显示在发现页'}${state.user.publicHandle ? ` · 可通过分享链接访问${album.charInfoCharacterName ? ` · CharInfo：${escapeHtml(album.charInfoCharacterName)}` : ' · CharInfo 未配置角色全名'}` : ' · 设置公开名称后可复制分享链接'}</p>
-      <div class="album-actions">
-        ${canShare ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : ''}
-        ${canShareCharInfo ? `<button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制 CharInfo 链接</button>` : ''}
-        ${album.charInfoCharacterName ? `<a class="button primary" href="/charinfo/?album=${encodeURIComponent(album.id)}">打开 Creator</a>` : '<button class="button primary" type="button" data-edit-album>配置 CharInfo</button>'}
-        <button class="button" type="button" data-manage-album>管理内容</button>
-        ${album.charInfoCharacterName ? '<button class="button" type="button" data-edit-album>编辑图库</button>' : ''}
-        <button class="button danger" type="button" data-delete-album>删除图库</button>
-      </div>
+      <details class="album-actions-menu">
+        <summary>管理图库</summary>
+        <div class="album-actions">
+          <p class="album-visibility">${album.visibility === 'public' ? '会显示在发现页' : '不会显示在发现页'}${state.user.publicHandle ? ` · 可通过分享链接访问${album.charInfoCharacterName ? ` · CharInfo：${escapeHtml(album.charInfoCharacterName)}` : ' · CharInfo 未配置角色全名'}` : ' · 设置公开名称后可复制分享链接'}</p>
+          ${canShare ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : ''}
+          ${canShareCharInfo ? `<button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制 CharInfo 链接</button>` : ''}
+          ${album.charInfoCharacterName ? `<a class="button primary" href="/charinfo/?album=${encodeURIComponent(album.id)}">打开 Creator</a>` : '<button class="button primary" type="button" data-edit-album>配置 CharInfo</button>'}
+          <button class="button" type="button" data-manage-album>管理内容</button>
+          ${album.charInfoCharacterName ? '<button class="button" type="button" data-edit-album>编辑图库</button>' : ''}
+          <button class="button danger" type="button" data-delete-album>删除图库</button>
+        </div>
+      </details>
     </div>
   </article>`;
 }

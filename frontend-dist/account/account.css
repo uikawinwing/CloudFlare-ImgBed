@@ -148,15 +148,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .discover-option { display: inline-flex; align-items: center; gap: 6px; color: var(--muted-strong); font-size: 11px; white-space: nowrap; cursor: pointer; }
 .discover-option input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
 
-.album-list { display: grid; gap: 14px; }
-.album-row { display: grid; grid-template-columns: minmax(210px, 280px) 1fr; gap: 22px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: 0 18px 44px rgba(0, 0, 0, .12); backdrop-filter: blur(18px); }
-.album-cover { aspect-ratio: 16/9; display: grid; place-items: center; overflow: hidden; border-radius: 10px; background: #040912; }
+.album-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 320px)); justify-content: start; gap: 14px; }
+.album-row { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: 0 18px 44px rgba(0, 0, 0, .12); backdrop-filter: blur(18px); }
+.album-cover { aspect-ratio: 4 / 3; display: grid; place-items: center; overflow: hidden; background: #040912; }
 .album-cover img, .album-cover video { width: 100%; height: 100%; display: block; object-fit: cover; }
-.album-body { min-width: 0; display: flex; flex-direction: column; justify-content: center; }
-.album-body h2 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
-.album-meta { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 10px 0 0; color: var(--muted); font-size: 13px; }
-.album-visibility { margin: 14px 0 0; color: var(--muted-strong); font-size: 13px; }
-.album-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.album-body { min-width: 0; padding: 13px; }
+.album-body h2 { overflow: hidden; margin: 0; font-size: 16px; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
+.album-meta { display: flex; flex-wrap: wrap; gap: 5px 10px; margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+.album-actions-menu { margin-top: 13px; }
+.album-actions-menu summary { display: inline-flex; min-height: 34px; align-items: center; cursor: pointer; color: var(--muted-strong); font-size: 12px; font-weight: 650; }
+.album-actions-menu summary:hover { color: var(--text); }
+.album-actions-menu[open] summary { margin-bottom: 10px; }
+.album-actions { display: grid; gap: 8px; }
+.album-visibility { margin: 0 0 2px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.album-actions .button { width: 100%; }
 .album-item-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: rgba(8, 18, 31, .68); }
 .album-item-row + .album-item-row { margin-top: 9px; }
 .album-item-row.busy { opacity: .54; pointer-events: none; }
@@ -262,9 +267,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .segmented button { min-width: 0; flex: 1; }
   .media-grid { columns: 2 180px; column-gap: 12px; }
   .media-card { margin-bottom: 12px; }
-  .album-row { grid-template-columns: 130px 1fr; gap: 14px; padding: 11px; }
-  .album-cover { aspect-ratio: 1; }
-  .album-actions { grid-column: 1 / -1; }
   .moderation-head { display: none; }
   .moderation-table { overflow: visible; border: 0; background: transparent; box-shadow: none; }
   .moderation-list { display: grid; gap: 10px; }
@@ -293,9 +295,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .selection-actions .button { flex: 1; }
   .media-grid { columns: 2 140px; column-gap: 9px; }
   .media-card { margin-bottom: 9px; }
-  .album-row { grid-template-columns: 92px 1fr; }
-  .album-body h2 { font-size: 18px; }
-  .album-actions .button { flex: 1 1 140px; }
   .album-item-row { grid-template-columns: 58px minmax(0, 1fr); }
   .album-item-thumb { width: 58px; }
   .album-item-actions { grid-column: 1 / -1; }

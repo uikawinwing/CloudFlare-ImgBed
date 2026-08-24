@@ -84,4 +84,11 @@ describe('account media and album UI', () => {
     assert.match(discoverSource, /if \(firstPage\) state\.albums = Array\.isArray\(body\.albums\)/);
     assert.match(discoverSource, /album\.coverThumbnailUrl \|\| album\.coverUrl/);
   });
+
+  it('keeps albums as compact cards and reveals secondary actions on demand', () => {
+    assert.match(styles, /\.album-list\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(260px,\s*320px\)\)[^}]*justify-content:\s*start/);
+    assert.match(styles, /\.album-cover\s*\{[^}]*aspect-ratio:\s*4\s*\/\s*3/);
+    assert.doesNotMatch(styles, /\.album-row\s*\{[^}]*grid-template-columns:\s*minmax\(210px,\s*280px\)\s+1fr/);
+    assert.match(source, /<details class="album-actions-menu">[\s\S]*<summary[^>]*>管理图库<\/summary>[\s\S]*class="album-actions"/);
+  });
 });
