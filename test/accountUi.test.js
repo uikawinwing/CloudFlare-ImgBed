@@ -8,6 +8,8 @@ const uploadSource = readFileSync(new URL('../frontend-dist/account/upload-in-fi
 const creatorSource = readFileSync(new URL('../frontend-dist/charinfo/index.html', import.meta.url), 'utf8');
 const discoverSource = readFileSync(new URL('../frontend-dist/discover/discover.js', import.meta.url), 'utf8');
 const discoverPage = readFileSync(new URL('../frontend-dist/index.html', import.meta.url), 'utf8');
+const accountPage = readFileSync(new URL('../frontend-dist/account/index.html', import.meta.url), 'utf8');
+const previewStyles = readFileSync(new URL('../frontend-dist/preview-style.css', import.meta.url), 'utf8');
 
 describe('account media and album UI', () => {
   it('provides clear Creator entry points from the workspace and each configured Album', () => {
@@ -69,6 +71,11 @@ describe('account media and album UI', () => {
     assert.match(discoverSource, /\.album-cover video/);
     assert.doesNotMatch(discoverSource, /discover-play|play-overlay|▶/);
     assert.doesNotMatch(discoverSource, /video-placeholder|play-symbol/);
+  });
+
+  it('does not let the late preview stylesheet collapse real-ratio video pins', () => {
+    assert.ok(accountPage.indexOf('/preview-style.css') > accountPage.indexOf('/account/account.css'));
+    assert.doesNotMatch(previewStyles, /\.media-frame video\s*\{/);
   });
 
   it('keeps sharing buttons available when the owner has a handle, regardless of discover visibility', () => {
