@@ -8,8 +8,8 @@ export async function onRequestPut({ request, env }) {
     const handle = String(publicHandle || '').trim().toLowerCase();
     if (!/^[a-z0-9][a-z0-9-]{2,31}$/.test(handle)) return json({ error: 'Public handle must use 3-32 lowercase letters, numbers or hyphens' }, 400);
     const current = await env.img_d1.prepare('SELECT public_handle FROM users WHERE discord_id = ?').bind(identity.id).first();
-    const publicAlbum = await env.img_d1.prepare("SELECT 1 FROM albums WHERE owner_id = ? AND visibility = 'public' LIMIT 1").bind(identity.id).first();
-    if (publicAlbum && current?.public_handle !== handle) return json({ error: 'Public handle cannot change while public albums exist' }, 409);
+    const album = await env.img_d1.prepare('SELECT 1 FROM albums WHERE owner_id = ? LIMIT 1').bind(identity.id).first();
+    if (album && current?.public_handle && current.public_handle !== handle) return json({ error: 'Public handle cannot change while shared album links exist' }, 409);
     try {
         await env.img_d1.prepare('UPDATE users SET public_handle = ?, updated_at = ? WHERE discord_id = ?').bind(handle, Date.now(), identity.id).run();
     } catch {

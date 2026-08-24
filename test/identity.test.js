@@ -73,9 +73,11 @@ describe('Discord identity policy', () => {
         assert.strictEqual(legacyPublicGalleryPageGet, publicGalleryPageGet);
 
         const bindings = [];
+        const queries = [];
         const env = {
             img_d1: {
-                prepare() {
+                prepare(sql) {
+                    queries.push(sql);
                     return {
                         bind(...values) {
                             bindings.push(values);
@@ -91,6 +93,10 @@ describe('Discord identity policy', () => {
         assert.strictEqual(apiResponse.status, 404);
         assert.strictEqual(pageResponse.status, 200);
         assert.deepStrictEqual(bindings, [['uika', 'siren'], ['uika', 'siren']]);
+        for (const sql of queries) {
+            assert.doesNotMatch(sql, /a\.visibility = 'public'/);
+            assert.match(sql, /u\.status = 'active'/);
+        }
 
         const invalidResponse = await publicGalleryGet({ request: new Request('https://example.test/api/public/gallery/uika/siren/extra'), env, params: malformedParams });
         assert.strictEqual(invalidResponse.status, 404);
@@ -99,7 +105,7 @@ describe('Discord identity policy', () => {
 
     it('builds a CharInfo gallery pack from album identity instead of Discord identity', () => {
         const pack = createGalleryPack({ id: 'album-id', public_handle: 'master', discord_id: 'discord-id', username: 'Master', char_info_character_name: '维奥莱塔·马克西姆·奥古斯塔' }, 'summer', [
-            { id: 'folder/a b.png', file_name: 'First image.png', file_type: 'image/png', timestamp: 1 },
+            { id: 'folder/a b.png', file_name: 'First image.png', file_type: 'image/png', timestamp: 1, visibility: 'public' },
             { id: 'second.mp4', file_name: 'Second video.mp4', file_type: 'video/mp4', timestamp: 2 },
             { id: 'third.webm', file_name: 'Third video.webm', file_type: 'video/webm', timestamp: 3 },
         ], 'http://example.test/api/public/gallery/master/summer');
@@ -115,14 +121,14 @@ describe('Discord identity policy', () => {
         assert.strictEqual(absoluteFileUrl('http://example.test/x', 'a.png'), 'https://example.test/file/a.png');
     });
 
-    it('requires an explicit valid character name before exposing a CharInfo pack', () => {
+    it('keeps ordinary album sharing available without a CharInfo character name', () => {
         assert.strictEqual(normalizeCharInfoCharacterName('  维奥莱塔·马克西姆·奥古斯塔  '), '维奥莱塔·马克西姆·奥古斯塔');
         assert.strictEqual(validateCharInfoCharacterName('维奥莱塔·马克西姆·奥古斯塔'), null);
         assert.match(validateCharInfoCharacterName('bad\nname'), /control characters/);
-        assert.throws(
-            () => createGalleryPack({ id: 'album-id', public_handle: 'master', username: 'Master' }, 'summer', [], 'https://example.test/x'),
-            /character name is not configured/,
-        );
+        const pack = createGalleryPack({ id: 'album-id', public_handle: 'master', username: 'Master' }, 'summer', [], 'https://example.test/x');
+        assert.strictEqual(pack.format, 'imgbed-gallery');
+        assert.strictEqual(pack.characterName, undefined);
+        assert.deepStrictEqual(pack.gallery, []);
     });
 
     it('rejects cross-site mutations but allows same-origin requests', () => {

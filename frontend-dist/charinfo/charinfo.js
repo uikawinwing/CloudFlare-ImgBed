@@ -234,7 +234,7 @@ function renderGallery() {
       : `<img src="${escapeHtml(fileUrl(file))}" alt="${escapeHtml(mediaLabel(file, index))}" loading="lazy">`;
     return `<article class="gallery-item" data-file-id="${escapeHtml(file.id)}">
       <div class="gallery-thumb">${media}<span class="type-pill">${isVideo(file) ? String(file.file_type).toLowerCase() === 'video/webm' ? 'WEBM' : 'MP4' : 'IMAGE'}</span></div>
-      <div class="gallery-copy"><strong title="${escapeHtml(mediaLabel(file, index))}">${escapeHtml(mediaLabel(file, index))}</strong><small>${escapeHtml(file.visibility === 'public' ? '公开文件' : '私密文件')} · ${escapeHtml(file.id)}</small><div class="gallery-options"><label><input type="checkbox" data-viewer-visible ${hidden ? '' : 'checked'}> Viewer 显示</label>${file.id === state.config.mainFileId ? '<span class="hint">主立绘</span>' : ''}${file.id === state.config.avatarFileId ? '<span class="hint">头像</span>' : ''}${file.id === state.config.coverFileId ? '<span class="hint">封面</span>' : ''}</div></div>
+      <div class="gallery-copy"><strong title="${escapeHtml(mediaLabel(file, index))}">${escapeHtml(mediaLabel(file, index))}</strong><small>${escapeHtml(file.visibility === 'public' ? '发现页显示' : '发现页隐藏')} · ${escapeHtml(file.id)}</small><div class="gallery-options"><label><input type="checkbox" data-viewer-visible ${hidden ? '' : 'checked'}> Viewer 显示</label>${file.id === state.config.mainFileId ? '<span class="hint">主立绘</span>' : ''}${file.id === state.config.avatarFileId ? '<span class="hint">头像</span>' : ''}${file.id === state.config.coverFileId ? '<span class="hint">封面</span>' : ''}</div></div>
       <div class="gallery-actions"><button type="button" data-move-up ${index === 0 ? 'disabled' : ''} aria-label="上移">↑</button><button type="button" data-move-down ${index === state.items.length - 1 ? 'disabled' : ''} aria-label="下移">↓</button><button type="button" data-remove aria-label="移出 Album">×</button></div>
     </article>`;
   }).join('');
@@ -378,7 +378,7 @@ async function createAlbum(event) {
   try {
     const created = await api('/api/user/albums', {
       method: 'POST',
-      body: JSON.stringify({ name, description: '', charInfoCharacterName: characterName, visibility: 'unlisted' }),
+      body: JSON.stringify({ name, description: '', charInfoCharacterName: characterName, visibility: 'public' }),
     });
     $('#newAlbumForm').hidden = true;
     $('#newAlbumName').value = '';

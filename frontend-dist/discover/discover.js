@@ -1,5 +1,7 @@
-const state = { items: [], featuredItems: [], cursor: null, type: 'all', loading: false, done: false };
+const state = { items: [], albums: [], featuredItems: [], cursor: null, type: 'all', loading: false, done: false };
 const masonry = document.querySelector('#masonry');
+const albumDiscover = document.querySelector('#albumDiscover');
+const albumGrid = document.querySelector('#albumGrid');
 const feedStatus = document.querySelector('#feedStatus');
 const loadMore = document.querySelector('#loadMore');
 const feedSentinel = document.querySelector('#feedSentinel');
@@ -64,12 +66,35 @@ function cardMarkup(item, featured = false) {
   return `<article class="pin"><button class="pin-button" type="button" data-open-id="${escapeHtml(item.id)}" aria-label="查看作品"><span class="pin-media" style="aspect-ratio:${ratioFor(item)}">${mediaMarkup(item)}</span></button></article>`;
 }
 
+function albumCardMarkup(album) {
+  const cover = album.coverThumbnailUrl || album.coverUrl;
+  const coverMarkup = !cover
+    ? '<span class="album-cover-empty">空图库</span>'
+    : String(album.coverType || '').startsWith('video/')
+      ? `<video src="${escapeHtml(cover)}" muted loop autoplay playsinline preload="metadata"></video>`
+      : `<img src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async">`;
+  return `<a class="album-card" href="${escapeHtml(album.url)}">
+    <span class="album-cover">${coverMarkup}</span>
+    <span class="album-card-info"><strong>${escapeHtml(album.name || '未命名图库')}</strong><small>${escapeHtml(album.creator?.name || album.creator?.handle || '创作者')} · ${Number(album.itemCount) || 0} 项</small></span>
+  </a>`;
+}
+
+function renderAlbums(query) {
+  const visible = state.albums.filter(album => {
+    const terms = `${album.name || ''} ${album.description || ''} ${album.creator?.name || ''} ${album.creator?.handle || ''}`.toLocaleLowerCase('zh-CN');
+    return !query || terms.includes(query);
+  });
+  albumGrid.innerHTML = visible.map(albumCardMarkup).join('');
+  albumDiscover.hidden = state.type !== 'all' || !visible.length;
+}
+
 function render() {
   const query = document.querySelector('#searchInput').value.trim().toLocaleLowerCase('zh-CN');
   const visible = state.items.filter(item => {
     const terms = `${titleFor(item)} ${creatorFor(item)} ${creatorHandleFor(item) || ''}`.toLocaleLowerCase('zh-CN');
     return !query || terms.includes(query);
   });
+  renderAlbums(query);
   masonry.innerHTML = visible.map(item => cardMarkup(item)).join('');
   if (!state.loading && !visible.length && state.items.length) setStatus('empty', '没有符合这个搜索条件的公开作品。');
   else if (!state.loading && !state.items.length) setStatus('empty', '还没有公开作品。第一批作品发布后，会在这里出现。');
@@ -99,6 +124,7 @@ async function loadFeed({ reset = false } = {}) {
   state.loading = true;
   if (reset) {
     state.items = [];
+    state.albums = [];
     state.cursor = null;
     state.done = false;
     masonry.innerHTML = '';
@@ -113,6 +139,7 @@ async function loadFeed({ reset = false } = {}) {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || '暂时无法读取公开作品。');
     const items = Array.isArray(body.files) ? body.files : [];
+    if (reset) state.albums = Array.isArray(body.albums) ? body.albums : [];
     state.items.push(...items);
     state.cursor = body.nextCursor || body.cursor || null;
     state.done = !state.cursor || !items.length;

@@ -224,17 +224,17 @@ function fileCard(file) {
   const mediaLabel = file.file_name || file.id;
   const visibility = file.visibility === 'public' ? 'public' : 'private';
   const visibilityHelp = visibility === 'public'
-    ? '公开后自动进入发现页；列表优先使用可复用缩略图。'
-    : '不公开展示；原文件仍保留在你的工作室。';
+    ? '会显示在发现页；分享链接和图库访问不受此设置影响。'
+    : '不会显示在发现页；分享链接和图库仍可正常访问。';
   return `<article class="media-card${selected ? ' selected' : ''}" data-file-id="${escapeHtml(file.id)}">
     <input class="media-select" type="checkbox" aria-label="选择 ${escapeHtml(mediaLabel)}" ${selected ? 'checked' : ''}>
     <button class="media-frame" type="button" aria-label="预览 ${escapeHtml(mediaLabel)}">
-      ${isVideo ? `<video src="${src}" muted loop playsinline preload="metadata"></video><span class="play" aria-hidden="true"></span><span class="media-type">${videoTypeLabel(file)}</span>` : `<img src="${escapeHtml(preview)}" alt="${escapeHtml(mediaLabel)}" loading="lazy" decoding="async">`}
+      ${isVideo ? `<video src="${src}" muted loop playsinline preload="metadata"></video><span class="media-type">${videoTypeLabel(file)}</span>` : `<img src="${escapeHtml(preview)}" alt="${escapeHtml(mediaLabel)}" loading="lazy" decoding="async">`}
     </button>
     <div class="media-info">
       <p class="media-name" title="${escapeHtml(file.file_name || file.id)}">${escapeHtml(file.file_name || file.id)}</p>
       <div class="media-meta"><span>${formatBytes(file.file_size_bytes)}</span><span>${formatDate(file.timestamp)}</span>${file.moderation_status === 'quarantined' ? '<span>已撤下</span>' : ''}</div>
-      <div class="file-visibility-row"><label><span class="sr-only">${escapeHtml(mediaLabel)} 的可见性</span><select class="file-visibility" aria-label="${escapeHtml(mediaLabel)} 的可见性"><option value="private" ${visibility === 'private' ? 'selected' : ''}>私密</option><option value="public" ${visibility === 'public' ? 'selected' : ''}>公开</option></select></label></div><small class="file-visibility-help">${visibilityHelp}</small>
+      <div class="file-visibility-row"><label><span class="sr-only">${escapeHtml(mediaLabel)} 是否显示在发现页</span><select class="file-visibility" aria-label="${escapeHtml(mediaLabel)} 是否显示在发现页"><option value="private" ${visibility === 'private' ? 'selected' : ''}>不显示</option><option value="public" ${visibility === 'public' ? 'selected' : ''}>显示在发现页</option></select></label></div><small class="file-visibility-help">${visibilityHelp}</small>
       <div class="file-card-actions"><button class="file-action" type="button" data-copy-file>${icons.link}<span>复制链接</span></button>${visibility === 'public' && !isVideo ? `<button class="file-action" type="button" data-copy-thumbnail>${icons.link}<span>复制缩略图</span></button>` : ''}<a class="file-action" href="${escapeHtml(src)}" target="_blank" rel="noopener">${icons.external}<span>原文件</span></a></div>
     </div>
   </article>`;
@@ -291,16 +291,16 @@ function albumRow(album) {
   const items = album.items || [];
   const cover = items.find(item => item.moderation_status !== 'quarantined');
   const coverMedia = cover ? (isVideoFile(cover) ? `<video src="${fileUrl(cover)}" muted loop playsinline preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(cover))}" alt="${escapeHtml(cover.file_name || album.name)}" loading="lazy" decoding="async">`) : `<span class="empty-icon">${icons.image}</span>`;
-  const canShare = album.visibility === 'public' && state.user.publicHandle;
+  const canShare = Boolean(state.user.publicHandle);
   const canShareCharInfo = canShare && Boolean(album.charInfoCharacterName);
   const shareUrl = canShare ? `${location.origin}/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
-  const feedUrl = canShareCharInfo ? `${location.origin}/api/public/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
+  const feedUrl = canShareCharInfo ? `${location.origin}/api/public/charinfo/${encodeURIComponent(album.id)}` : '';
   return `<article class="album-row" data-album-id="${escapeHtml(album.id)}">
     <div class="album-cover">${coverMedia}</div>
     <div class="album-body">
       <h2>${escapeHtml(album.name)}</h2>
       <div class="album-meta"><span>${items.length} 个项目</span><span>最近更新：${formatDate(album.updated_at)}</span></div>
-      <p class="album-visibility">${album.visibility === 'public' ? `公开 · 可通过分享链接访问${album.charInfoCharacterName ? ` · CharInfo：${escapeHtml(album.charInfoCharacterName)}` : ' · CharInfo 未配置角色全名'}` : '不公开 · 已分享的文件链接仍可访问'}</p>
+      <p class="album-visibility">${album.visibility === 'public' ? '会显示在发现页' : '不会显示在发现页'}${state.user.publicHandle ? ` · 可通过分享链接访问${album.charInfoCharacterName ? ` · CharInfo：${escapeHtml(album.charInfoCharacterName)}` : ' · CharInfo 未配置角色全名'}` : ' · 设置公开名称后可复制分享链接'}</p>
       <div class="album-actions">
         ${canShare ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : ''}
         ${canShareCharInfo ? `<button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制 CharInfo 链接</button>` : ''}
@@ -449,12 +449,20 @@ function openDialog(content, { closeable = true, wide = false } = {}) {
   const dialog = dialogRoot.querySelector('.dialog');
   dialog?.focus();
   const close = () => {
+    document.removeEventListener('keydown', closeOnEscape);
     dialogRoot.innerHTML = '';
     if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus();
+  };
+  const closeOnEscape = event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+    }
   };
   if (closeable) {
     backdrop.addEventListener('click', event => { if (event.target === backdrop) close(); });
     dialogRoot.querySelectorAll('[data-close-dialog]').forEach(button => button.addEventListener('click', close));
+    document.addEventListener('keydown', closeOnEscape);
   }
   return close;
 }
@@ -495,7 +503,8 @@ async function ensurePublicHandle() {
 function previewFile(file) {
   const isVideo = isVideoFile(file);
   openDialog(`<div class="dialog-head"><div><h2>${escapeHtml(file.file_name || file.id)}</h2><p style="color:var(--muted);margin:6px 0 0">${formatBytes(file.file_size_bytes)}</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
-    <div class="dialog-body"><div class="media-frame" style="aspect-ratio:16/10;border-radius:12px">${isVideo ? `<video src="${fileUrl(file)}" autoplay muted loop playsinline controls></video>` : `<img src="${fileUrl(file)}" alt="${escapeHtml(file.file_name || '')}">`}</div></div>`, { wide: true });
+    <div class="dialog-body"><div class="file-preview-media">${isVideo ? `<video src="${fileUrl(file)}" autoplay muted loop playsinline controls></video>` : `<img src="${fileUrl(file)}" alt="${escapeHtml(file.file_name || '')}">`}</div></div>
+    <div class="dialog-actions"><a class="button" href="${escapeHtml(fileUrl(file))}" target="_blank" rel="noopener">${icons.external}打开原始尺寸</a><button class="button" type="button" data-close-dialog>关闭</button></div>`, { wide: true });
 }
 
 function bindFileEvents() {
@@ -554,11 +563,11 @@ async function updateFileVisibility(fileId, visibility) {
     markViewDirty('albums');
     renderFiles();
     if (file.visibility === 'private') {
-      toast('已设为私密。');
+      toast('已从发现页隐藏；分享链接仍可访问。');
     } else if (result.thumbnailReady) {
-      toast(result.thumbnailCreated ? '已公开，并已生成可复用缩略图。' : '已公开；现有缩略图会继续复用。');
+      toast(result.thumbnailCreated ? '已显示在发现页，并已生成可复用缩略图。' : '已显示在发现页；现有缩略图会继续复用。');
     } else {
-      toast('已公开；缩略图暂时使用动态预览，原图不受影响。');
+      toast('已显示在发现页；缩略图暂时使用动态预览，原图不受影响。');
     }
   } catch (error) {
     file.visibility = previous.visibility;
@@ -573,33 +582,41 @@ async function updateFileVisibility(fileId, visibility) {
 async function addSelectedToAlbum() {
   if (!state.albums.length) await loadAlbums(false);
   if (!state.albums.length) {
-    toast('请先创建一个图库。', 'error');
-    await navigateWorkspace({ view: 'albums', section: 'content' });
+    albumDialog(null, { onCreated: addSelectedFilesToAlbum });
     return;
   }
-  const content = `<div class="dialog-head"><h2>加入图库</h2><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
+  const content = `<div class="dialog-head"><h2>加入图库</h2><div><button class="icon-button" id="createAlbumForSelection" type="button" aria-label="新建图库" title="新建图库">${icons.plus}</button><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div></div>
     <div class="dialog-body"><div class="album-picker">${state.albums.map((album, index) => `<label><input type="radio" name="album" value="${escapeHtml(album.id)}" ${index === 0 ? 'checked' : ''}><span>${escapeHtml(album.name)}</span></label>`).join('')}</div></div>
     <div class="dialog-actions"><button class="button" type="button" data-close-dialog>取消</button><button class="button primary" type="button" id="confirmAddToAlbum">加入图库</button></div>`;
   const close = openDialog(content);
+  dialogRoot.querySelector('#createAlbumForSelection').addEventListener('click', () => {
+    close();
+    albumDialog(null, { onCreated: addSelectedFilesToAlbum });
+  });
   dialogRoot.querySelector('#confirmAddToAlbum').addEventListener('click', async event => {
     const albumId = dialogRoot.querySelector('input[name="album"]:checked')?.value;
     if (!albumId) return;
     event.currentTarget.disabled = true;
-    let added = 0;
-    for (const fileId of state.selected) {
-      try {
-        await api(`/api/user/albums/${encodeURIComponent(albumId)}/items`, { method: 'POST', body: JSON.stringify({ fileId }) });
-        added += 1;
-      } catch (error) {
-        toast(error.message, 'error');
-      }
-    }
+    const added = await addSelectedFilesToAlbum(albumId);
     close();
-    state.selected.clear();
-    if (added) markViewDirty('albums');
     renderFiles();
     toast(`已将 ${added} 个文件加入图库。`);
   });
+}
+
+async function addSelectedFilesToAlbum(albumId) {
+  let added = 0;
+  for (const fileId of state.selected) {
+    try {
+      await api(`/api/user/albums/${encodeURIComponent(albumId)}/items`, { method: 'POST', body: JSON.stringify({ fileId }) });
+      added += 1;
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  }
+  state.selected.clear();
+  if (added) markViewDirty('albums');
+  return added;
 }
 
 function confirmDeleteSelected() {
@@ -628,7 +645,7 @@ function confirmDeleteSelected() {
   });
 }
 
-function albumDialog(album = null) {
+function albumDialog(album = null, { onCreated = null } = {}) {
   const editing = Boolean(album);
   const content = `<form id="albumForm">
     <div class="dialog-head"><h2>${editing ? '编辑图库' : '新建图库'}</h2><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
@@ -638,8 +655,8 @@ function albumDialog(album = null) {
       <div class="field"><label for="albumDescription">说明</label><textarea id="albumDescription" name="description" maxlength="200">${escapeHtml(album?.description || '')}</textarea></div>
       <div class="field"><label for="albumCharInfoCharacterName">CharInfo 角色全名（可选）</label><input id="albumCharInfoCharacterName" name="charInfoCharacterName" maxlength="80" value="${escapeHtml(album?.charInfoCharacterName || '')}"><small>需要生成 CharInfo 链接时填写角色完整姓名；不要填写 Discord 用户名或角色简称。</small></div>
       <fieldset class="field" style="border:0;padding:0"><legend>可见性</legend>
-        <label class="radio-option"><input type="radio" name="visibility" value="public" ${album?.visibility === 'public' ? 'checked' : ''}><span class="radio-copy"><strong>公开图库</strong><small>任何人都可以通过链接浏览；填写 CharInfo 角色全名后可供 CharInfo 读取。</small></span></label>
-        <label class="radio-option"><input type="radio" name="visibility" value="unlisted" ${album?.visibility !== 'public' ? 'checked' : ''}><span class="radio-copy"><strong>不公开图库</strong><small>不会公开展示图库，但已分享的文件直链仍可访问。</small></span></label>
+        <label class="radio-option"><input type="radio" name="visibility" value="public" ${album?.visibility !== 'unlisted' ? 'checked' : ''}><span class="radio-copy"><strong>显示在发现页</strong><small>会展示在发现页；分享链接始终由公开名称和图库链接名称决定。</small></span></label>
+        <label class="radio-option"><input type="radio" name="visibility" value="unlisted" ${album?.visibility === 'unlisted' ? 'checked' : ''}><span class="radio-copy"><strong>不显示在发现页</strong><small>不会出现在发现页，但仍可通过分享链接访问。</small></span></label>
       </fieldset>
       <small class="field-error" id="albumError"></small>
     </div>
@@ -652,12 +669,19 @@ function albumDialog(album = null) {
     const payload = { name: form.name.value.trim(), slug: form.slug.value.trim() || undefined, description: form.description.value.trim(), charInfoCharacterName: form.charInfoCharacterName.value.trim(), visibility: form.visibility.value };
     form.querySelector('button[type="submit"]').disabled = true;
     try {
-      if (editing) await api(`/api/user/albums/${encodeURIComponent(album.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
-      else await api('/api/user/albums', { method: 'POST', body: JSON.stringify(payload) });
+      const savedAlbum = editing
+        ? await api(`/api/user/albums/${encodeURIComponent(album.id)}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        : await api('/api/user/albums', { method: 'POST', body: JSON.stringify(payload) });
       close();
       await loadAlbums(true);
-      renderAlbums();
-      toast(editing ? '图库已更新。' : '图库已创建。');
+      if (!editing && onCreated) {
+        const added = await onCreated(savedAlbum.id);
+        renderFiles();
+        toast(`图库已创建，并已将 ${added} 个文件加入图库。`);
+      } else {
+        renderAlbums();
+        toast(editing ? '图库已更新。' : '图库已创建。');
+      }
     } catch (error) {
       form.querySelector('#albumError').textContent = error.status === 409 ? '这个公开名称已经被使用。' : error.message;
       form.querySelector('button[type="submit"]').disabled = false;

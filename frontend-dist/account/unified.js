@@ -16,12 +16,12 @@ function normalizeVisibilityControls(root = document) {
     const card = select.closest('.media-card');
     const help = card?.querySelector('.file-visibility-help');
     if (help) help.textContent = select.value === 'public'
-      ? '公开后会进入发现页，并可用于公开图库。'
-      : '仅在自己的工作室管理，不进入公开目录。';
+      ? '会显示在发现页；分享链接和图库访问不受此设置影响。'
+      : '不会显示在发现页；分享链接和图库仍可正常访问。';
   });
   root.querySelectorAll?.('.discover-option').forEach(node => node.remove());
   root.querySelectorAll?.('.toast').forEach(node => {
-    if (/已公开.*发现页/.test(node.textContent)) node.textContent = '已设为公开，会出现在发现页。';
+    if (/已公开.*发现页/.test(node.textContent)) node.textContent = '已显示在发现页。';
   });
 }
 

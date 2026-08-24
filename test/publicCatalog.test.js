@@ -1,4 +1,5 @@
 import assert from 'assert';
+import * as catalog from '../functions/utils/publicCatalog.js';
 import {
     decodeCursor,
     encodeCursor,
@@ -7,7 +8,7 @@ import {
     presentDiscoverFile,
     resolveFilePublication,
     listDiscover,
-    listPublicAlbumFiles,
+    listSharedAlbumFiles,
 } from '../functions/utils/publicCatalog.js';
 import { parseImageTransform, transformImageRequestViaUrl } from '../functions/file/imageTransform.js';
 
@@ -79,7 +80,7 @@ describe('public catalog policy', () => {
         assert.strictEqual(response, null);
     });
 
-    it('puts the public-only rule in both public SQL queries', async () => {
+    it('uses visibility for Discover but not for direct album sharing', async () => {
         const queries = [];
         const env = {
             img_d1: {
@@ -90,12 +91,36 @@ describe('public catalog policy', () => {
             },
         };
         await listDiscover(env, { limit: 24, type: 'all', sort: 'recent', cursor: null }, 'https://example.test/api/public/discover');
-        await listPublicAlbumFiles(env, 'album-id');
+        await listSharedAlbumFiles(env, 'album-id');
+        assert.match(queries[0], /f\.visibility = 'public'/);
+        assert.doesNotMatch(queries[1], /f\.visibility = 'public'/);
         for (const sql of queries) {
-            assert.match(sql, /f\.visibility = 'public'/);
             assert.match(sql, /f\.moderation_status = 'active'/);
             assert.match(sql, /u\.status = 'active'/);
         }
         assert.doesNotMatch(queries[0], /f\.discover_eligible = 1/);
+    });
+
+    it('lists only public albums in Discover while keeping their direct share URLs', async () => {
+        assert.strictEqual(typeof catalog.listDiscoverAlbums, 'function');
+        const queries = [];
+        const env = {
+            img_d1: {
+                prepare(sql) {
+                    queries.push(sql);
+                    return { bind: () => ({ all: async () => ({ results: [{
+                        id: 'album-id', slug: 'summer', name: 'Summer', description: '', updated_at: 1,
+                        creator_name: 'Master', creator_handle: 'master', cover_id: 'cover.png',
+                        cover_type: 'image/png', cover_visibility: 'private', item_count: 1,
+                    }] }) }) };
+                },
+            },
+        };
+        const albums = await catalog.listDiscoverAlbums(env, 'https://example.test/api/public/discover');
+        assert.match(queries[0], /a\.visibility = 'public'/);
+        assert.match(queries[0], /f\.moderation_status = 'active'/);
+        assert.strictEqual(albums[0].url, 'https://example.test/gallery/master/summer');
+        assert.strictEqual(albums[0].coverUrl, 'https://example.test/file/cover.png');
+        assert.strictEqual(albums[0].coverThumbnailUrl, null);
     });
 });

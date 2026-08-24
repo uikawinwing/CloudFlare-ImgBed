@@ -1,7 +1,7 @@
 import {
     absoluteFileUrl as catalogFileUrl,
     absoluteThumbnailUrl as catalogThumbnailUrl,
-    listPublicAlbumFiles,
+    listSharedAlbumFiles,
 } from '../../../../utils/publicCatalog.js';
 import { requireCharInfoAlbumIdentity } from '../../../../utils/charInfoGallery.js';
 
@@ -20,14 +20,9 @@ export async function onRequestGet({ request, env }) {
     const slugs = gallerySlugsFromRequest(request.url, '/api/public/gallery/');
     if (!slugs) return json({ error: 'Gallery not found' }, 404);
     const { ownerSlug, albumSlug } = slugs;
-    const album = await env.img_d1.prepare("SELECT a.id, a.name, a.description, a.char_info_character_name, a.updated_at, u.discord_id, u.username, u.public_handle FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE u.public_handle = ? AND u.status = 'active' AND a.slug = ? AND a.visibility = 'public'").bind(ownerSlug, albumSlug).first();
+    const album = await env.img_d1.prepare("SELECT a.id, a.name, a.description, a.char_info_character_name, a.updated_at, u.discord_id, u.username, u.public_handle FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE u.public_handle = ? AND u.status = 'active' AND a.slug = ?").bind(ownerSlug, albumSlug).first();
     if (!album) return json({ error: 'Gallery not found' }, 404);
-    try {
-        requireCharInfoAlbumIdentity(album);
-    } catch (error) {
-        return json({ error: error instanceof Error ? error.message : String(error) }, 409);
-    }
-    const files = await listPublicAlbumFiles(env, album.id);
+    const files = await listSharedAlbumFiles(env, album.id);
     const lastModifiedAt = Math.max(Number(album.updated_at) || 0, ...files.map((file) => Number(file.timestamp) || 0));
     const etag = makeEtag(album, files, lastModifiedAt);
     const headers = publicHeaders(etag, lastModifiedAt);
@@ -36,17 +31,22 @@ export async function onRequestGet({ request, env }) {
 }
 
 export function createGalleryPack(album, albumSlug, files, requestUrl) {
-    const identity = requireCharInfoAlbumIdentity(album);
+    let identity = null;
+    try {
+        identity = requireCharInfoAlbumIdentity(album);
+    } catch {}
     return {
-        format: 'char-info-gallery-pack',
+        format: identity ? 'char-info-gallery-pack' : 'imgbed-gallery',
         version: 1,
-        packId: identity.packId,
-        profileId: identity.profileId,
-        characterName: identity.characterName,
+        ...(identity ? {
+            packId: identity.packId,
+            profileId: identity.profileId,
+            characterName: identity.characterName,
+        } : {}),
         gallery: files.map((file) => ({
             title: file.file_name || file.id,
             sources: [absoluteFileUrl(requestUrl, file.id)],
-            thumbnail: String(file.file_type || '').startsWith('image/')
+            thumbnail: file.visibility === 'public' && String(file.file_type || '').startsWith('image/')
                 ? absoluteThumbnailUrl(requestUrl, file.id)
                 : null,
         })),
@@ -74,7 +74,7 @@ function gallerySlugsFromRequest(requestUrl, prefix) {
 }
 
 function makeEtag(album, files, lastModifiedAt) {
-    const signature = files.map((file) => `${file.id}:${file.file_name || ''}:${file.timestamp || ''}`).join('|');
+    const signature = files.map((file) => `${file.id}:${file.file_name || ''}:${file.timestamp || ''}:${file.visibility || ''}`).join('|');
     return `W/"${album.id}:${lastModifiedAt}:${hashString(signature)}"`;
 }
 

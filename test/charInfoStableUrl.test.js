@@ -14,7 +14,7 @@ describe('stable CharInfo visual URL', () => {
             public_handle: 'master',
         };
         let files = [
-            { id: 'first.png', file_name: 'First.png', file_type: 'image/png', timestamp: 1 },
+            { id: 'first.png', file_name: 'First.png', file_type: 'image/png', timestamp: 1, visibility: 'public' },
             { id: 'second.webm', file_name: 'Second.webm', file_type: 'video/webm', timestamp: 2 },
         ];
         let visualConfig = JSON.stringify({
@@ -42,7 +42,8 @@ describe('stable CharInfo visual URL', () => {
                 prepare(sql) {
                     if (sql.includes('FROM albums a JOIN users u')) {
                         assert.match(sql, /a\.id = \?/);
-                        assert.match(sql, /a\.visibility = 'public'/);
+                        assert.doesNotMatch(sql, /a\.visibility = 'public'/);
+                        assert.match(sql, /u\.status = 'active'/);
                         return {
                             bind(value) {
                                 assert.strictEqual(value, 'album-id');
@@ -113,8 +114,15 @@ describe('stable CharInfo visual URL', () => {
         const thirdPack = await thirdResponse.json();
         assert.deepStrictEqual(thirdPack.gallery.map((item) => item.title), ['Second.webm', 'First.png', 'Third.png']);
 
+        files[0].visibility = 'private';
+        const privateResponse = await stableCharInfoGet({ request: new Request(url), env, params: { albumId: 'album-id' } });
+        const privateEtag = privateResponse.headers.get('etag');
+        assert.notStrictEqual(privateEtag, thirdEtag, 'visibility changes must invalidate the ETag');
+        const privatePack = await privateResponse.json();
+        assert.strictEqual(privatePack.gallery.find(item => item.title === 'First.png').thumbnail, null, 'shared private files must use the original instead of the public-only thumbnail endpoint');
+
         const unchangedResponse = await stableCharInfoGet({
-            request: new Request(url, { headers: { 'If-None-Match': thirdEtag } }),
+            request: new Request(url, { headers: { 'If-None-Match': privateEtag } }),
             env,
             params: { albumId: 'album-id' },
         });

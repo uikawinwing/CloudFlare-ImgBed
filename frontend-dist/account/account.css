@@ -139,8 +139,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .media-frame img, .media-frame video { width: 100%; height: 100%; display: block; object-fit: cover; }
 .media-frame video { pointer-events: none; }
 .media-type { position: absolute; top: 12px; right: 12px; padding: 4px 7px; border: 1px solid rgba(255, 255, 255, .36); border-radius: 6px; background: rgba(5, 10, 18, .78); color: #fff; font-size: 11px; font-weight: 740; }
-.play { position: absolute; inset: 50% auto auto 50%; width: 52px; height: 52px; transform: translate(-50%, -50%); border: 1px solid rgba(255, 255, 255, .72); border-radius: 50%; background: rgba(5, 10, 18, .7); }
-.play::before { content: ""; position: absolute; top: 50%; left: 52%; transform: translate(-50%, -50%); border: 8px solid transparent; border-left: 13px solid #fff; border-right: 0; }
 .media-info { padding: 14px 15px 16px; }
 .media-name { overflow: hidden; margin: 0; color: var(--text); font-size: 14px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .media-meta { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 7px; color: var(--muted); font-size: 12px; }
@@ -220,6 +218,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .icon-button svg { width: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .dialog-body { padding: 22px 24px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 0 24px 24px; }
+.file-preview-media { display: grid; place-items: center; max-height: calc(100vh - 230px); overflow: auto; border-radius: 12px; background: #040912; }
+.file-preview-media img, .file-preview-media video { display: block; max-width: 100%; max-height: calc(100vh - 230px); width: auto; height: auto; object-fit: contain; }
 .field { display: grid; gap: 8px; margin-bottom: 18px; }
 .field label, .field legend { color: var(--muted-strong); font-size: 13px; font-weight: 620; }
 .field input, .field textarea { width: 100%; min-height: 46px; padding: 11px 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: rgba(5, 13, 24, .84); color: var(--text); }

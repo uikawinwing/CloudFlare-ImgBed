@@ -34,8 +34,6 @@ button:focus-visible, a:focus-visible { outline: 3px solid color-mix(in srgb, va
 .gallery-item:hover .item-media img, .gallery-item:hover .item-media video { transform: scale(1.015); filter: brightness(.97); }
 .item-title { overflow: hidden; margin: 0; padding: 9px 3px 0; color: var(--app-text); font-size: 12px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .type-label { position: absolute; top: 9px; right: 9px; padding: 4px 7px; border-radius: 999px; background: rgba(5,9,16,.68); color: white; font-size: 9px; font-weight: 760; }
-.play { position: absolute; inset: 50% auto auto 50%; width: 48px; height: 48px; display: grid; place-items: center; transform: translate(-50%,-50%); border: 1px solid rgba(255,255,255,.65); border-radius: 50%; background: rgba(5,8,13,.58); }
-.play::before { content: ""; margin-left: 4px; border: 8px solid transparent; border-left: 12px solid white; border-right: 0; }
 .gallery-note { margin: 30px 0 0; color: var(--app-muted); font-size: 12px; text-align: center; }
 .empty, .gallery-error, .loading { min-height: 66vh; display: grid; place-content: center; justify-items: center; text-align: center; }
 .loading-ring { width: 30px; height: 30px; margin-bottom: 13px; border: 3px solid var(--app-border); border-top-color: var(--app-accent); border-radius: 50%; animation: spin .75s linear infinite; }

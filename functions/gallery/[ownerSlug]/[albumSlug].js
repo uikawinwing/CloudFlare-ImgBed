@@ -4,7 +4,7 @@ export async function onRequestGet({ request, env }) {
     const { ownerSlug, albumSlug } = slugs;
     const owner = escapeAttribute(ownerSlug);
     const album = escapeAttribute(albumSlug);
-    const record = env.img_d1?.prepare ? await env.img_d1.prepare("SELECT a.name, a.description, u.username FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE u.public_handle = ? AND a.slug = ? AND a.visibility = 'public'").bind(ownerSlug, albumSlug).first() : null;
+    const record = env.img_d1?.prepare ? await env.img_d1.prepare("SELECT a.name, a.description, u.username FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE u.public_handle = ? AND u.status = 'active' AND a.slug = ?").bind(ownerSlug, albumSlug).first() : null;
     const name = escapeAttribute(record?.name || albumSlug || '公开图库');
     const creator = escapeAttribute(record?.username || ownerSlug || '');
     const description = escapeAttribute(record?.description || '');

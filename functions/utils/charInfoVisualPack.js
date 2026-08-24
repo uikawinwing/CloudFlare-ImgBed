@@ -19,9 +19,9 @@ export function parsePublicVisualConfig(storedValue) {
 export function createCharInfoVisualPack({ album, files, storedVisualConfig, requestUrl }) {
     const identity = requireCharInfoAlbumIdentity(album);
     const visualConfig = parsePublicVisualConfig(storedVisualConfig);
-    const publicFiles = Array.isArray(files) ? files : [];
-    const fileById = new Map(publicFiles.map(file => [String(file.id), file]));
-    const orderedFiles = orderGalleryFiles(publicFiles, visualConfig?.mainFileId);
+    const sharedFiles = Array.isArray(files) ? files : [];
+    const fileById = new Map(sharedFiles.map(file => [String(file.id), file]));
+    const orderedFiles = orderGalleryFiles(sharedFiles, visualConfig?.mainFileId);
 
     return {
         format: CHAR_INFO_VISUAL_PACK_FORMAT,
@@ -47,7 +47,7 @@ function buildGalleryItem(file, visualConfig, requestUrl) {
     return {
         title: file.file_name || file.id,
         sources: [absoluteFileUrl(requestUrl, file.id)],
-        thumbnail: String(file.file_type || '').startsWith('image/')
+        thumbnail: file.visibility === 'public' && String(file.file_type || '').startsWith('image/')
             ? absoluteThumbnailUrl(requestUrl, file.id)
             : null,
         ...(hidden ? { viewerVisible: false } : {}),

@@ -1,6 +1,6 @@
 import { charInfoVisualStorageKey } from '../../../utils/charInfoVisualConfig.js';
 import { createCharInfoVisualPack } from '../../../utils/charInfoVisualPack.js';
-import { listPublicAlbumFiles } from '../../../utils/publicCatalog.js';
+import { listSharedAlbumFiles } from '../../../utils/publicCatalog.js';
 
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -19,12 +19,12 @@ export async function onRequestGet({ request, env, params }) {
     if (!albumId) return json({ error: 'Gallery not found' }, 404);
 
     const album = await env.img_d1.prepare(
-        "SELECT a.id, a.name, a.description, a.char_info_character_name, a.updated_at, u.discord_id, u.username, u.public_handle FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE a.id = ? AND u.status = 'active' AND a.visibility = 'public'",
+        "SELECT a.id, a.name, a.description, a.char_info_character_name, a.updated_at, u.discord_id, u.username, u.public_handle FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE a.id = ? AND u.status = 'active'",
     ).bind(albumId).first();
     if (!album) return json({ error: 'Gallery not found' }, 404);
 
     const [files, visualRow] = await Promise.all([
-        listPublicAlbumFiles(env, album.id),
+        listSharedAlbumFiles(env, album.id),
         env.img_d1.prepare('SELECT value FROM other_data WHERE key = ?').bind(charInfoVisualStorageKey(album.id)).first(),
     ]);
     const storedVisualConfig = typeof visualRow?.value === 'string' ? visualRow.value : null;
@@ -73,7 +73,7 @@ function makeEtag(album, files, storedVisualConfig) {
         album.name || '',
         album.description || '',
         storedVisualConfig || '',
-        ...files.map((file) => `${file.id}:${file.file_name || ''}:${file.file_type || ''}:${file.timestamp || ''}`),
+        ...files.map((file) => `${file.id}:${file.file_name || ''}:${file.file_type || ''}:${file.timestamp || ''}:${file.visibility || ''}`),
     ].join('|');
     return `W/\"${album.id}:${hashString(signature)}\"`;
 }

@@ -1,4 +1,4 @@
-import { CatalogRequestError, listDiscover, parseDiscoverQuery } from '../../../utils/publicCatalog.js';
+import { CatalogRequestError, listDiscover, listDiscoverAlbums, parseDiscoverQuery } from '../../../utils/publicCatalog.js';
 
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -13,8 +13,12 @@ export async function onRequestGet({ request, env }) {
     if (!env.img_d1?.prepare) return json({ error: 'D1 is required' }, 503);
     try {
         const query = parseDiscoverQuery(new URL(request.url));
-        const page = await listDiscover(env, query, request.url);
-        return json({ ...page, type: query.type, sort: query.sort });
+        const includeAlbums = query.type === 'all' && query.sort === 'recent' && !query.cursor;
+        const [page, albums] = await Promise.all([
+            listDiscover(env, query, request.url),
+            includeAlbums ? listDiscoverAlbums(env, request.url) : Promise.resolve([]),
+        ]);
+        return json({ ...page, albums, type: query.type, sort: query.sort });
     } catch (error) {
         if (error instanceof CatalogRequestError) return json({ error: error.message }, 400);
         console.error('Discover catalog failed', error);

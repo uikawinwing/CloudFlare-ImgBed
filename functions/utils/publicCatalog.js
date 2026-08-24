@@ -3,6 +3,7 @@ import { absoluteThumbnailUrl } from './thumbnail.js';
 const MAX_PAGE_SIZE = 48;
 
 export const PUBLIC_FILE_SQL = "f.visibility = 'public' AND f.moderation_status = 'active' AND u.status = 'active'";
+export const SHARED_ALBUM_FILE_SQL = "f.moderation_status = 'active' AND u.status = 'active'";
 
 export function isPublicCatalogFile(file, owner) {
     return file?.visibility === 'public'
@@ -74,12 +75,42 @@ export async function listDiscover(env, query, requestUrl) {
     };
 }
 
-export async function listPublicAlbumFiles(env, albumId) {
-    const result = await env.img_d1.prepare(`SELECT f.id, f.file_name, f.file_type, f.timestamp
+export async function listDiscoverAlbums(env, requestUrl, limit = 12) {
+    const pageSize = Math.min(Math.max(Number(limit) || 12, 1), 24);
+    const sql = `WITH ranked_items AS (
+        SELECT ai.album_id, f.id AS cover_id, f.file_type AS cover_type, f.visibility AS cover_visibility,
+            ROW_NUMBER() OVER (PARTITION BY ai.album_id ORDER BY ai.position, ai.created_at) AS item_rank
+        FROM album_items ai
+        JOIN files f ON f.id = ai.file_id
+        WHERE f.moderation_status = 'active'
+    ), item_counts AS (
+        SELECT ai.album_id, COUNT(*) AS item_count
+        FROM album_items ai
+        JOIN files f ON f.id = ai.file_id
+        WHERE f.moderation_status = 'active'
+        GROUP BY ai.album_id
+    )
+    SELECT a.id, a.slug, a.name, a.description, a.updated_at,
+        u.username AS creator_name, u.public_handle AS creator_handle,
+        cover.cover_id, cover.cover_type, cover.cover_visibility,
+        COALESCE(counts.item_count, 0) AS item_count
+    FROM albums a
+    JOIN users u ON u.discord_id = a.owner_id
+    LEFT JOIN ranked_items cover ON cover.album_id = a.id AND cover.item_rank = 1
+    LEFT JOIN item_counts counts ON counts.album_id = a.id
+    WHERE a.visibility = 'public' AND u.status = 'active' AND u.public_handle IS NOT NULL
+    ORDER BY a.updated_at DESC, a.id DESC
+    LIMIT ?`;
+    const result = await env.img_d1.prepare(sql).bind(pageSize).all();
+    return (result.results || []).map((album) => presentDiscoverAlbum(album, requestUrl));
+}
+
+export async function listSharedAlbumFiles(env, albumId) {
+    const result = await env.img_d1.prepare(`SELECT f.id, f.file_name, f.file_type, f.timestamp, f.visibility
         FROM album_items ai
         JOIN files f ON f.id = ai.file_id
         JOIN users u ON u.discord_id = f.owner_id
-        WHERE ai.album_id = ? AND ${PUBLIC_FILE_SQL}
+        WHERE ai.album_id = ? AND ${SHARED_ALBUM_FILE_SQL}
         ORDER BY ai.position, ai.created_at`).bind(albumId).all();
     return result.results || [];
 }
@@ -101,6 +132,35 @@ export function presentDiscoverFile(file, requestUrl) {
         },
         url,
         thumbnailUrl: isImage ? absoluteThumbnailUrl(requestUrl, file.id) : null,
+    };
+}
+
+export function presentDiscoverAlbum(album, requestUrl) {
+    const coverUrl = album.cover_id ? absoluteFileUrl(requestUrl, album.cover_id) : null;
+    const coverThumbnailUrl = album.cover_id
+        && album.cover_visibility === 'public'
+        && String(album.cover_type || '').startsWith('image/')
+        ? absoluteThumbnailUrl(requestUrl, album.cover_id)
+        : null;
+    const url = new URL(requestUrl);
+    url.protocol = 'https:';
+    url.pathname = `/gallery/${encodeURIComponent(album.creator_handle)}/${encodeURIComponent(album.slug)}`;
+    url.search = '';
+    url.hash = '';
+    return {
+        id: album.id,
+        name: album.name || '未命名图库',
+        description: album.description || '',
+        itemCount: Number(album.item_count) || 0,
+        updatedAt: Number(album.updated_at) || 0,
+        creator: {
+            name: album.creator_name || 'Creator',
+            handle: album.creator_handle,
+        },
+        url: url.toString(),
+        coverUrl,
+        coverThumbnailUrl,
+        coverType: album.cover_type || null,
     };
 }
 

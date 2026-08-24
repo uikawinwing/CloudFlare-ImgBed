@@ -109,7 +109,7 @@ function recentMarkup() {
   const failed = uploadState.recent.filter(item => !item.url);
   return `<section class="integrated-upload-status recent" aria-live="polite">
     <div class="integrated-upload-status-head"><div><strong>刚刚上传</strong><small>${success.length} 个已加入“我的文件”${failed.length ? ` · ${failed.length} 个失败` : ''}</small></div><button type="button" data-recent-upload-dismiss>关闭</button></div>
-    <div class="integrated-upload-list">${uploadState.recent.map(item => `<div class="integrated-upload-row ${item.url ? 'done' : 'error'}"><div class="integrated-upload-copy"><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong><small>${item.url ? '默认保持私密，可在文件卡中改为公开' : escapeHtml(item.error || '上传失败')}</small></div>${item.url ? `<button type="button" data-copy-upload-url="${escapeHtml(item.url)}">复制链接</button>` : ''}</div>`).join('')}</div>
+    <div class="integrated-upload-list">${uploadState.recent.map(item => `<div class="integrated-upload-row ${item.url ? 'done' : 'error'}"><div class="integrated-upload-copy"><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong><small>${item.url ? '默认显示在发现页，可在文件卡中隐藏' : escapeHtml(item.error || '上传失败')}</small></div>${item.url ? `<button type="button" data-copy-upload-url="${escapeHtml(item.url)}">复制链接</button>` : ''}</div>`).join('')}</div>
   </section>`;
 }
 

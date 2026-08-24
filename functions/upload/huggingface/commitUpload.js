@@ -140,7 +140,7 @@ export async function onRequestPost(context) {
             Directory: '',
             Tags: [],
             OwnerId: identity.id,
-            Visibility: 'private',
+            Visibility: 'public',
             ModerationStatus: 'active'
         };
 

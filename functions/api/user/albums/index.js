@@ -14,7 +14,7 @@ export async function onRequest(context) {
     const name = String(payload.name || '').trim();
     const description = payload.description === undefined ? null : String(payload.description).trim();
     const slug = normalizeSlug(payload.slug || name);
-    const visibility = payload.visibility || 'unlisted';
+    const visibility = payload.visibility || 'public';
     const charInfoCharacterName = normalizeCharInfoCharacterName(payload.charInfoCharacterName);
     const charInfoCharacterNameError = validateCharInfoCharacterName(charInfoCharacterName);
     if (!name || !slug || (description !== null && description.length > 1000) || !['public', 'unlisted'].includes(visibility)) return json({ error: 'A valid album name, description, slug and visibility are required' }, 400);

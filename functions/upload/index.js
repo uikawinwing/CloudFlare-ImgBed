@@ -238,7 +238,7 @@ async function processFileUpload(context, formdata = null) {
     };
     if (context.discordIdentity) {
         metadata.OwnerId = context.discordIdentity.id;
-        metadata.Visibility = 'private';
+        metadata.Visibility = 'public';
         metadata.ModerationStatus = 'active';
     }
 
