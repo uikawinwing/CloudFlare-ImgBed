@@ -235,7 +235,7 @@ function fileCard(file) {
       <p class="media-name" title="${escapeHtml(file.file_name || file.id)}">${escapeHtml(file.file_name || file.id)}</p>
       <div class="media-meta"><span>${formatBytes(file.file_size_bytes)}</span><span>${formatDate(file.timestamp)}</span>${file.moderation_status === 'quarantined' ? '<span>已撤下</span>' : ''}</div>
       <div class="file-visibility-row"><label><span class="sr-only">${escapeHtml(mediaLabel)} 是否显示在发现页</span><select class="file-visibility" aria-label="${escapeHtml(mediaLabel)} 是否显示在发现页"><option value="private" ${visibility === 'private' ? 'selected' : ''}>不显示</option><option value="public" ${visibility === 'public' ? 'selected' : ''}>显示在发现页</option></select></label></div><small class="file-visibility-help">${visibilityHelp}</small>
-      <div class="file-card-actions"><button class="file-action" type="button" data-copy-file>${icons.link}<span>复制链接</span></button>${visibility === 'public' && !isVideo ? `<button class="file-action" type="button" data-copy-thumbnail>${icons.link}<span>复制缩略图</span></button>` : ''}<a class="file-action" href="${escapeHtml(src)}" target="_blank" rel="noopener">${icons.external}<span>原文件</span></a></div>
+      <div class="file-card-actions"><button class="file-action" type="button" data-copy-file>${icons.link}<span>复制链接</span></button><a class="file-action" href="${escapeHtml(src)}" target="_blank" rel="noopener">${icons.external}<span>原文件</span></a></div>
     </div>
   </article>`;
 }
@@ -265,7 +265,6 @@ function renderFiles() {
           <div class="quota-copy"><span>${quota ? `已使用 ${formatBytes(used)} / 200 MB` : `已使用 ${formatBytes(used)}`}</span><span>${quota ? `${Math.min(100, Math.round(used / quota * 100))}%` : '所有者不限额'}</span></div>
           <div class="quota-track"><div class="quota-bar" style="width:${quota ? Math.min(100, used / quota * 100) : 0}%"></div></div>
         </div>
-        <a class="button primary" href="/studio">${icons.upload}前往上传</a>
       </div>
     </header>
     <div class="toolbar file-toolbar">
@@ -280,7 +279,7 @@ function renderFiles() {
     ${state.selected.size ? `<div class="selection-bar">
       <div class="selection-copy"><strong>已选择 ${state.selected.size} 项</strong><button class="button ghost" id="clearSelection" type="button">取消选择</button></div>
       <div class="selection-actions"><button class="button" id="addToAlbum" type="button">${icons.folder}加入图库</button><button class="button danger" id="deleteSelected" type="button">${icons.trash}永久删除</button></div>
-    </div>` : ''}
+    </div>` : state.files.length ? '<p class="selection-guidance">勾选文件卡左上角，可批量加入图库或删除</p>' : ''}
     ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '试试更换筛选条件或搜索词。' : '点击上传文件，或直接拖拽 / Ctrl+V 粘贴 JPG、PNG、GIF、WebP、AVIF、MP4 或 WebM。'}</p>${state.files.length ? '' : `<button class="button primary" type="button" data-integrated-upload-trigger>${icons.upload}上传第一个文件</button>`}</div>`}
   </section>`;
   bindFileEvents();
@@ -304,8 +303,9 @@ function albumRow(album) {
       <div class="album-actions">
         ${canShare ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : ''}
         ${canShareCharInfo ? `<button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制 CharInfo 链接</button>` : ''}
+        ${album.charInfoCharacterName ? `<a class="button primary" href="/charinfo/?album=${encodeURIComponent(album.id)}">打开 Creator</a>` : '<button class="button primary" type="button" data-edit-album>配置 CharInfo</button>'}
         <button class="button" type="button" data-manage-album>管理内容</button>
-        <button class="button" type="button" data-edit-album>编辑</button>
+        ${album.charInfoCharacterName ? '<button class="button" type="button" data-edit-album>编辑图库</button>' : ''}
         <button class="button danger" type="button" data-delete-album>删除图库</button>
       </div>
     </div>
@@ -528,14 +528,6 @@ function bindFileEvents() {
         toast('资源链接已复制。');
       } catch {
         toast('复制失败，请直接打开原文件后复制地址。', 'error');
-      }
-    });
-    card.querySelector('[data-copy-thumbnail]')?.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(new URL(thumbnailUrl(state.files.find(file => file.id === id)), location.origin).href);
-        toast('缩略图链接已复制。');
-      } catch {
-        toast('缩略图链接复制失败。', 'error');
       }
     });
     card.querySelector('.file-visibility')?.addEventListener('change', event => updateFileVisibility(id, event.currentTarget.value));

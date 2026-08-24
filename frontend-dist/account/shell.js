@@ -31,6 +31,7 @@ function navItem(item, active) {
 
 function activeKey() {
   const path = window.location.pathname;
+  if (path.startsWith('/charinfo')) return 'charinfo';
   if (path.startsWith('/account')) {
     const params = new URLSearchParams(window.location.search);
     const view = params.get('view') || 'files';
@@ -49,6 +50,7 @@ function buildNavigation(role) {
     { key: 'upload', label: '上传', href: '/studio', icon: 'upload' },
     { key: 'files', label: '我的文件', href: accountHref('files'), icon: 'files' },
     { key: 'albums', label: '我的图库', href: accountHref('albums'), icon: 'gallery' },
+    { key: 'charinfo', label: 'CharInfo Creator', href: '/charinfo/', icon: 'gallery' },
   ];
   const staff = [
     { key: 'content', label: '内容管理', href: accountHref('admin', 'content'), icon: 'shield' },

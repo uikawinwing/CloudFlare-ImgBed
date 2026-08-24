@@ -118,22 +118,6 @@ function patchFilesView() {
   const section = document.querySelector('#mainContent .page-section');
   if (!section) return;
 
-  section.querySelectorAll('a[href="/studio"], a[href="/studio/"]').forEach(link => {
-    link.href = '#';
-    link.dataset.integratedUploadTrigger = 'true';
-    if (link.textContent.includes('前往上传')) link.innerHTML = `${link.querySelector('svg')?.outerHTML || ''}上传文件`;
-  });
-
-  const headActions = section.querySelector('.head-actions');
-  if (headActions && !headActions.querySelector('[data-integrated-upload-trigger]')) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'button primary';
-    button.dataset.integratedUploadTrigger = 'true';
-    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>上传文件';
-    headActions.append(button);
-  }
-
   let helper = section.querySelector('.integrated-upload-helper');
   if (!helper) {
     helper = document.createElement('div');

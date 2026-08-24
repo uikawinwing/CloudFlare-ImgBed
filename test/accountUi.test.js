@@ -3,10 +3,28 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../frontend-dist/account/account.js', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../frontend-dist/account/account.css', import.meta.url), 'utf8');
+const shellSource = readFileSync(new URL('../frontend-dist/account/shell.js', import.meta.url), 'utf8');
+const uploadSource = readFileSync(new URL('../frontend-dist/account/upload-in-files.js', import.meta.url), 'utf8');
+const creatorSource = readFileSync(new URL('../frontend-dist/charinfo/index.html', import.meta.url), 'utf8');
 const discoverSource = readFileSync(new URL('../frontend-dist/discover/discover.js', import.meta.url), 'utf8');
 const discoverPage = readFileSync(new URL('../frontend-dist/index.html', import.meta.url), 'utf8');
 
 describe('account media and album UI', () => {
+  it('provides clear Creator entry points from the workspace and each configured Album', () => {
+    assert.match(shellSource, /key: 'charinfo', label: 'CharInfo Creator', href: '\/charinfo\/'/);
+    assert.match(source, /class="button primary" href="\/charinfo\/\?album=\$\{encodeURIComponent\(album\.id\)\}">打开 Creator/);
+    assert.match(creatorSource, /href="\/account\/\?view=albums">返回我的图库/);
+  });
+
+  it('uses one upload entry, explains selection, and hides internal thumbnail actions', () => {
+    assert.doesNotMatch(source, /href="\/studio"/);
+    assert.doesNotMatch(uploadSource, /headActions\.append\(button\)/);
+    assert.match(uploadSource, /integrated-upload-helper[\s\S]*选择文件/);
+    assert.match(source, /勾选文件卡左上角/);
+    assert.match(styles, /\.media-select[\s\S]*appearance: none/);
+    assert.doesNotMatch(source, /data-copy-thumbnail/);
+  });
+
   it('lets selected files be added to a newly created album from the picker', () => {
     assert.match(source, /id="createAlbumForSelection"[\s\S]*?新建图库/);
     assert.match(source, /albumDialog\(null, \{ onCreated: addSelectedFilesToAlbum \}\)/);
