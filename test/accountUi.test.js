@@ -34,7 +34,8 @@ describe('account media and album UI', () => {
 
   it('renders public albums returned by Discover', () => {
     assert.match(discoverPage, /id="albumGrid"/);
-    assert.match(discoverSource, /state\.albums = Array\.isArray\(body\.albums\)/);
+    assert.match(discoverSource, /const firstPage = reset \|\| !state\.items\.length/);
+    assert.match(discoverSource, /if \(firstPage\) state\.albums = Array\.isArray\(body\.albums\)/);
     assert.match(discoverSource, /album\.coverThumbnailUrl \|\| album\.coverUrl/);
   });
 });

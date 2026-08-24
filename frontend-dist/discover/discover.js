@@ -121,6 +121,7 @@ function featured(items) {
 
 async function loadFeed({ reset = false } = {}) {
   if (state.loading || (!reset && state.done)) return;
+  const firstPage = reset || !state.items.length;
   state.loading = true;
   if (reset) {
     state.items = [];
@@ -139,10 +140,11 @@ async function loadFeed({ reset = false } = {}) {
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || '暂时无法读取公开作品。');
     const items = Array.isArray(body.files) ? body.files : [];
-    if (reset) state.albums = Array.isArray(body.albums) ? body.albums : [];
+    if (firstPage) state.albums = Array.isArray(body.albums) ? body.albums : [];
     state.items.push(...items);
     state.cursor = body.nextCursor || body.cursor || null;
     state.done = !state.cursor || !items.length;
+    state.loading = false;
     render();
   } catch (error) {
     state.done = true;
