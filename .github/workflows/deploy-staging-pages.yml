@@ -26,5 +26,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy frontend-dist --project-name=cloudflare-imgbed-dxx --branch=staging
+          command: pages deploy frontend-dist --project-name=cloudflare-imgbed --branch=staging
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
