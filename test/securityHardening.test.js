@@ -27,11 +27,19 @@ function ftypBox(majorBrand, compatibleBrand = majorBrand) {
 }
 
 describe('media security hardening', () => {
-    it('keeps the upload allowlist media-only and does not enable WebM without signature support', () => {
+    it('keeps the upload allowlist media-only with validated WebM support', () => {
         assert.strictEqual(ALLOWED_UPLOAD_TYPES.has('image/svg+xml'), false);
         assert.strictEqual(ALLOWED_UPLOAD_TYPES.has('text/html'), false);
-        assert.strictEqual(ALLOWED_UPLOAD_TYPES.has('video/webm'), false);
+        assert.strictEqual(ALLOWED_UPLOAD_TYPES.has('video/webm'), true);
         assert.strictEqual(ALLOWED_UPLOAD_TYPES.has('video/mp4'), true);
+    });
+
+    it('keeps WebM enabled in the integrated upload UI', () => {
+        const uploadSource = readFileSync(new URL('../frontend-dist/account/upload-in-files.js', import.meta.url), 'utf8');
+        assert.match(uploadSource, /const ACCEPTED_FILE = .*webm/i);
+        assert.match(uploadSource, /input\.accept = .*video\/webm/i);
+        assert.match(uploadSource, /file\.type !== 'video\/webm'/);
+        assert.match(uploadSource, /MP4 与 WebM/);
     });
 
     it('uses the verified MIME type for canonical storage extensions instead of the user filename', () => {

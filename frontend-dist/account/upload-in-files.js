@@ -1,6 +1,6 @@
 const RECENT_UPLOADS_KEY = 'imgbed-recent-upload-results';
 const MAX_UPLOAD_BYTES = 95 * 1024 * 1024;
-const ACCEPTED_FILE = /\.(?:jpe?g|png|gif|webp|avif|mp4)$/i;
+const ACCEPTED_FILE = /\.(?:jpe?g|png|gif|webp|avif|mp4|webm)$/i;
 
 const uploadState = {
   busy: false,
@@ -65,7 +65,7 @@ function ensureFileInput() {
   input.id = 'integratedUploadInput';
   input.type = 'file';
   input.multiple = true;
-  input.accept = 'image/jpeg,image/png,image/gif,image/webp,image/avif,video/mp4';
+  input.accept = 'image/jpeg,image/png,image/gif,image/webp,image/avif,video/mp4,video/webm';
   input.hidden = true;
   input.addEventListener('change', () => {
     const files = [...(input.files || [])];
@@ -88,7 +88,7 @@ function ensureDropOverlay() {
   overlay.id = 'integratedUploadDropOverlay';
   overlay.className = 'integrated-upload-drop-overlay';
   overlay.hidden = true;
-  overlay.innerHTML = '<div class="integrated-upload-drop-card"><span aria-hidden="true">＋</span><strong>松开以上传到“我的文件”</strong><small>图片、动图、WebP、AVIF 或 MP4</small></div>';
+  overlay.innerHTML = '<div class="integrated-upload-drop-card"><span aria-hidden="true">＋</span><strong>松开以上传到“我的文件”</strong><small>图片、动图、WebP、AVIF、MP4 与 WebM</small></div>';
   document.body.append(overlay);
   return overlay;
 }
@@ -164,8 +164,8 @@ function normalizeSelectedFiles(files) {
   const accepted = [];
   for (const file of files) {
     if (!(file instanceof File) || !file.size) continue;
-    if (!ACCEPTED_FILE.test(file.name) && !file.type.startsWith('image/') && file.type !== 'video/mp4') {
-      notify(`${file.name}：目前“我的文件”只接收图片、动图与 MP4。`, 'error');
+    if (!ACCEPTED_FILE.test(file.name) && !file.type.startsWith('image/') && file.type !== 'video/mp4' && file.type !== 'video/webm') {
+      notify(`${file.name}：目前“我的文件”只接收图片、动图、MP4 与 WebM。`, 'error');
       continue;
     }
     if (file.size > MAX_UPLOAD_BYTES) {
