@@ -9,6 +9,7 @@ const dialogRoot = document.querySelector('#dialogRoot');
 let lastTrigger = null;
 let discoverReady = false;
 let lastRefreshAt = 0;
+let mediaObserver = null;
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 const encodeFilePath = id => String(id).split('/').map(encodeURIComponent).join('/');
@@ -57,7 +58,7 @@ async function reflectSignInState() {
 
 function mediaMarkup(item, eager = false) {
   const title = escapeHtml(titleFor(item));
-  if (isVideo(item)) return `<div class="video-placeholder" aria-hidden="true"><span class="play-symbol"></span></div><span class="type-label">视频</span>`;
+  if (isVideo(item)) return `<video src="${escapeHtml(originalUrl(item))}" autoplay muted loop playsinline preload="metadata" aria-label="${title}"></video><span class="type-label">视频</span>`;
   return `<img src="${escapeHtml(previewUrl(item))}" alt="${title}" loading="${eager ? 'eager' : 'lazy'}" decoding="async" fetchpriority="${eager ? 'high' : 'low'}">`;
 }
 
@@ -100,6 +101,7 @@ function render() {
   else if (!state.loading && !state.items.length) setStatus('empty', '还没有公开作品。第一批作品发布后，会在这里出现。');
   else if (!state.loading) setStatus('', '');
   loadMore.hidden = state.done || !state.items.length;
+  observeDiscoverVideos();
 }
 
 function featured(items) {
@@ -117,6 +119,27 @@ function featured(items) {
   hero.hidden = false;
   hero.innerHTML = `<button type="button" data-open-id="${escapeHtml(heroItem.id)}" aria-label="查看精选作品"><span class="hero-media">${mediaMarkup(heroItem, true)}</span><span class="hero-feature-overlay"><small>精选推荐</small></span></button>`;
   rail.innerHTML = items.slice(1, 5).map(item => cardMarkup(item, true)).join('');
+  observeDiscoverVideos();
+}
+
+function observeDiscoverVideos() {
+  mediaObserver?.disconnect();
+  if (!('IntersectionObserver' in window)) return;
+  mediaObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+    const video = entry.target;
+    if (entry.isIntersecting) video.play().catch(() => {}); else video.pause();
+  }), { threshold: .35 });
+  document.querySelectorAll('.pin-media video, .hero-media video, .feature-media video, .album-cover video').forEach(video => {
+    video.addEventListener('loadedmetadata', syncPinRatio, { once: true });
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) syncPinRatio();
+    mediaObserver.observe(video);
+
+    function syncPinRatio() {
+      const { videoWidth, videoHeight } = video;
+      const pinMedia = video.closest('.pin-media');
+      if (pinMedia && videoWidth > 0 && videoHeight > 0) pinMedia.style.aspectRatio = `${videoWidth} / ${videoHeight}`;
+    }
+  });
 }
 
 async function loadFeed({ reset = false } = {}) {

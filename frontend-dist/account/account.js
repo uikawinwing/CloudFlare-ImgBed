@@ -225,7 +225,7 @@ function fileCard(file) {
   const mediaLabel = file.file_name || file.id;
   return `<article class="media-card${selected ? ' selected' : ''}" data-file-id="${escapeHtml(file.id)}">
     ${state.selectionMode ? `<input class="media-select" type="checkbox" aria-label="选择 ${escapeHtml(mediaLabel)}" ${selected ? 'checked' : ''}>` : ''}
-    <button class="media-frame" type="button" data-open-media aria-label="${state.selectionMode ? '选择' : '打开'} ${escapeHtml(mediaLabel)}">
+    <button class="media-frame" type="button" data-open-media ${isVideo ? 'data-video-frame' : ''} aria-label="${state.selectionMode ? '选择' : '打开'} ${escapeHtml(mediaLabel)}">
       ${isVideo ? `<video src="${src}" muted loop playsinline preload="metadata"></video><span class="media-type">${videoTypeLabel(file)}</span>` : `<img src="${escapeHtml(preview)}" alt="${escapeHtml(mediaLabel)}" loading="lazy" decoding="async">`}
     </button>
   </article>`;
@@ -432,7 +432,17 @@ function observeVideos() {
     const video = entry.target;
     if (entry.isIntersecting) video.play().catch(() => {}); else video.pause();
   }), { threshold: .45 });
-  document.querySelectorAll('.media-frame video, .album-cover video').forEach(video => observer.observe(video));
+  document.querySelectorAll('.media-frame video, .album-cover video').forEach(video => {
+    video.addEventListener('loadedmetadata', syncFrameRatio, { once: true });
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) syncFrameRatio();
+    observer.observe(video);
+
+    function syncFrameRatio() {
+      const { videoWidth, videoHeight } = video;
+      const frame = video.closest('.media-frame');
+      if (frame && videoWidth > 0 && videoHeight > 0) frame.style.aspectRatio = `${videoWidth} / ${videoHeight}`;
+    }
+  });
 }
 
 function openDialog(content, { closeable = true, wide = false, className = '', label = '对话框' } = {}) {

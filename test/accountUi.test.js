@@ -61,6 +61,16 @@ describe('account media and album UI', () => {
     assert.doesNotMatch(styles, /^\.play/m);
   });
 
+  it('sizes video pins from their real frame and auto-previews them in Discover', () => {
+    assert.match(source, /loadedmetadata[\s\S]*videoWidth[\s\S]*videoHeight[\s\S]*aspectRatio/);
+    assert.match(discoverSource, /<video[^>]*autoplay[^>]*muted[^>]*loop[^>]*playsinline/);
+    assert.match(discoverSource, /loadedmetadata[\s\S]*videoWidth[\s\S]*videoHeight[\s\S]*pinMedia\.style\.aspectRatio/);
+    assert.match(discoverSource, /IntersectionObserver[\s\S]*\.play\(\)/);
+    assert.match(discoverSource, /\.album-cover video/);
+    assert.doesNotMatch(discoverSource, /discover-play|play-overlay|▶/);
+    assert.doesNotMatch(discoverSource, /video-placeholder|play-symbol/);
+  });
+
   it('keeps sharing buttons available when the owner has a handle, regardless of discover visibility', () => {
     assert.match(source, /const canShare = Boolean\(state\.user\.publicHandle\)/);
     assert.match(source, /const canShareCharInfo = canShare && Boolean\(album\.charInfoCharacterName\)/);

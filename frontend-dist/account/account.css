@@ -139,7 +139,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .media-select:checked::after { content: '✓'; display: grid; width: 100%; height: 100%; place-items: center; color: #fff; font-size: 18px; font-weight: 800; line-height: 1; }
 .media-select:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .media-frame { position: relative; display: block; width: 100%; padding: 0; border: 0; overflow: hidden; background: #040912; cursor: pointer; }
-.media-frame img, .media-frame video { width: 100%; height: auto; display: block; object-fit: cover; }
+.media-frame[data-video-frame] { aspect-ratio: 1 / 1; }
+.media-frame img { width: 100%; height: auto; display: block; object-fit: cover; }
+.media-frame video { width: 100%; height: 100%; display: block; object-fit: cover; }
 .media-frame video { pointer-events: none; }
 .media-type { position: absolute; top: 12px; right: 12px; padding: 4px 7px; border: 1px solid rgba(255, 255, 255, .36); border-radius: 6px; background: rgba(5, 10, 18, .78); color: #fff; font-size: 11px; font-weight: 740; }
 .file-visibility { max-width: 132px; min-height: 32px; padding: 0 29px 0 9px; border: 1px solid var(--border); border-radius: 7px; background: rgba(8, 18, 31, .72); color: var(--muted-strong); font-size: 12px; }
