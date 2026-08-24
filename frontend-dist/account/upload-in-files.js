@@ -118,19 +118,11 @@ function patchFilesView() {
   const section = document.querySelector('#mainContent .page-section');
   if (!section) return;
 
-  let helper = section.querySelector('.integrated-upload-helper');
-  if (!helper) {
-    helper = document.createElement('div');
-    helper.className = 'integrated-upload-helper';
-    const toolbar = section.querySelector('.file-toolbar');
-    (toolbar || section.firstElementChild)?.insertAdjacentElement('beforebegin', helper);
-  }
-  if (helper) {
-    helper.innerHTML = `<div><strong>上传就在这里</strong><span>点击“上传文件”，或把文件拖到页面；也可以直接 Ctrl+V 粘贴图片。</span></div><button type="button" data-integrated-upload-trigger ${uploadState.busy ? 'disabled' : ''}>选择文件</button>`;
-  }
+  const trigger = section.querySelector('[data-integrated-upload-trigger]');
+  if (trigger) trigger.disabled = uploadState.busy;
 
   section.querySelectorAll('.integrated-upload-status-slot').forEach(node => node.remove());
-  const anchor = helper || section.querySelector('.file-toolbar') || section.querySelector('.page-head');
+  const anchor = section.querySelector('.file-toolbar') || section.querySelector('.page-head');
   const markup = queueMarkup() || recentMarkup();
   if (anchor && markup) {
     const status = document.createElement('div');

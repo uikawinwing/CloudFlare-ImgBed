@@ -16,13 +16,31 @@ describe('account media and album UI', () => {
     assert.match(creatorSource, /href="\/account\/\?view=albums">返回我的图库/);
   });
 
-  it('uses one upload entry, explains selection, and hides internal thumbnail actions', () => {
+  it('uses a compact upload entry and hides internal thumbnail actions', () => {
     assert.doesNotMatch(source, /href="\/studio"/);
     assert.doesNotMatch(uploadSource, /headActions\.append\(button\)/);
-    assert.match(uploadSource, /integrated-upload-helper[\s\S]*选择文件/);
-    assert.match(source, /勾选文件卡左上角/);
+    assert.match(source, /data-integrated-upload-trigger[\s\S]*上传文件/);
+    assert.match(uploadSource, /const trigger = section\.querySelector\('\[data-integrated-upload-trigger\]'\)/);
     assert.match(styles, /\.media-select[\s\S]*appearance: none/);
     assert.doesNotMatch(source, /data-copy-thumbnail/);
+  });
+
+  it('keeps the masonry feed media-first until the user opens an item', () => {
+    assert.match(source, /selectionMode:\s*false/);
+    assert.match(source, /id="toggleSelectionMode"[\s\S]*批量选择/);
+    assert.match(source, /state\.selectionMode\s*\?\s*`<input class="media-select"/);
+    assert.doesNotMatch(source, /selection-guidance/);
+    assert.doesNotMatch(source, /file-visibility-help/);
+    assert.doesNotMatch(uploadSource, /integrated-upload-helper/);
+  });
+
+  it('opens a viewport-sized media viewer on the first card click', () => {
+    assert.match(source, /class="media-frame"[\s\S]*data-open-media/);
+    assert.match(source, /\[data-open-media\][\s\S]*openFileViewer/);
+    assert.match(source, /function openFileViewer\(file\)/);
+    assert.match(styles, /\.media-viewer-dialog\s*\{[^}]*width:\s*100vw[^}]*height:\s*100dvh/);
+    assert.match(styles, /\.media-viewer-dialog \.file-preview-media img[^}]*object-fit:\s*contain/);
+    assert.match(styles, /\.dialog-backdrop:has\(\.media-viewer-dialog\)\s*\{[^}]*padding:\s*0/);
   });
 
   it('lets selected files be added to a newly created album from the picker', () => {

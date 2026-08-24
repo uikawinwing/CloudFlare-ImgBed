@@ -8,6 +8,7 @@ const state = {
   files: [],
   albums: [],
   selected: new Set(),
+  selectionMode: false,
   filter: 'all',
   fileQuery: '',
   fileSort: 'newest',
@@ -222,21 +223,11 @@ function fileCard(file) {
   const src = fileUrl(file);
   const preview = previewUrl(file);
   const mediaLabel = file.file_name || file.id;
-  const visibility = file.visibility === 'public' ? 'public' : 'private';
-  const visibilityHelp = visibility === 'public'
-    ? '会显示在发现页；分享链接和图库访问不受此设置影响。'
-    : '不会显示在发现页；分享链接和图库仍可正常访问。';
   return `<article class="media-card${selected ? ' selected' : ''}" data-file-id="${escapeHtml(file.id)}">
-    <input class="media-select" type="checkbox" aria-label="选择 ${escapeHtml(mediaLabel)}" ${selected ? 'checked' : ''}>
-    <button class="media-frame" type="button" aria-label="预览 ${escapeHtml(mediaLabel)}">
+    ${state.selectionMode ? `<input class="media-select" type="checkbox" aria-label="选择 ${escapeHtml(mediaLabel)}" ${selected ? 'checked' : ''}>` : ''}
+    <button class="media-frame" type="button" data-open-media aria-label="${state.selectionMode ? '选择' : '打开'} ${escapeHtml(mediaLabel)}">
       ${isVideo ? `<video src="${src}" muted loop playsinline preload="metadata"></video><span class="media-type">${videoTypeLabel(file)}</span>` : `<img src="${escapeHtml(preview)}" alt="${escapeHtml(mediaLabel)}" loading="lazy" decoding="async">`}
     </button>
-    <div class="media-info">
-      <p class="media-name" title="${escapeHtml(file.file_name || file.id)}">${escapeHtml(file.file_name || file.id)}</p>
-      <div class="media-meta"><span>${formatBytes(file.file_size_bytes)}</span><span>${formatDate(file.timestamp)}</span>${file.moderation_status === 'quarantined' ? '<span>已撤下</span>' : ''}</div>
-      <div class="file-visibility-row"><label><span class="sr-only">${escapeHtml(mediaLabel)} 是否显示在发现页</span><select class="file-visibility" aria-label="${escapeHtml(mediaLabel)} 是否显示在发现页"><option value="private" ${visibility === 'private' ? 'selected' : ''}>不显示</option><option value="public" ${visibility === 'public' ? 'selected' : ''}>显示在发现页</option></select></label></div><small class="file-visibility-help">${visibilityHelp}</small>
-      <div class="file-card-actions"><button class="file-action" type="button" data-copy-file>${icons.link}<span>复制链接</span></button><a class="file-action" href="${escapeHtml(src)}" target="_blank" rel="noopener">${icons.external}<span>原文件</span></a></div>
-    </div>
   </article>`;
 }
 
@@ -275,12 +266,14 @@ function renderFiles() {
         <button type="button" data-filter="video" class="${state.filter === 'video' ? 'active' : ''}">视频</button>
       </div>
       <select class="select-control" id="fileSort" aria-label="排序"><option value="newest" ${state.fileSort === 'newest' ? 'selected' : ''}>最近上传</option><option value="oldest" ${state.fileSort === 'oldest' ? 'selected' : ''}>最早上传</option><option value="name" ${state.fileSort === 'name' ? 'selected' : ''}>按名称</option></select>
+      <button class="button" type="button" data-integrated-upload-trigger>${icons.upload}上传文件</button>
+      <button class="button${state.selectionMode ? ' active' : ''}" id="toggleSelectionMode" type="button">${state.selectionMode ? '完成选择' : '批量选择'}</button>
     </div>
-    ${state.selected.size ? `<div class="selection-bar">
+    ${state.selectionMode && state.selected.size ? `<div class="selection-bar">
       <div class="selection-copy"><strong>已选择 ${state.selected.size} 项</strong><button class="button ghost" id="clearSelection" type="button">取消选择</button></div>
       <div class="selection-actions"><button class="button" id="addToAlbum" type="button">${icons.folder}加入图库</button><button class="button danger" id="deleteSelected" type="button">${icons.trash}永久删除</button></div>
-    </div>` : state.files.length ? '<p class="selection-guidance">勾选文件卡左上角，可批量加入图库或删除</p>' : ''}
-    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '试试更换筛选条件或搜索词。' : '点击上传文件，或直接拖拽 / Ctrl+V 粘贴 JPG、PNG、GIF、WebP、AVIF、MP4 或 WebM。'}</p>${state.files.length ? '' : `<button class="button primary" type="button" data-integrated-upload-trigger>${icons.upload}上传第一个文件</button>`}</div>`}
+    </div>` : ''}
+    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '试试更换筛选条件或搜索词。' : '使用上方“上传文件”，或直接拖拽 / Ctrl+V 粘贴 JPG、PNG、GIF、WebP、AVIF、MP4 或 WebM。'}</p></div>`}
   </section>`;
   bindFileEvents();
   observeVideos();
@@ -442,9 +435,9 @@ function observeVideos() {
   document.querySelectorAll('.media-frame video, .album-cover video').forEach(video => observer.observe(video));
 }
 
-function openDialog(content, { closeable = true, wide = false } = {}) {
+function openDialog(content, { closeable = true, wide = false, className = '', label = '对话框' } = {}) {
   const previouslyFocused = document.activeElement;
-  dialogRoot.innerHTML = `<div class="dialog-backdrop" role="presentation"><section class="dialog${wide ? ' wide' : ''}" role="dialog" aria-modal="true" aria-label="对话框" tabindex="-1">${content}</section></div>`;
+  dialogRoot.innerHTML = `<div class="dialog-backdrop" role="presentation"><section class="dialog${wide ? ' wide' : ''}${className ? ` ${className}` : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(label)}" tabindex="-1">${content}</section></div>`;
   const backdrop = dialogRoot.firstElementChild;
   const dialog = dialogRoot.querySelector('.dialog');
   dialog?.focus();
@@ -500,11 +493,26 @@ async function ensurePublicHandle() {
   });
 }
 
-function previewFile(file) {
+function openFileViewer(file) {
+  if (!file) return;
   const isVideo = isVideoFile(file);
-  openDialog(`<div class="dialog-head"><div><h2>${escapeHtml(file.file_name || file.id)}</h2><p style="color:var(--muted);margin:6px 0 0">${formatBytes(file.file_size_bytes)}</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
-    <div class="dialog-body"><div class="file-preview-media">${isVideo ? `<video src="${fileUrl(file)}" autoplay muted loop playsinline controls></video>` : `<img src="${fileUrl(file)}" alt="${escapeHtml(file.file_name || '')}">`}</div></div>
-    <div class="dialog-actions"><a class="button" href="${escapeHtml(fileUrl(file))}" target="_blank" rel="noopener">${icons.external}打开原始尺寸</a><button class="button" type="button" data-close-dialog>关闭</button></div>`, { wide: true });
+  const visibility = file.visibility === 'public' ? 'public' : 'private';
+  openDialog(`<div class="media-viewer-head"><div><h2>${escapeHtml(file.file_name || file.id)}</h2><p>${formatBytes(file.file_size_bytes)}${formatDate(file.timestamp) ? ` · ${formatDate(file.timestamp)}` : ''}</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
+    <div class="file-preview-media" data-media-viewer-stage>${isVideo ? `<video src="${fileUrl(file)}" autoplay muted loop playsinline controls></video>` : `<img src="${fileUrl(file)}" alt="${escapeHtml(file.file_name || '')}">`}</div>
+    <div class="media-viewer-details"><label>发现页展示<select class="file-visibility" id="viewerVisibility" aria-label="是否显示在发现页"><option value="private" ${visibility === 'private' ? 'selected' : ''}>不显示</option><option value="public" ${visibility === 'public' ? 'selected' : ''}>显示在发现页</option></select></label><div class="media-viewer-actions"><button class="button" type="button" id="copyViewerFile">${icons.link}复制链接</button><a class="button" href="${escapeHtml(fileUrl(file))}" target="_blank" rel="noopener">${icons.external}打开原始尺寸</a></div></div>`, { className: 'media-viewer-dialog', label: `查看 ${file.file_name || file.id}` });
+  dialogRoot.querySelector('#viewerVisibility')?.addEventListener('change', event => updateFileVisibility(file.id, event.currentTarget.value));
+  dialogRoot.querySelector('#copyViewerFile')?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(new URL(fileUrl(file), location.origin).href);
+      toast('资源链接已复制。');
+    } catch {
+      toast('复制失败，请直接打开原文件后复制地址。', 'error');
+    }
+  });
+}
+
+function previewFile(file) {
+  openFileViewer(file);
 }
 
 function bindFileEvents() {
@@ -512,25 +520,28 @@ function bindFileEvents() {
   document.querySelector('#fileSearch')?.addEventListener('change', event => { state.fileQuery = event.target.value; renderFiles(); });
   document.querySelector('#fileSearch')?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); state.fileQuery = event.currentTarget.value; renderFiles(); } });
   document.querySelector('#fileSort')?.addEventListener('change', event => { state.fileSort = event.target.value; renderFiles(); });
+  document.querySelector('#toggleSelectionMode')?.addEventListener('click', () => {
+    state.selectionMode = !state.selectionMode;
+    if (!state.selectionMode) state.selected.clear();
+    renderFiles();
+  });
   document.querySelector('#clearSelection')?.addEventListener('click', () => { state.selected.clear(); renderFiles(); });
   document.querySelector('#addToAlbum')?.addEventListener('click', addSelectedToAlbum);
   document.querySelector('#deleteSelected')?.addEventListener('click', confirmDeleteSelected);
   document.querySelectorAll('.media-card').forEach(card => {
     const id = card.dataset.fileId;
-    card.querySelector('.media-select').addEventListener('change', event => {
+    card.querySelector('.media-select')?.addEventListener('change', event => {
       if (event.target.checked) state.selected.add(id); else state.selected.delete(id);
       renderFiles();
     });
-    card.querySelector('.media-frame').addEventListener('click', () => previewFile(state.files.find(file => file.id === id)));
-    card.querySelector('[data-copy-file]')?.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(new URL(fileUrl(state.files.find(file => file.id === id)), location.origin).href);
-        toast('资源链接已复制。');
-      } catch {
-        toast('复制失败，请直接打开原文件后复制地址。', 'error');
+    card.querySelector('[data-open-media]')?.addEventListener('click', () => {
+      if (state.selectionMode) {
+        if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
+        renderFiles();
+        return;
       }
+      openFileViewer(state.files.find(file => file.id === id));
     });
-    card.querySelector('.file-visibility')?.addEventListener('change', event => updateFileVisibility(id, event.currentTarget.value));
   });
 }
 
