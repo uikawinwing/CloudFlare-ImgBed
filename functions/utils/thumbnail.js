@@ -6,14 +6,60 @@ import { DiscordAPI } from './storage/discordAPI.js';
 export const THUMBNAIL_WIDTH = 720;
 export const THUMBNAIL_FORMAT = 'webp';
 export const THUMBNAIL_CONTENT_TYPE = 'image/webp';
+export const THUMBNAIL_VARIANTS = Object.freeze({
+    avatar: Object.freeze({ width: 160, outputFormat: THUMBNAIL_CONTENT_TYPE }),
+    library: Object.freeze({ width: 256, outputFormat: THUMBNAIL_CONTENT_TYPE }),
+    gallery: Object.freeze({ width: THUMBNAIL_WIDTH, outputFormat: THUMBNAIL_CONTENT_TYPE }),
+});
 
-export function absoluteThumbnailUrl(requestUrl, fileId) {
+export function getThumbnailVariant(name) {
+    if (!name || name === 'gallery') return THUMBNAIL_VARIANTS.gallery;
+    return THUMBNAIL_VARIANTS[name] || null;
+}
+
+export function absoluteThumbnailUrl(requestUrl, fileId, variantName, version) {
+    const variant = getThumbnailVariant(variantName) || THUMBNAIL_VARIANTS.gallery;
     const url = new URL(requestUrl);
     url.protocol = 'https:';
     url.pathname = `/thumb/${encodeFilePath(fileId)}`;
     url.search = '';
+    if (variant !== THUMBNAIL_VARIANTS.gallery) url.searchParams.set('variant', variantName);
+    const normalizedVersion = normalizeThumbnailVersion(version);
+    if (normalizedVersion) url.searchParams.set('v', normalizedVersion);
     url.hash = '';
     return url.toString();
+}
+
+export function thumbnailVariantUrls(requestUrl, fileId, version) {
+    return Object.keys(THUMBNAIL_VARIANTS).map(variant => absoluteThumbnailUrl(requestUrl, fileId, variant, version));
+}
+
+export function normalizeThumbnailVersion(version) {
+    const numericVersion = Number(version);
+    return Number.isFinite(numericVersion) && numericVersion > 0 ? String(numericVersion) : '';
+}
+
+export function thumbnailContentVersion(record = {}) {
+    return normalizeThumbnailVersion(
+        record?.Thumbnail?.CreatedAt
+        || record?.thumbnail_created_at
+        || record?.TimeStamp
+        || record?.timestamp,
+    );
+}
+
+export function createThumbnailTransform(metadata = {}, variantName) {
+    const variant = getThumbnailVariant(variantName) || THUMBNAIL_VARIANTS.gallery;
+    const sourceWidth = Number(metadata.Width) || 0;
+    return {
+        requested: true,
+        options: {
+            width: sourceWidth > 0 ? Math.min(sourceWidth, variant.width) : variant.width,
+            fit: 'scale-down',
+        },
+        outputFormat: variant.outputFormat,
+        fallback: null,
+    };
 }
 
 export function getPermanentThumbnail(metadata = {}) {
@@ -27,9 +73,6 @@ export function hasPermanentThumbnail(metadata = {}) {
 }
 
 export async function ensurePermanentThumbnail(context, fileId, metadata = {}) {
-    if (metadata.Visibility !== 'public') {
-        return { metadata, ready: false, created: false, reason: 'not-public' };
-    }
     if (!String(metadata.FileType || '').startsWith('image/')) {
         return { metadata, ready: false, created: false, reason: 'not-image' };
     }
@@ -51,16 +94,11 @@ export async function ensurePermanentThumbnail(context, fileId, metadata = {}) {
             return { metadata, ready: false, created: false, reason: 'invalid-source-type' };
         }
 
-        const sourceWidth = Number(metadata.Width) || 0;
-        const targetWidth = sourceWidth > 0 ? Math.min(sourceWidth, THUMBNAIL_WIDTH) : THUMBNAIL_WIDTH;
+        const imageTransform = createThumbnailTransform(metadata);
+        const targetWidth = imageTransform.options.width;
         const transformed = await transformImageResponse({
             env: context.env,
-            imageTransform: {
-                requested: true,
-                options: { width: targetWidth },
-                outputFormat: THUMBNAIL_CONTENT_TYPE,
-                fallback: null,
-            },
+            imageTransform,
         }, sourceResponse);
 
         if (!transformed.ok || !transformed.body || normalizeContentType(transformed.headers.get('Content-Type')) !== THUMBNAIL_CONTENT_TYPE) {

@@ -113,8 +113,10 @@ describe('Discord identity policy', () => {
         assert.strictEqual(pack.packId, 'master');
         assert.strictEqual(pack.profileId, 'album-id');
         assert.strictEqual(pack.characterName, '维奥莱塔·马克西姆·奥古斯塔');
+        assert.strictEqual(pack.avatarThumbnail, 'https://example.test/thumb/folder/a%20b.png?variant=avatar&v=1');
+        assert.strictEqual(pack.libraryThumbnail, 'https://example.test/thumb/folder/a%20b.png?variant=library&v=1');
         assert.deepStrictEqual(pack.gallery, [
-            { title: 'First image.png', sources: ['https://example.test/file/folder/a%20b.png'], thumbnail: 'https://example.test/thumb/folder/a%20b.png' },
+            { title: 'First image.png', sources: ['https://example.test/file/folder/a%20b.png'], thumbnail: 'https://example.test/thumb/folder/a%20b.png?v=1' },
             { title: 'Second video.mp4', sources: ['https://example.test/file/second.mp4'], thumbnail: null },
             { title: 'Third video.webm', sources: ['https://example.test/file/third.webm'], thumbnail: null },
         ]);

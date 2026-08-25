@@ -137,9 +137,9 @@ describe('stable CharInfo visual URL', () => {
         files[0].visibility = 'private';
         const privateResponse = await stableCharInfoGet({ request: new Request(url), env, params: { albumId: 'album-id' } });
         const privateEtag = privateResponse.headers.get('etag');
-        assert.notStrictEqual(privateEtag, thirdEtag, 'visibility changes must invalidate the ETag');
+        assert.strictEqual(privateEtag, thirdEtag, 'Discover visibility does not change the shared pack representation');
         const privatePack = await privateResponse.json();
-        assert.strictEqual(privatePack.gallery.find(item => item.title === 'First.png').thumbnail, null, 'shared private files must use the original instead of the public-only thumbnail endpoint');
+        assert.strictEqual(privatePack.gallery.find(item => item.title === 'First.png').thumbnail, 'https://example.test/thumb/first.png?v=1');
 
         const unchangedResponse = await stableCharInfoGet({
             request: new Request(url, { headers: { 'If-None-Match': privateEtag } }),

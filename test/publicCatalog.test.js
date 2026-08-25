@@ -41,7 +41,7 @@ describe('public catalog policy', () => {
 
     it('emits a stable reusable thumbnail URL for Discover images', () => {
         const image = presentDiscoverFile({ id: 'art.png', file_name: 'Art', file_type: 'image/png', timestamp: 1 }, 'https://example.test/api/public/discover');
-        assert.strictEqual(image.thumbnailUrl, 'https://example.test/thumb/art.png');
+        assert.strictEqual(image.thumbnailUrl, 'https://example.test/thumb/art.png?v=1');
     });
 
     it('keeps original and thumbnail URLs separate for nested file ids', () => {
@@ -52,7 +52,7 @@ describe('public catalog policy', () => {
             timestamp: 1,
         }, 'https://staging.cloudflare-imgbed-dxx.pages.dev/api/public/discover');
         assert.match(image.url, /\/file\/users\/589790434960867328\/55226fd2-d75d-44d7-be34-f392ce2bd2d8\.png$/);
-        assert.match(image.thumbnailUrl, /\/thumb\/users\/589790434960867328\/55226fd2-d75d-44d7-be34-f392ce2bd2d8\.png$/);
+        assert.match(image.thumbnailUrl, /\/thumb\/users\/589790434960867328\/55226fd2-d75d-44d7-be34-f392ce2bd2d8\.png\?v=1$/);
         assert.strictEqual(image.name, 'venus_divinity.png');
     });
 
@@ -111,7 +111,7 @@ describe('public catalog policy', () => {
                     return { bind: () => ({ all: async () => ({ results: [{
                         id: 'album-id', slug: 'summer', name: 'Summer', description: '', updated_at: 1,
                         creator_name: 'Master', creator_handle: 'master', cover_id: 'cover.png',
-                        cover_type: 'image/png', cover_visibility: 'private', item_count: 1,
+                        cover_type: 'image/png', cover_visibility: 'private', cover_timestamp: 1, item_count: 1,
                     }] }) }) };
                 },
             },
@@ -119,8 +119,9 @@ describe('public catalog policy', () => {
         const albums = await catalog.listDiscoverAlbums(env, 'https://example.test/api/public/discover');
         assert.match(queries[0], /a\.visibility = 'public'/);
         assert.match(queries[0], /f\.moderation_status = 'active'/);
+        assert.strictEqual((queries[0].match(/f\.visibility = 'public'/g) || []).length, 2);
         assert.strictEqual(albums[0].url, 'https://example.test/gallery/master/summer');
-        assert.strictEqual(albums[0].coverUrl, 'https://example.test/file/cover.png');
+        assert.strictEqual(albums[0].coverUrl, null);
         assert.strictEqual(albums[0].coverThumbnailUrl, null);
     });
 });

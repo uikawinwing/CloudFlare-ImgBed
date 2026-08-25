@@ -43,7 +43,7 @@ export const dockerImageProcessor = {
             width: options.width,
             height: options.height,
             fit: resolveSharpFit(options.fit),
-            withoutEnlargement: !options.fit,
+            withoutEnlargement: !options.fit || options.fit === 'scale-down',
         });
 
         pipeline = applyOutputFormat(pipeline, options.outputFormat);

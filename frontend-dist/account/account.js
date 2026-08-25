@@ -60,7 +60,7 @@ function thumbnailUrl(file) {
 
 function previewUrl(file) {
   const isImage = String(file.file_type || '').startsWith('image/');
-  return isImage && file.visibility === 'public' ? thumbnailUrl(file) : fileUrl(file);
+  return isImage ? thumbnailUrl(file) : fileUrl(file);
 }
 
 function isVideoFile(file) {

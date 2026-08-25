@@ -1,5 +1,5 @@
 import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
-import { absoluteThumbnailUrl, hasPermanentThumbnail } from '../../../utils/thumbnail.js';
+import { absoluteThumbnailUrl, hasPermanentThumbnail, thumbnailContentVersion } from '../../../utils/thumbnail.js';
 
 export async function onRequestGet({ request, env }) {
     const identity = await getDiscordIdentity(env, request);
@@ -8,12 +8,15 @@ export async function onRequestGet({ request, env }) {
     const rows = await env.img_d1.prepare('SELECT id, file_name, file_type, file_size_bytes, timestamp, width, height, visibility, moderation_status, metadata FROM files WHERE owner_id = ? ORDER BY timestamp DESC LIMIT 200').bind(identity.id).all();
     const files = (rows.results || []).map((row) => {
         const metadata = parseMetadata(row.metadata);
-        const isPublicImage = row.visibility === 'public' && String(row.file_type || '').startsWith('image/');
+        const isImage = String(row.file_type || '').startsWith('image/');
         const { metadata: _metadata, ...file } = row;
         return {
             ...file,
-            thumbnail_url: isPublicImage ? absoluteThumbnailUrl(request.url, row.id) : null,
-            thumbnail_ready: isPublicImage && hasPermanentThumbnail(metadata),
+            thumbnail_url: isImage ? absoluteThumbnailUrl(request.url, row.id, 'gallery', thumbnailContentVersion({
+                ...metadata,
+                timestamp: row.timestamp,
+            })) : null,
+            thumbnail_ready: isImage && hasPermanentThumbnail(metadata),
         };
     });
     return json({ files });

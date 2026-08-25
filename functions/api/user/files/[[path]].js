@@ -3,11 +3,11 @@ import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
 import { removeFileFromIndex } from '../../../utils/indexManager.js';
 import { resolveFilePublication } from '../../../utils/publicCatalog.js';
-import { purgeCFCache } from '../../../utils/purgeCache.js';
 import {
     absoluteThumbnailUrl,
     ensurePermanentThumbnail,
     hasPermanentThumbnail,
+    thumbnailContentVersion,
 } from '../../../utils/thumbnail.js';
 
 export async function onRequestDelete(context) {
@@ -43,7 +43,7 @@ export async function onRequestPatch(context) {
     let thumbnailReady = hasPermanentThumbnail(metadata);
     let thumbnailCreated = false;
     let thumbnailReason = null;
-    if (visibility === 'public' && String(metadata.FileType || '').startsWith('image/')) {
+    if (String(metadata.FileType || '').startsWith('image/')) {
         const thumbnailResult = await ensurePermanentThumbnail(context, fileId, metadata);
         metadata = thumbnailResult.metadata;
         thumbnailReady = thumbnailResult.ready;
@@ -54,16 +54,9 @@ export async function onRequestPatch(context) {
     await db.put(fileId, file.value || '', { metadata });
     await context.env.img_d1.prepare('UPDATE files SET metadata = ?, visibility = ?, discover_eligible = ? WHERE id = ?').bind(JSON.stringify(metadata), visibility, discoverEligible, fileId).run();
 
-    const thumbnailUrl = visibility === 'public' && String(metadata.FileType || '').startsWith('image/')
-        ? absoluteThumbnailUrl(context.request.url, fileId)
+    const thumbnailUrl = String(metadata.FileType || '').startsWith('image/')
+        ? absoluteThumbnailUrl(context.request.url, fileId, 'gallery', thumbnailContentVersion(metadata))
         : null;
-    if (thumbnailUrl) {
-        try {
-            await purgeCFCache(context.env, thumbnailUrl);
-        } catch (error) {
-            console.warn('Failed to purge thumbnail cache after visibility update:', error.message);
-        }
-    }
 
     return json({
         success: true,

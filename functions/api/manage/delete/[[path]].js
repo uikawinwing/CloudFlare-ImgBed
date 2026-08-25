@@ -12,7 +12,7 @@ import {
     resolveWebDAVCredentials,
 } from '../../../utils/metadata/channelCredentials.js';
 import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
-import { absoluteThumbnailUrl, deletePermanentThumbnail } from '../../../utils/thumbnail.js';
+import { deletePermanentThumbnail, thumbnailContentVersion, thumbnailVariantUrls } from '../../../utils/thumbnail.js';
 
 // CORS 跨域响应头
 const corsHeaders = {
@@ -149,7 +149,7 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
         // 如果文件记录不存在，直接返回成功（幂等删除）
         if (!img) {
             await purgeCFCache(env, cdnUrl);
-            await purgeCFCache(env, absoluteThumbnailUrl(url.toString(), fileId));
+            await purgeThumbnailCaches(env, url.toString(), fileId);
             const normalizedFolder = fileId.split('/').slice(0, -1).join('/');
             await purgeRandomFileListCache(url.origin, normalizedFolder);
             await purgePublicFileListCache(url.origin, normalizedFolder);
@@ -164,7 +164,7 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
                 .bind(JSON.stringify(deletingMetadata), 'deleting', fileId).run();
         }
         await purgeCFCache(env, cdnUrl);
-        await purgeCFCache(env, absoluteThumbnailUrl(url.toString(), fileId));
+        await purgeThumbnailCaches(env, url.toString(), fileId, thumbnailContentVersion(img.metadata));
 
         // 缩图是原文件的派生资源，不作为独立作品；删除原文件时尽力一起清理。
         if (!await deletePermanentThumbnail(env, img.metadata)) {
@@ -221,6 +221,12 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
     } catch (e) {
         console.error('Delete file failed:', e);
         return false;
+    }
+}
+
+async function purgeThumbnailCaches(env, requestUrl, fileId, version) {
+    for (const thumbnailUrl of thumbnailVariantUrls(requestUrl, fileId, version)) {
+        await purgeCFCache(env, thumbnailUrl);
     }
 }
 

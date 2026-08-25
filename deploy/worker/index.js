@@ -9,7 +9,10 @@
 
 // --- 中间件（自动生成） ---
 import * as mw_api from '../../functions/api/_middleware.js';
+import * as mw_api_admin from '../../functions/api/admin/_middleware.js';
 import * as mw_api_manage from '../../functions/api/manage/_middleware.js';
+import * as mw_api_moderation from '../../functions/api/moderation/_middleware.js';
+import * as mw_api_user from '../../functions/api/user/_middleware.js';
 import * as mw_dav from '../../functions/dav/_middleware.js';
 import * as mw_file from '../../functions/file/_middleware.js';
 import * as mw_random from '../../functions/random/_middleware.js';
@@ -20,6 +23,10 @@ import * as apiManageBatchIndexChunk from '../../functions/api/manage/batch/inde
 import * as apiManageBatchIndexConfig from '../../functions/api/manage/batch/index/config.js';
 import * as apiManageBatchIndexFinalize from '../../functions/api/manage/batch/index/finalize.js';
 import * as apiManageBatchRestoreChunk from '../../functions/api/manage/batch/restore/chunk.js';
+import * as apiPublicGalleryParamOwnerSlugParamAlbumSlug from '../../functions/api/public/gallery/[ownerSlug]/[albumSlug].js';
+import * as apiUserAlbumsCatchAllIdCharinfo from '../../functions/api/user/albums/[[id]]/charinfo.js';
+import * as apiUserAlbumsCatchAllIdItems from '../../functions/api/user/albums/[[id]]/items.js';
+import * as apiAuthDiscordCallback from '../../functions/api/auth/discord/callback.js';
 import * as apiManageBatchList from '../../functions/api/manage/batch/list.js';
 import * as apiManageBatchSettings from '../../functions/api/manage/batch/settings.js';
 import * as apiManageCusConfigBlockip from '../../functions/api/manage/cusConfig/blockip.js';
@@ -34,103 +41,165 @@ import * as apiManageSysConfigSecurity from '../../functions/api/manage/sysConfi
 import * as apiManageSysConfigUpload from '../../functions/api/manage/sysConfig/upload.js';
 import * as apiManageTagsAutocomplete from '../../functions/api/manage/tags/autocomplete.js';
 import * as apiManageTagsBatch from '../../functions/api/manage/tags/batch.js';
+import * as apiPublicCharinfoParamAlbumId from '../../functions/api/public/charinfo/[albumId].js';
+import * as apiUserAlbumsParamId from '../../functions/api/user/albums/[id].js';
+import * as apiAdminMigrateKvFiles from '../../functions/api/admin/migrate-kv-files.js';
+import * as apiAdminUsers_index from '../../functions/api/admin/users/index.js';
 import * as apiAuthAdminLogin from '../../functions/api/auth/adminLogin.js';
+import * as apiAuthDiscord_index from '../../functions/api/auth/discord/index.js';
 import * as apiAuthLogin from '../../functions/api/auth/login.js';
 import * as apiAuthLogout from '../../functions/api/auth/logout.js';
+import * as apiAuthMe from '../../functions/api/auth/me.js';
 import * as apiAuthResetAuth from '../../functions/api/auth/resetAuth.js';
 import * as apiAuthSessionCheck from '../../functions/api/auth/sessionCheck.js';
 import * as apiBingWallpaper_index from '../../functions/api/bing/wallpaper/index.js';
 import * as apiManageApiTokens from '../../functions/api/manage/apiTokens.js';
 import * as apiManageList from '../../functions/api/manage/list.js';
 import * as apiManageQuota from '../../functions/api/manage/quota.js';
+import * as apiModerationAudit from '../../functions/api/moderation/audit.js';
+import * as apiModerationFiles from '../../functions/api/moderation/files.js';
+import * as apiPublicDiscover_index from '../../functions/api/public/discover/index.js';
 import * as apiPublicList from '../../functions/api/public/list.js';
+import * as apiUserAlbums_index from '../../functions/api/user/albums/index.js';
+import * as apiUserFiles_index from '../../functions/api/user/files/index.js';
+import * as apiUserHandle from '../../functions/api/user/handle.js';
+import * as galleryParamOwnerSlugParamAlbumSlug from '../../functions/gallery/[ownerSlug]/[albumSlug].js';
 import * as uploadHuggingfaceCommitUpload from '../../functions/upload/huggingface/commitUpload.js';
 import * as uploadHuggingfaceCompleteMultipart from '../../functions/upload/huggingface/completeMultipart.js';
 import * as uploadHuggingfaceGetUploadUrl from '../../functions/upload/huggingface/getUploadUrl.js';
 import * as apiChannels from '../../functions/api/channels.js';
 import * as apiDirectoryTree from '../../functions/api/directoryTree.js';
 import * as apiFetchRes from '../../functions/api/fetchRes.js';
+import * as apiUploadPolicy from '../../functions/api/uploadPolicy.js';
 import * as apiUserConfig from '../../functions/api/userConfig.js';
+import * as myAlbums from '../../functions/my-albums.js';
+import * as myFiles from '../../functions/my-files.js';
 import * as random_index from '../../functions/random/index.js';
 import * as upload_index from '../../functions/upload/index.js';
-import * as apiManageBlockCatchAll from '../../functions/api/manage/block/[[path]].js';
-import * as apiManageDeleteCatchAll from '../../functions/api/manage/delete/[[path]].js';
-import * as apiManageMetadataCatchAll from '../../functions/api/manage/metadata/[[path]].js';
-import * as apiManageMoveCatchAll from '../../functions/api/manage/move/[[path]].js';
-import * as apiManageRenameCatchAll from '../../functions/api/manage/rename/[[path]].js';
-import * as apiManageTagsCatchAll from '../../functions/api/manage/tags/[[path]].js';
-import * as apiManageWhiteCatchAll from '../../functions/api/manage/white/[[path]].js';
-import * as davCatchAll from '../../functions/dav/[[path]].js';
-import * as fileCatchAll from '../../functions/file/[[path]].js';
+import * as apiAdminUsersCatchAllDiscordId from '../../functions/api/admin/users/[[discordId]].js';
+import * as apiManageBlockCatchAllPath from '../../functions/api/manage/block/[[path]].js';
+import * as apiManageDeleteCatchAllPath from '../../functions/api/manage/delete/[[path]].js';
+import * as apiManageMetadataCatchAllPath from '../../functions/api/manage/metadata/[[path]].js';
+import * as apiManageMoveCatchAllPath from '../../functions/api/manage/move/[[path]].js';
+import * as apiManageRenameCatchAllPath from '../../functions/api/manage/rename/[[path]].js';
+import * as apiManageTagsCatchAllPath from '../../functions/api/manage/tags/[[path]].js';
+import * as apiManageWhiteCatchAllPath from '../../functions/api/manage/white/[[path]].js';
+import * as apiModerationDeleteCatchAllPath from '../../functions/api/moderation/delete/[[path]].js';
+import * as apiModerationQuarantineCatchAllPath from '../../functions/api/moderation/quarantine/[[path]].js';
+import * as apiModerationRestoreCatchAllPath from '../../functions/api/moderation/restore/[[path]].js';
+import * as apiUserFilesCatchAllPath from '../../functions/api/user/files/[[path]].js';
+import * as davCatchAllPath from '../../functions/dav/[[path]].js';
+import * as fileCatchAllPath from '../../functions/file/[[path]].js';
+import * as thumbCatchAllPath from '../../functions/thumb/[[path]].js';
 
 
 // ==================== 自动生成的路由表 ====================
 
 const routes = [
-    { path: '/api/manage/batch/index/chunk', module: apiManageBatchIndexChunk, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/batch/index/config', module: apiManageBatchIndexConfig, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/batch/index/finalize', module: apiManageBatchIndexFinalize, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/batch/restore/chunk', module: apiManageBatchRestoreChunk, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/batch/list', module: apiManageBatchList, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/batch/settings', module: apiManageBatchSettings, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/cusConfig/blockip', module: apiManageCusConfigBlockip, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/cusConfig/blockipList', module: apiManageCusConfigBlockipList, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/cusConfig/files', module: apiManageCusConfigFiles, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/cusConfig/list', module: apiManageCusConfigList, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/cusConfig/whiteip', module: apiManageCusConfigWhiteip, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/delete/batch', module: apiManageDeleteBatch, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/sysConfig/others', module: apiManageSysConfigOthers, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/sysConfig/page', module: apiManageSysConfigPage, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/sysConfig/security', module: apiManageSysConfigSecurity, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/sysConfig/upload', module: apiManageSysConfigUpload, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/tags/autocomplete', module: apiManageTagsAutocomplete, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/tags/batch', module: apiManageTagsBatch, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/auth/adminLogin', module: apiAuthAdminLogin, middlewares: [mw_api] },
-    { path: '/api/auth/login', module: apiAuthLogin, middlewares: [mw_api] },
-    { path: '/api/auth/logout', module: apiAuthLogout, middlewares: [mw_api] },
-    { path: '/api/auth/resetAuth', module: apiAuthResetAuth, middlewares: [mw_api] },
-    { path: '/api/auth/sessionCheck', module: apiAuthSessionCheck, middlewares: [mw_api] },
-    { path: '/api/bing/wallpaper', module: apiBingWallpaper_index, middlewares: [mw_api] },
-    { path: '/api/manage/apiTokens', module: apiManageApiTokens, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/list', module: apiManageList, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/manage/quota', module: apiManageQuota, middlewares: [mw_api, mw_api_manage] },
-    { path: '/api/public/list', module: apiPublicList, middlewares: [mw_api] },
-    { path: '/upload/huggingface/commitUpload', module: uploadHuggingfaceCommitUpload, middlewares: [mw_upload] },
-    { path: '/upload/huggingface/completeMultipart', module: uploadHuggingfaceCompleteMultipart, middlewares: [mw_upload] },
-    { path: '/upload/huggingface/getUploadUrl', module: uploadHuggingfaceGetUploadUrl, middlewares: [mw_upload] },
-    { path: '/api/channels', module: apiChannels, middlewares: [mw_api] },
-    { path: '/api/directoryTree', module: apiDirectoryTree, middlewares: [mw_api] },
-    { path: '/api/fetchRes', module: apiFetchRes, middlewares: [mw_api] },
-    { path: '/api/userConfig', module: apiUserConfig, middlewares: [mw_api] },
-    { path: '/random', module: random_index, middlewares: [mw_random] },
-    { path: '/upload', module: upload_index, middlewares: [mw_upload] },
-    { path: '/api/manage/block/', module: apiManageBlockCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
-    { path: '/api/manage/delete/', module: apiManageDeleteCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
-    { path: '/api/manage/metadata/', module: apiManageMetadataCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
-    { path: '/api/manage/move/', module: apiManageMoveCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
-    { path: '/api/manage/rename/', module: apiManageRenameCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
-    { path: '/api/manage/tags/', module: apiManageTagsCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
-    { path: '/api/manage/white/', module: apiManageWhiteCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
-    { path: '/dav/', module: davCatchAll, middlewares: [mw_dav], catchAll: true },
-    { path: '/file/', module: fileCatchAll, middlewares: [mw_file], catchAll: true },
+    { path: '/api/manage/batch/index/chunk', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"batch"},{"type":"static","value":"index"},{"type":"static","value":"chunk"}], module: apiManageBatchIndexChunk, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/batch/index/config', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"batch"},{"type":"static","value":"index"},{"type":"static","value":"config"}], module: apiManageBatchIndexConfig, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/batch/index/finalize', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"batch"},{"type":"static","value":"index"},{"type":"static","value":"finalize"}], module: apiManageBatchIndexFinalize, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/batch/restore/chunk', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"batch"},{"type":"static","value":"restore"},{"type":"static","value":"chunk"}], module: apiManageBatchRestoreChunk, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/public/gallery/:ownerSlug/:albumSlug', segments: [{"type":"static","value":"api"},{"type":"static","value":"public"},{"type":"static","value":"gallery"},{"type":"dynamic","name":"ownerSlug","array":false},{"type":"dynamic","name":"albumSlug","array":false}], module: apiPublicGalleryParamOwnerSlugParamAlbumSlug, middlewares: [mw_api] },
+    { path: '/api/user/albums/:id/charinfo', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"albums"},{"type":"dynamic","name":"id","array":true},{"type":"static","value":"charinfo"}], module: apiUserAlbumsCatchAllIdCharinfo, middlewares: [mw_api, mw_api_user] },
+    { path: '/api/user/albums/:id/items', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"albums"},{"type":"dynamic","name":"id","array":true},{"type":"static","value":"items"}], module: apiUserAlbumsCatchAllIdItems, middlewares: [mw_api, mw_api_user] },
+    { path: '/api/auth/discord/callback', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"discord"},{"type":"static","value":"callback"}], module: apiAuthDiscordCallback, middlewares: [mw_api] },
+    { path: '/api/manage/batch/list', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"batch"},{"type":"static","value":"list"}], module: apiManageBatchList, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/batch/settings', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"batch"},{"type":"static","value":"settings"}], module: apiManageBatchSettings, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/cusConfig/blockip', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"cusConfig"},{"type":"static","value":"blockip"}], module: apiManageCusConfigBlockip, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/cusConfig/blockipList', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"cusConfig"},{"type":"static","value":"blockipList"}], module: apiManageCusConfigBlockipList, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/cusConfig/files', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"cusConfig"},{"type":"static","value":"files"}], module: apiManageCusConfigFiles, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/cusConfig/list', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"cusConfig"},{"type":"static","value":"list"}], module: apiManageCusConfigList, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/cusConfig/whiteip', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"cusConfig"},{"type":"static","value":"whiteip"}], module: apiManageCusConfigWhiteip, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/delete/batch', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"delete"},{"type":"static","value":"batch"}], module: apiManageDeleteBatch, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/sysConfig/others', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"sysConfig"},{"type":"static","value":"others"}], module: apiManageSysConfigOthers, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/sysConfig/page', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"sysConfig"},{"type":"static","value":"page"}], module: apiManageSysConfigPage, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/sysConfig/security', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"sysConfig"},{"type":"static","value":"security"}], module: apiManageSysConfigSecurity, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/sysConfig/upload', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"sysConfig"},{"type":"static","value":"upload"}], module: apiManageSysConfigUpload, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/tags/autocomplete', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"tags"},{"type":"static","value":"autocomplete"}], module: apiManageTagsAutocomplete, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/tags/batch', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"tags"},{"type":"static","value":"batch"}], module: apiManageTagsBatch, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/public/charinfo/:albumId', segments: [{"type":"static","value":"api"},{"type":"static","value":"public"},{"type":"static","value":"charinfo"},{"type":"dynamic","name":"albumId","array":false}], module: apiPublicCharinfoParamAlbumId, middlewares: [mw_api] },
+    { path: '/api/user/albums/:id', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"albums"},{"type":"dynamic","name":"id","array":false}], module: apiUserAlbumsParamId, middlewares: [mw_api, mw_api_user] },
+    { path: '/api/admin/migrate-kv-files', segments: [{"type":"static","value":"api"},{"type":"static","value":"admin"},{"type":"static","value":"migrate-kv-files"}], module: apiAdminMigrateKvFiles, middlewares: [mw_api, mw_api_admin] },
+    { path: '/api/admin/users', segments: [{"type":"static","value":"api"},{"type":"static","value":"admin"},{"type":"static","value":"users"}], module: apiAdminUsers_index, middlewares: [mw_api, mw_api_admin] },
+    { path: '/api/auth/adminLogin', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"adminLogin"}], module: apiAuthAdminLogin, middlewares: [mw_api] },
+    { path: '/api/auth/discord', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"discord"}], module: apiAuthDiscord_index, middlewares: [mw_api] },
+    { path: '/api/auth/login', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"login"}], module: apiAuthLogin, middlewares: [mw_api] },
+    { path: '/api/auth/logout', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"logout"}], module: apiAuthLogout, middlewares: [mw_api] },
+    { path: '/api/auth/me', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"me"}], module: apiAuthMe, middlewares: [mw_api] },
+    { path: '/api/auth/resetAuth', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"resetAuth"}], module: apiAuthResetAuth, middlewares: [mw_api] },
+    { path: '/api/auth/sessionCheck', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"sessionCheck"}], module: apiAuthSessionCheck, middlewares: [mw_api] },
+    { path: '/api/bing/wallpaper', segments: [{"type":"static","value":"api"},{"type":"static","value":"bing"},{"type":"static","value":"wallpaper"}], module: apiBingWallpaper_index, middlewares: [mw_api] },
+    { path: '/api/manage/apiTokens', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"apiTokens"}], module: apiManageApiTokens, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/list', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"list"}], module: apiManageList, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/quota', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"quota"}], module: apiManageQuota, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/moderation/audit', segments: [{"type":"static","value":"api"},{"type":"static","value":"moderation"},{"type":"static","value":"audit"}], module: apiModerationAudit, middlewares: [mw_api, mw_api_moderation] },
+    { path: '/api/moderation/files', segments: [{"type":"static","value":"api"},{"type":"static","value":"moderation"},{"type":"static","value":"files"}], module: apiModerationFiles, middlewares: [mw_api, mw_api_moderation] },
+    { path: '/api/public/discover', segments: [{"type":"static","value":"api"},{"type":"static","value":"public"},{"type":"static","value":"discover"}], module: apiPublicDiscover_index, middlewares: [mw_api] },
+    { path: '/api/public/list', segments: [{"type":"static","value":"api"},{"type":"static","value":"public"},{"type":"static","value":"list"}], module: apiPublicList, middlewares: [mw_api] },
+    { path: '/api/user/albums', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"albums"}], module: apiUserAlbums_index, middlewares: [mw_api, mw_api_user] },
+    { path: '/api/user/files', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"files"}], module: apiUserFiles_index, middlewares: [mw_api, mw_api_user] },
+    { path: '/api/user/handle', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"handle"}], module: apiUserHandle, middlewares: [mw_api, mw_api_user] },
+    { path: '/gallery/:ownerSlug/:albumSlug', segments: [{"type":"static","value":"gallery"},{"type":"dynamic","name":"ownerSlug","array":false},{"type":"dynamic","name":"albumSlug","array":false}], module: galleryParamOwnerSlugParamAlbumSlug, middlewares: [] },
+    { path: '/upload/huggingface/commitUpload', segments: [{"type":"static","value":"upload"},{"type":"static","value":"huggingface"},{"type":"static","value":"commitUpload"}], module: uploadHuggingfaceCommitUpload, middlewares: [mw_upload] },
+    { path: '/upload/huggingface/completeMultipart', segments: [{"type":"static","value":"upload"},{"type":"static","value":"huggingface"},{"type":"static","value":"completeMultipart"}], module: uploadHuggingfaceCompleteMultipart, middlewares: [mw_upload] },
+    { path: '/upload/huggingface/getUploadUrl', segments: [{"type":"static","value":"upload"},{"type":"static","value":"huggingface"},{"type":"static","value":"getUploadUrl"}], module: uploadHuggingfaceGetUploadUrl, middlewares: [mw_upload] },
+    { path: '/api/channels', segments: [{"type":"static","value":"api"},{"type":"static","value":"channels"}], module: apiChannels, middlewares: [mw_api] },
+    { path: '/api/directoryTree', segments: [{"type":"static","value":"api"},{"type":"static","value":"directoryTree"}], module: apiDirectoryTree, middlewares: [mw_api] },
+    { path: '/api/fetchRes', segments: [{"type":"static","value":"api"},{"type":"static","value":"fetchRes"}], module: apiFetchRes, middlewares: [mw_api] },
+    { path: '/api/uploadPolicy', segments: [{"type":"static","value":"api"},{"type":"static","value":"uploadPolicy"}], module: apiUploadPolicy, middlewares: [mw_api] },
+    { path: '/api/userConfig', segments: [{"type":"static","value":"api"},{"type":"static","value":"userConfig"}], module: apiUserConfig, middlewares: [mw_api] },
+    { path: '/my-albums', segments: [{"type":"static","value":"my-albums"}], module: myAlbums, middlewares: [] },
+    { path: '/my-files', segments: [{"type":"static","value":"my-files"}], module: myFiles, middlewares: [] },
+    { path: '/random', segments: [{"type":"static","value":"random"}], module: random_index, middlewares: [mw_random] },
+    { path: '/upload', segments: [{"type":"static","value":"upload"}], module: upload_index, middlewares: [mw_upload] },
+    { path: '/api/admin/users/*discordId', segments: [{"type":"static","value":"api"},{"type":"static","value":"admin"},{"type":"static","value":"users"},{"type":"catchAll","name":"discordId","array":true}], module: apiAdminUsersCatchAllDiscordId, middlewares: [mw_api, mw_api_admin], catchAll: true },
+    { path: '/api/manage/block/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"block"},{"type":"catchAll","name":"path","array":true}], module: apiManageBlockCatchAllPath, middlewares: [mw_api, mw_api_manage], catchAll: true },
+    { path: '/api/manage/delete/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"delete"},{"type":"catchAll","name":"path","array":true}], module: apiManageDeleteCatchAllPath, middlewares: [mw_api, mw_api_manage], catchAll: true },
+    { path: '/api/manage/metadata/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"metadata"},{"type":"catchAll","name":"path","array":true}], module: apiManageMetadataCatchAllPath, middlewares: [mw_api, mw_api_manage], catchAll: true },
+    { path: '/api/manage/move/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"move"},{"type":"catchAll","name":"path","array":true}], module: apiManageMoveCatchAllPath, middlewares: [mw_api, mw_api_manage], catchAll: true },
+    { path: '/api/manage/rename/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"rename"},{"type":"catchAll","name":"path","array":true}], module: apiManageRenameCatchAllPath, middlewares: [mw_api, mw_api_manage], catchAll: true },
+    { path: '/api/manage/tags/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"tags"},{"type":"catchAll","name":"path","array":true}], module: apiManageTagsCatchAllPath, middlewares: [mw_api, mw_api_manage], catchAll: true },
+    { path: '/api/manage/white/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"white"},{"type":"catchAll","name":"path","array":true}], module: apiManageWhiteCatchAllPath, middlewares: [mw_api, mw_api_manage], catchAll: true },
+    { path: '/api/moderation/delete/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"moderation"},{"type":"static","value":"delete"},{"type":"catchAll","name":"path","array":true}], module: apiModerationDeleteCatchAllPath, middlewares: [mw_api, mw_api_moderation], catchAll: true },
+    { path: '/api/moderation/quarantine/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"moderation"},{"type":"static","value":"quarantine"},{"type":"catchAll","name":"path","array":true}], module: apiModerationQuarantineCatchAllPath, middlewares: [mw_api, mw_api_moderation], catchAll: true },
+    { path: '/api/moderation/restore/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"moderation"},{"type":"static","value":"restore"},{"type":"catchAll","name":"path","array":true}], module: apiModerationRestoreCatchAllPath, middlewares: [mw_api, mw_api_moderation], catchAll: true },
+    { path: '/api/user/files/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"files"},{"type":"catchAll","name":"path","array":true}], module: apiUserFilesCatchAllPath, middlewares: [mw_api, mw_api_user], catchAll: true },
+    { path: '/dav/*path', segments: [{"type":"static","value":"dav"},{"type":"catchAll","name":"path","array":true}], module: davCatchAllPath, middlewares: [mw_dav], catchAll: true },
+    { path: '/file/*path', segments: [{"type":"static","value":"file"},{"type":"catchAll","name":"path","array":true}], module: fileCatchAllPath, middlewares: [mw_file], catchAll: true },
+    { path: '/thumb/*path', segments: [{"type":"static","value":"thumb"},{"type":"catchAll","name":"path","array":true}], module: thumbCatchAllPath, middlewares: [], catchAll: true },
 ];
 
 
 // ==================== 路由匹配 ====================
 
 function matchRoute(pathname) {
+    const pathSegments = pathname.split('/').filter(Boolean);
     for (const route of routes) {
-        if (route.catchAll) {
-            if (pathname.startsWith(route.path)) {
-                const rest = pathname.slice(route.path.length);
-                const pathParam = rest.split('/').filter(Boolean);
-                return { route, params: { path: pathParam } };
+        const params = {};
+        let pathIndex = 0;
+        let matched = true;
+
+        for (const segment of route.segments) {
+            if (segment.type === 'catchAll') {
+                params[segment.name] = pathSegments.slice(pathIndex);
+                pathIndex = pathSegments.length;
+                break;
             }
-        } else {
-            if (pathname === route.path || pathname === route.path + '/') {
-                return { route, params: {} };
+
+            const pathSegment = pathSegments[pathIndex];
+            if (pathSegment === undefined || (segment.type === 'static' && pathSegment !== segment.value)) {
+                matched = false;
+                break;
             }
+
+            if (segment.type === 'dynamic') {
+                params[segment.name] = segment.array ? [pathSegment] : pathSegment;
+            }
+            pathIndex += 1;
         }
+
+        if (matched && pathIndex === pathSegments.length) return { route, params };
     }
     return null;
 }
@@ -339,6 +408,12 @@ export default {
             data: {},
         };
 
-        return await maybeServeFromCache(request, ctx, () => executeChain(middlewares, handler, context));
+        const executeRoute = () => executeChain(middlewares, handler, context);
+        const routeHandlesRevalidation = pathname.startsWith('/file/')
+            || pathname.startsWith('/thumb/')
+            || pathname.startsWith('/api/public/gallery/')
+            || pathname.startsWith('/api/public/charinfo/');
+        if (routeHandlesRevalidation) return await executeRoute();
+        return await maybeServeFromCache(request, ctx, executeRoute);
     },
 };

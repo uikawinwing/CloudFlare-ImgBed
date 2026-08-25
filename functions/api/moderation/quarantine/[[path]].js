@@ -2,6 +2,7 @@ import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
 import { prepareAuditLog, readReason } from '../../../utils/auditLog.js';
 import { purgeCFCache } from '../../../utils/purgeCache.js';
+import { thumbnailContentVersion, thumbnailVariantUrls } from '../../../utils/thumbnail.js';
 
 export async function onRequestPost(context) {
     const identity = await getDiscordIdentity(context.env, context.request);
@@ -19,6 +20,9 @@ export async function onRequestPost(context) {
         prepareAuditLog(context.env, { actorId: identity.id, action: 'file.quarantine', targetType: 'file', targetId: fileId, reason }),
     ]);
     await purgeCFCache(context.env, `${new URL(context.request.url).origin}/file/${fileId}`);
+    for (const thumbnailUrl of thumbnailVariantUrls(context.request.url, fileId, thumbnailContentVersion(metadata))) {
+        await purgeCFCache(context.env, thumbnailUrl);
+    }
     return json({ success: true, fileId, moderationStatus: 'quarantined' });
 }
 

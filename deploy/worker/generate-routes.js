@@ -44,7 +44,8 @@ function toVarName(filePath) {
     const rel = relative(FUNCTIONS_DIR, filePath)
         .replace(/\\/g, '/')
         .replace(/\.js$/, '')
-        .replace(/\[\[path\]\]/g, 'catchAll')
+        .replace(/\[\[([^\]]+)\]\]/g, (_, name) => `catchAll${capitalize(name)}`)
+        .replace(/\[([^\]]+)\]/g, (_, name) => `param${capitalize(name)}`)
         .replace(/\/index$/, '_index');
     
     // 转为 camelCase
@@ -52,6 +53,10 @@ function toVarName(filePath) {
         .split(/[\/\-.]/)
         .map((part, i) => i === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1))
         .join('');
+}
+
+function capitalize(value) {
+    return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 /**
@@ -66,12 +71,25 @@ function toUrlPath(filePath) {
         rel = rel.slice(0, -'/index'.length);
     }
     
-    const isCatchAll = rel.endsWith('/[[path]]');
-    if (isCatchAll) {
-        rel = rel.slice(0, -'[[path]]'.length); // 保留尾部斜杠
-    }
-    
-    return { urlPath: '/' + rel, isCatchAll };
+    const rawSegments = rel.split('/').filter(Boolean);
+    const segments = rawSegments.map((segment, index) => {
+        const catchAllMatch = /^\[\[([^\]]+)\]\]$/.exec(segment);
+        if (catchAllMatch) {
+            const isFinal = index === rawSegments.length - 1;
+            return { type: isFinal ? 'catchAll' : 'dynamic', name: catchAllMatch[1], array: true };
+        }
+
+        const dynamicMatch = /^\[([^\]]+)\]$/.exec(segment);
+        if (dynamicMatch) return { type: 'dynamic', name: dynamicMatch[1], array: false };
+        return { type: 'static', value: segment };
+    });
+    const isCatchAll = segments.at(-1)?.type === 'catchAll';
+    const urlPath = '/' + segments.map((segment) => {
+        if (segment.type === 'static') return segment.value;
+        return `${segment.type === 'catchAll' ? '*' : ':'}${segment.name}`;
+    }).join('/');
+
+    return { urlPath, segments, isCatchAll };
 }
 
 /**
@@ -143,10 +161,11 @@ function scanDir(dir) {
         
         const varName = toVarName(fullPath);
         const importPath = toImportPath(fullPath);
-        const { urlPath, isCatchAll } = toUrlPath(fullPath);
+        const { urlPath, segments, isCatchAll } = toUrlPath(fullPath);
         
         routes.push({
             urlPath,
+            segments,
             importPath,
             varName,
             isCatchAll,
@@ -192,9 +211,9 @@ for (const route of routes) {
         : '[]';
     
     if (route.isCatchAll) {
-        routeEntries += `    { path: '${route.urlPath}', module: ${route.varName}, middlewares: ${mwArray}, catchAll: true },\n`;
+        routeEntries += `    { path: '${route.urlPath}', segments: ${JSON.stringify(route.segments)}, module: ${route.varName}, middlewares: ${mwArray}, catchAll: true },\n`;
     } else {
-        routeEntries += `    { path: '${route.urlPath}', module: ${route.varName}, middlewares: ${mwArray} },\n`;
+        routeEntries += `    { path: '${route.urlPath}', segments: ${JSON.stringify(route.segments)}, module: ${route.varName}, middlewares: ${mwArray} },\n`;
     }
 }
 
@@ -219,18 +238,32 @@ ${routeEntries}];
 // ==================== 路由匹配 ====================
 
 function matchRoute(pathname) {
+    const pathSegments = pathname.split('/').filter(Boolean);
     for (const route of routes) {
-        if (route.catchAll) {
-            if (pathname.startsWith(route.path)) {
-                const rest = pathname.slice(route.path.length);
-                const pathParam = rest.split('/').filter(Boolean);
-                return { route, params: { path: pathParam } };
+        const params = {};
+        let pathIndex = 0;
+        let matched = true;
+
+        for (const segment of route.segments) {
+            if (segment.type === 'catchAll') {
+                params[segment.name] = pathSegments.slice(pathIndex);
+                pathIndex = pathSegments.length;
+                break;
             }
-        } else {
-            if (pathname === route.path || pathname === route.path + '/') {
-                return { route, params: {} };
+
+            const pathSegment = pathSegments[pathIndex];
+            if (pathSegment === undefined || (segment.type === 'static' && pathSegment !== segment.value)) {
+                matched = false;
+                break;
             }
+
+            if (segment.type === 'dynamic') {
+                params[segment.name] = segment.array ? [pathSegment] : pathSegment;
+            }
+            pathIndex += 1;
         }
+
+        if (matched && pathIndex === pathSegments.length) return { route, params };
     }
     return null;
 }
@@ -439,7 +472,13 @@ export default {
             data: {},
         };
 
-        return await maybeServeFromCache(request, ctx, () => executeChain(middlewares, handler, context));
+        const executeRoute = () => executeChain(middlewares, handler, context);
+        const routeHandlesRevalidation = pathname.startsWith('/file/')
+            || pathname.startsWith('/thumb/')
+            || pathname.startsWith('/api/public/gallery/')
+            || pathname.startsWith('/api/public/charinfo/');
+        if (routeHandlesRevalidation) return await executeRoute();
+        return await maybeServeFromCache(request, ctx, executeRoute);
     },
 };
 `;

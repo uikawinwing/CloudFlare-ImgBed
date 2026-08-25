@@ -73,7 +73,7 @@ function makeEtag(album, files, storedVisualConfig) {
         album.name || '',
         album.description || '',
         storedVisualConfig || '',
-        ...files.map((file) => `${file.id}:${file.file_name || ''}:${file.file_type || ''}:${file.timestamp || ''}:${file.visibility || ''}`),
+        ...files.map((file) => `${file.id}:${file.file_name || ''}:${file.file_type || ''}:${file.timestamp || ''}`),
     ].join('|');
     return `W/\"${album.id}:${hashString(signature)}\"`;
 }

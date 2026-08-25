@@ -1,4 +1,4 @@
-import { absoluteThumbnailUrl } from './thumbnail.js';
+import { absoluteThumbnailUrl, thumbnailContentVersion } from './thumbnail.js';
 
 const MAX_PAGE_SIZE = 48;
 
@@ -60,6 +60,7 @@ export async function listDiscover(env, query, requestUrl) {
     }
     bindings.push(query.limit + 1);
     const sql = `SELECT f.id, f.file_name, f.file_type, f.timestamp, f.width, f.height, f.featured_at,
+        json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS thumbnail_created_at,
         u.username AS creator_name, u.public_handle AS creator_handle
         FROM files f JOIN users u ON u.discord_id = f.owner_id
         WHERE ${conditions.join(' AND ')}
@@ -79,20 +80,22 @@ export async function listDiscoverAlbums(env, requestUrl, limit = 12) {
     const pageSize = Math.min(Math.max(Number(limit) || 12, 1), 24);
     const sql = `WITH ranked_items AS (
         SELECT ai.album_id, f.id AS cover_id, f.file_type AS cover_type, f.visibility AS cover_visibility,
+            f.timestamp AS cover_timestamp,
+            json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS cover_thumbnail_created_at,
             ROW_NUMBER() OVER (PARTITION BY ai.album_id ORDER BY ai.position, ai.created_at) AS item_rank
         FROM album_items ai
         JOIN files f ON f.id = ai.file_id
-        WHERE f.moderation_status = 'active'
+        WHERE f.visibility = 'public' AND f.moderation_status = 'active'
     ), item_counts AS (
         SELECT ai.album_id, COUNT(*) AS item_count
         FROM album_items ai
         JOIN files f ON f.id = ai.file_id
-        WHERE f.moderation_status = 'active'
+        WHERE f.visibility = 'public' AND f.moderation_status = 'active'
         GROUP BY ai.album_id
     )
     SELECT a.id, a.slug, a.name, a.description, a.updated_at,
         u.username AS creator_name, u.public_handle AS creator_handle,
-        cover.cover_id, cover.cover_type, cover.cover_visibility,
+        cover.cover_id, cover.cover_type, cover.cover_visibility, cover.cover_timestamp, cover.cover_thumbnail_created_at,
         COALESCE(counts.item_count, 0) AS item_count
     FROM albums a
     JOIN users u ON u.discord_id = a.owner_id
@@ -106,7 +109,8 @@ export async function listDiscoverAlbums(env, requestUrl, limit = 12) {
 }
 
 export async function listSharedAlbumFiles(env, albumId) {
-    const result = await env.img_d1.prepare(`SELECT f.id, f.file_name, f.file_type, f.timestamp, f.visibility
+    const result = await env.img_d1.prepare(`SELECT f.id, f.file_name, f.file_type, f.timestamp, f.visibility,
+        json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS thumbnail_created_at
         FROM album_items ai
         JOIN files f ON f.id = ai.file_id
         JOIN users u ON u.discord_id = f.owner_id
@@ -131,16 +135,19 @@ export function presentDiscoverFile(file, requestUrl) {
             handle: file.creator_handle || null,
         },
         url,
-        thumbnailUrl: isImage ? absoluteThumbnailUrl(requestUrl, file.id) : null,
+        thumbnailUrl: isImage ? absoluteThumbnailUrl(requestUrl, file.id, 'gallery', thumbnailContentVersion(file)) : null,
     };
 }
 
 export function presentDiscoverAlbum(album, requestUrl) {
-    const coverUrl = album.cover_id ? absoluteFileUrl(requestUrl, album.cover_id) : null;
-    const coverThumbnailUrl = album.cover_id
-        && album.cover_visibility === 'public'
+    const hasDiscoverableCover = album.cover_id && album.cover_visibility === 'public';
+    const coverUrl = hasDiscoverableCover ? absoluteFileUrl(requestUrl, album.cover_id) : null;
+    const coverThumbnailUrl = hasDiscoverableCover
         && String(album.cover_type || '').startsWith('image/')
-        ? absoluteThumbnailUrl(requestUrl, album.cover_id)
+        ? absoluteThumbnailUrl(requestUrl, album.cover_id, 'gallery', thumbnailContentVersion({
+            timestamp: album.cover_timestamp,
+            thumbnail_created_at: album.cover_thumbnail_created_at,
+        }))
         : null;
     const url = new URL(requestUrl);
     url.protocol = 'https:';

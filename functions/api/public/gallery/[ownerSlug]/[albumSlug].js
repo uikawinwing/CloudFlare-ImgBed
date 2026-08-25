@@ -4,6 +4,7 @@ import {
     listSharedAlbumFiles,
 } from '../../../../utils/publicCatalog.js';
 import { requireCharInfoAlbumIdentity } from '../../../../utils/charInfoGallery.js';
+import { thumbnailContentVersion } from '../../../../utils/thumbnail.js';
 
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -35,6 +36,7 @@ export function createGalleryPack(album, albumSlug, files, requestUrl) {
     try {
         identity = requireCharInfoAlbumIdentity(album);
     } catch {}
+    const previewFile = identity ? files.find(isThumbnailImage) : null;
     return {
         format: identity ? 'char-info-gallery-pack' : 'imgbed-gallery',
         version: 1,
@@ -42,12 +44,14 @@ export function createGalleryPack(album, albumSlug, files, requestUrl) {
             packId: identity.packId,
             profileId: identity.profileId,
             characterName: identity.characterName,
+            avatarThumbnail: previewFile ? absoluteThumbnailUrl(requestUrl, previewFile.id, 'avatar', thumbnailContentVersion(previewFile)) : null,
+            libraryThumbnail: previewFile ? absoluteThumbnailUrl(requestUrl, previewFile.id, 'library', thumbnailContentVersion(previewFile)) : null,
         } : {}),
         gallery: files.map((file) => ({
             title: file.file_name || file.id,
             sources: [absoluteFileUrl(requestUrl, file.id)],
-            thumbnail: file.visibility === 'public' && String(file.file_type || '').startsWith('image/')
-                ? absoluteThumbnailUrl(requestUrl, file.id)
+            thumbnail: isThumbnailImage(file)
+                ? absoluteThumbnailUrl(requestUrl, file.id, 'gallery', thumbnailContentVersion(file))
                 : null,
         })),
     };
@@ -57,8 +61,12 @@ export function absoluteFileUrl(requestUrl, fileId) {
     return catalogFileUrl(requestUrl, fileId);
 }
 
-export function absoluteThumbnailUrl(requestUrl, fileId) {
-    return catalogThumbnailUrl(requestUrl, fileId);
+export function absoluteThumbnailUrl(requestUrl, fileId, variant, version) {
+    return catalogThumbnailUrl(requestUrl, fileId, variant, version);
+}
+
+function isThumbnailImage(file) {
+    return String(file?.file_type || '').startsWith('image/');
 }
 
 function gallerySlugsFromRequest(requestUrl, prefix) {
@@ -74,7 +82,7 @@ function gallerySlugsFromRequest(requestUrl, prefix) {
 }
 
 function makeEtag(album, files, lastModifiedAt) {
-    const signature = files.map((file) => `${file.id}:${file.file_name || ''}:${file.timestamp || ''}:${file.visibility || ''}`).join('|');
+    const signature = files.map((file) => `${file.id}:${file.file_name || ''}:${file.file_type || ''}:${file.timestamp || ''}:${file.thumbnail_created_at || ''}`).join('|');
     return `W/"${album.id}:${lastModifiedAt}:${hashString(signature)}"`;
 }
 

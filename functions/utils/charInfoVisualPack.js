@@ -1,6 +1,7 @@
 import { requireCharInfoAlbumIdentity } from './charInfoGallery.js';
 import { normalizeCharInfoVisualConfig } from './charInfoVisualConfig.js';
 import { absoluteFileUrl, absoluteThumbnailUrl } from './publicCatalog.js';
+import { thumbnailContentVersion } from './thumbnail.js';
 
 export const CHAR_INFO_VISUAL_PACK_FORMAT = 'char-info-visual-pack';
 export const CHAR_INFO_VISUAL_PACK_VERSION = 1;
@@ -47,8 +48,8 @@ function buildGalleryItem(file, visualConfig, requestUrl) {
     return {
         title: file.file_name || file.id,
         sources: [absoluteFileUrl(requestUrl, file.id)],
-        thumbnail: file.visibility === 'public' && String(file.file_type || '').startsWith('image/')
-            ? absoluteThumbnailUrl(requestUrl, file.id)
+        thumbnail: String(file.file_type || '').startsWith('image/')
+            ? absoluteThumbnailUrl(requestUrl, file.id, 'gallery', thumbnailContentVersion(file))
             : null,
         ...(hidden ? { viewerVisible: false } : {}),
     };
