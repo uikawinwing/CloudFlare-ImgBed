@@ -30,6 +30,7 @@ const scrollPositions = new Map();
 
 const main = document.querySelector('#mainContent');
 const dialogRoot = document.querySelector('#dialogRoot');
+let activeDialogClose = null;
 
 const icons = {
   upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>',
@@ -65,6 +66,36 @@ function previewUrl(file) {
 
 function isVideoFile(file) {
   return String(file?.file_type || '').startsWith('video/');
+}
+
+function isStaticCoverFile(file) {
+  return String(file?.file_type || '').startsWith('image/') && file?.moderation_status === 'active';
+}
+
+function coverPosition(value) {
+  const position = Number(value);
+  return Number.isInteger(position) && position >= 0 && position <= 100 ? position : 50;
+}
+
+function selectedCoverFileId(album) {
+  return album.coverFileId || album.cover_file_id || null;
+}
+
+function albumCoverItem(album) {
+  const coverFileId = selectedCoverFileId(album);
+  const items = album.items || [];
+  if (coverFileId) {
+    const selected = items.find(item => item.id === coverFileId && isStaticCoverFile(item));
+    if (selected) return selected;
+  }
+  return items.find(item => item.moderation_status !== 'quarantined') || null;
+}
+
+function albumCoverPosition(album) {
+  return {
+    x: coverPosition(album.coverPositionX ?? album.cover_position_x),
+    y: coverPosition(album.coverPositionY ?? album.cover_position_y),
+  };
 }
 
 function videoTypeLabel(file) {
@@ -281,8 +312,12 @@ function renderFiles() {
 
 function albumRow(album) {
   const items = album.items || [];
-  const cover = items.find(item => item.moderation_status !== 'quarantined');
-  const coverMedia = cover ? (isVideoFile(cover) ? `<video src="${fileUrl(cover)}" muted loop playsinline preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(cover))}" alt="${escapeHtml(cover.file_name || album.name)}" loading="lazy" decoding="async">`) : `<span class="empty-icon">${icons.image}</span>`;
+  const cover = albumCoverItem(album);
+  const focus = albumCoverPosition(album);
+  const useSavedFocus = cover && selectedCoverFileId(album) === cover.id && isStaticCoverFile(cover);
+  const coverMedia = !cover ? `<span class="empty-icon">${icons.image}</span>` : isVideoFile(cover)
+    ? `<video src="${fileUrl(cover)}" muted loop playsinline preload="metadata"></video>`
+    : `<img src="${escapeHtml(previewUrl(cover))}" alt="${escapeHtml(cover.file_name || album.name)}" loading="lazy" decoding="async"${useSavedFocus ? ` style="object-position:${focus.x}% ${focus.y}%"` : ''}>`;
   const canShare = Boolean(state.user.publicHandle);
   const canShareCharInfo = canShare && Boolean(album.charInfoCharacterName);
   const shareUrl = canShare ? `${location.origin}/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
@@ -312,7 +347,7 @@ function renderAlbums() {
   syncNavigation();
   main.innerHTML = `<section class="page-section">
     <header class="page-head">
-      <div class="page-title"><h1>我的图库</h1><p>把文件整理成可分享的图库。删除图库只会拆掉收纳盒，原文件仍留在“我的文件”。</p></div>
+      <div class="page-title"><h1>我的图库</h1></div>
       <button class="button primary" id="createAlbum" type="button">${icons.plus}新建图库</button>
     </header>
     ${state.user.publicHandle ? '' : '<div class="notice-panel"><div><strong>准备公开图库？</strong><p>先设置一个用于分享链接的公开名称。它会绑定当前 Discord 账号。</p></div><button class="button" id="setPublicHandle" type="button">设置公开名称</button></div>'}
@@ -449,14 +484,19 @@ function observeVideos() {
 }
 
 function openDialog(content, { closeable = true, wide = false, className = '', label = '对话框' } = {}) {
+  activeDialogClose?.();
   const previouslyFocused = document.activeElement;
   dialogRoot.innerHTML = `<div class="dialog-backdrop" role="presentation"><section class="dialog${wide ? ' wide' : ''}${className ? ` ${className}` : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(label)}" tabindex="-1">${content}</section></div>`;
   const backdrop = dialogRoot.firstElementChild;
   const dialog = dialogRoot.querySelector('.dialog');
   dialog?.focus();
+  let closed = false;
   const close = () => {
+    if (closed) return;
+    closed = true;
     document.removeEventListener('keydown', closeOnEscape);
     dialogRoot.innerHTML = '';
+    if (activeDialogClose === close) activeDialogClose = null;
     if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus();
   };
   const closeOnEscape = event => {
@@ -470,6 +510,7 @@ function openDialog(content, { closeable = true, wide = false, className = '', l
     dialogRoot.querySelectorAll('[data-close-dialog]').forEach(button => button.addEventListener('click', close));
     document.addEventListener('keydown', closeOnEscape);
   }
+  activeDialogClose = close;
   return close;
 }
 
@@ -723,12 +764,13 @@ function bindAlbumEvents() {
 
 function manageAlbumItems(album) {
   const items = [...(album.items || [])].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+  const coverFileId = selectedCoverFileId(album);
   const rows = items.map((item, index) => `<article class="album-item-row" data-file-id="${escapeHtml(item.id)}">
     <div class="album-item-thumb">${isVideoFile(item) ? `<video src="${fileUrl(item)}" muted playsinline preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(item.file_name || item.id)}" loading="lazy" decoding="async">`}</div>
     <div class="album-item-copy"><strong>${escapeHtml(item.file_name || item.id)}</strong><span>${formatBytes(item.file_size_bytes)}</span></div>
-    <div class="album-item-actions"><button class="icon-button" type="button" data-move-up aria-label="上移" ${index === 0 ? 'disabled' : ''}>↑</button><button class="icon-button" type="button" data-move-down aria-label="下移" ${index === items.length - 1 ? 'disabled' : ''}>↓</button><button class="button danger" type="button" data-remove-item>移出图库</button></div>
+    <div class="album-item-actions">${isStaticCoverFile(item) ? `<button class="button" type="button" data-edit-cover>${coverFileId === item.id ? '调整封面' : '设为封面'}</button>` : ''}<button class="icon-button" type="button" data-move-up aria-label="上移" ${index === 0 ? 'disabled' : ''}>↑</button><button class="icon-button" type="button" data-move-down aria-label="下移" ${index === items.length - 1 ? 'disabled' : ''}>↓</button><button class="button danger" type="button" data-remove-item>移出图库</button></div>
   </article>`).join('');
-  const content = `<div class="dialog-head"><div><h2>管理“${escapeHtml(album.name)}”的内容</h2><p>${items.length} 个项目</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div><div class="dialog-body">${rows || '<div class="empty-state compact"><h3>图库里还没有文件</h3><p>请从“我的文件”选择内容加入。</p></div>'}</div>`;
+  const content = `<div class="dialog-head"><div><h2>管理“${escapeHtml(album.name)}”的内容</h2><p>${items.length} 个项目</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div><div class="dialog-body">${coverFileId ? '<button class="button" type="button" data-clear-cover>恢复自动封面</button>' : ''}${rows || '<div class="empty-state compact"><h3>图库里还没有文件</h3><p>请从“我的文件”选择内容加入。</p></div>'}</div>`;
   openDialog(content, { wide: true });
   dialogRoot.querySelectorAll('.album-item-row').forEach((row, index) => {
     const fileId = row.dataset.fileId;
@@ -766,7 +808,91 @@ function manageAlbumItems(album) {
       const next = items[index + 1];
       await reorder(next, index + 1, index);
     });
+    row.querySelector('[data-edit-cover]')?.addEventListener('click', () => openAlbumCoverEditor(album, items[index]));
     row.querySelector('[data-remove-item]')?.addEventListener('click', () => mutate('DELETE', null, `?fileId=${encodeURIComponent(fileId)}`));
+  });
+  dialogRoot.querySelector('[data-clear-cover]')?.addEventListener('click', async event => {
+    event.currentTarget.disabled = true;
+    try {
+      await api(`/api/user/albums/${encodeURIComponent(album.id)}`, { method: 'PATCH', body: JSON.stringify({ coverFileId: null }) });
+      await loadAlbums(true);
+      const refreshed = state.albums.find(item => item.id === album.id) || album;
+      renderAlbums();
+      manageAlbumItems(refreshed);
+      toast('已恢复自动封面。');
+    } catch (error) {
+      event.currentTarget.disabled = false;
+      toast(error.message, 'error');
+    }
+  });
+}
+
+function openAlbumCoverEditor(album, item) {
+  const selected = selectedCoverFileId(album) === item.id;
+  const initial = selected ? albumCoverPosition(album) : { x: 50, y: 50 };
+  const content = `<form id="albumCoverForm">
+    <div class="dialog-head"><h2>调整封面</h2><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
+    <div class="dialog-body cover-editor-body">
+      <div class="cover-focus-preview"><img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(item.file_name || item.id)}" draggable="false" style="object-position:${initial.x}% ${initial.y}%"></div>
+      <label class="cover-focus-control" for="coverFocusX"><span>水平焦点 <output id="coverFocusXValue" for="coverFocusX">${initial.x}%</output></span><input id="coverFocusX" name="coverFocusX" type="range" min="0" max="100" step="1" value="${initial.x}" aria-label="水平焦点"></label>
+      <label class="cover-focus-control" for="coverFocusY"><span>垂直焦点 <output id="coverFocusYValue" for="coverFocusY">${initial.y}%</output></span><input id="coverFocusY" name="coverFocusY" type="range" min="0" max="100" step="1" value="${initial.y}" aria-label="垂直焦点"></label>
+    </div>
+    <div class="dialog-actions"><button class="button" type="button" data-close-dialog>取消</button><button class="button primary" type="submit">保存封面</button></div>
+  </form>`;
+  const close = openDialog(content, { label: '调整相册封面' });
+  const form = dialogRoot.querySelector('#albumCoverForm');
+  const focusPreview = form.querySelector('.cover-focus-preview');
+  const preview = focusPreview.querySelector('img');
+  const xInput = form.coverFocusX;
+  const yInput = form.coverFocusY;
+  const updatePreview = () => {
+    preview.style.objectPosition = `${xInput.value}% ${yInput.value}%`;
+    form.querySelector('#coverFocusXValue').textContent = `${xInput.value}%`;
+    form.querySelector('#coverFocusYValue').textContent = `${yInput.value}%`;
+  };
+  xInput.addEventListener('input', updatePreview);
+  yInput.addEventListener('input', updatePreview);
+  const clampFocus = value => Math.round(Math.min(100, Math.max(0, value)));
+  let drag = null;
+  const updateFromDrag = event => {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const bounds = focusPreview.getBoundingClientRect();
+    xInput.value = String(clampFocus(drag.focusX - (event.clientX - drag.clientX) / bounds.width * 100));
+    yInput.value = String(clampFocus(drag.focusY - (event.clientY - drag.clientY) / bounds.height * 100));
+    updatePreview();
+  };
+  focusPreview.addEventListener('pointerdown', event => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    drag = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, focusX: Number(xInput.value), focusY: Number(yInput.value) };
+    focusPreview.setPointerCapture(event.pointerId);
+    focusPreview.classList.add('is-dragging');
+  });
+  focusPreview.addEventListener('pointermove', event => {
+    if (focusPreview.hasPointerCapture(event.pointerId)) updateFromDrag(event);
+  });
+  const finishDrag = event => {
+    if (focusPreview.hasPointerCapture(event.pointerId)) focusPreview.releasePointerCapture(event.pointerId);
+    if (drag?.pointerId === event.pointerId) drag = null;
+    focusPreview.classList.remove('is-dragging');
+  };
+  focusPreview.addEventListener('pointerup', finishDrag);
+  focusPreview.addEventListener('pointercancel', finishDrag);
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      await api(`/api/user/albums/${encodeURIComponent(album.id)}`, { method: 'PATCH', body: JSON.stringify({ coverFileId: item.id, coverPositionX: Number(xInput.value), coverPositionY: Number(yInput.value) }) });
+      await loadAlbums(true);
+      const refreshed = state.albums.find(entry => entry.id === album.id) || album;
+      close();
+      renderAlbums();
+      manageAlbumItems(refreshed);
+      toast('封面已更新。');
+    } catch (error) {
+      button.disabled = false;
+      toast(error.message, 'error');
+    }
   });
 }
 

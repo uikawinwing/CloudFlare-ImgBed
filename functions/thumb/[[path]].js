@@ -77,7 +77,10 @@ export async function onRequest(context) {
 async function createThumbnailResponse(context, fileId, metadata, variantName, cacheControl) {
     const permanent = getPermanentThumbnail(metadata);
     let source = permanent ? await fetchPermanentThumbnail(context.env, metadata) : null;
-    let sourceIsPermanent = Boolean(source);
+    if (permanent && !source) {
+        return new Response('Permanent thumbnail source unavailable', { status: 502, headers: noStoreHeaders() });
+    }
+    let sourceIsPermanent = Boolean(permanent);
     let sourceMetadata = permanent ? { Width: permanent.Width || metadata.Width } : metadata;
 
     if (!source) {

@@ -80,6 +80,7 @@ jobs:
           wranglerVersion: '4'
           command: |
             deploy --dry-run --config deploy/worker/wrangler.staging.toml
+            d1 execute img_d1 --remote --config deploy/worker/wrangler.staging.toml --file database/migrations/v2.10.0_album_covers.sql
             deploy --config deploy/worker/wrangler.staging.toml
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 

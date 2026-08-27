@@ -24,6 +24,10 @@ const ratioFor = item => {
   const height = Number(item.height);
   return width > 0 && height > 0 ? `${width} / ${height}` : '1 / 1';
 };
+const albumCoverPosition = value => {
+  const position = Number(value);
+  return Number.isInteger(position) && position >= 0 && position <= 100 ? position : 50;
+};
 
 function copyText(value) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
@@ -69,11 +73,12 @@ function cardMarkup(item, featured = false) {
 
 function albumCardMarkup(album) {
   const cover = album.coverThumbnailUrl || album.coverUrl;
+  const objectPosition = `${albumCoverPosition(album.coverPositionX)}% ${albumCoverPosition(album.coverPositionY)}%`;
   const coverMarkup = !cover
     ? '<span class="album-cover-empty">空图库</span>'
     : String(album.coverType || '').startsWith('video/')
       ? `<video src="${escapeHtml(cover)}" muted loop autoplay playsinline preload="metadata"></video>`
-      : `<img src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async">`;
+      : `<img src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async" style="object-position:${objectPosition}">`;
   return `<a class="album-card" href="${escapeHtml(album.url)}">
     <span class="album-cover">${coverMarkup}</span>
     <span class="album-card-info"><strong>${escapeHtml(album.name || '未命名图库')}</strong><small>${escapeHtml(album.creator?.name || album.creator?.handle || '创作者')} · ${Number(album.itemCount) || 0} 项</small></span>

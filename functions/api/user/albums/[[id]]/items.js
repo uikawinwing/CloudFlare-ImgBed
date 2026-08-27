@@ -24,7 +24,10 @@ export async function onRequestDelete(context) {
     if (!albumId) return json({ error: 'Album not found' }, 404);
     const album = await ownedAlbum(context.env, albumId, identity);
     if (!album) return json({ error: 'Album not found' }, 404);
-    await context.env.img_d1.prepare('DELETE FROM album_items WHERE album_id = ? AND file_id = ?').bind(album.id, fileId).run();
+    await context.env.img_d1.batch([
+        context.env.img_d1.prepare('DELETE FROM album_covers WHERE album_id = ? AND file_id = ?').bind(album.id, fileId),
+        context.env.img_d1.prepare('DELETE FROM album_items WHERE album_id = ? AND file_id = ?').bind(album.id, fileId),
+    ]);
     return json({ success: true });
 }
 

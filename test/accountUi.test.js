@@ -8,6 +8,7 @@ const uploadSource = readFileSync(new URL('../frontend-dist/account/upload-in-fi
 const creatorSource = readFileSync(new URL('../frontend-dist/charinfo/index.html', import.meta.url), 'utf8');
 const discoverSource = readFileSync(new URL('../frontend-dist/discover/discover.js', import.meta.url), 'utf8');
 const discoverPage = readFileSync(new URL('../frontend-dist/index.html', import.meta.url), 'utf8');
+const discoverRoutePage = readFileSync(new URL('../frontend-dist/discover/index.html', import.meta.url), 'utf8');
 const accountPage = readFileSync(new URL('../frontend-dist/account/index.html', import.meta.url), 'utf8');
 const previewStyles = readFileSync(new URL('../frontend-dist/preview-style.css', import.meta.url), 'utf8');
 
@@ -92,10 +93,31 @@ describe('account media and album UI', () => {
     assert.match(discoverSource, /album\.coverThumbnailUrl \|\| album\.coverUrl/);
   });
 
+  it('keeps public section headings free of designer commentary', () => {
+    for (const page of [discoverPage, discoverRoutePage]) {
+      assert.doesNotMatch(page, /section-intro[^>]*>[\s\S]*?<p>/);
+      assert.doesNotMatch(page, /浏览创作者选择展示|所有设为公开的作品|由站点精选与推荐系统/);
+    }
+  });
+
   it('keeps albums as compact cards and reveals secondary actions on demand', () => {
     assert.match(styles, /\.album-list\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(260px,\s*320px\)\)[^}]*justify-content:\s*start/);
     assert.match(styles, /\.album-cover\s*\{[^}]*aspect-ratio:\s*4\s*\/\s*3/);
     assert.doesNotMatch(styles, /\.album-row\s*\{[^}]*grid-template-columns:\s*minmax\(210px,\s*280px\)\s+1fr/);
     assert.match(source, /<details class="album-actions-menu">[\s\S]*<summary[^>]*>管理图库<\/summary>[\s\S]*class="album-actions"/);
+  });
+
+  it('lets an owner choose an image cover and drag its focal point without changing album order', () => {
+    assert.match(source, /function isStaticCoverFile\(file\)[\s\S]*file_type[\s\S]*image\//);
+    assert.match(source, /data-edit-cover[\s\S]*调整封面/);
+    assert.match(source, /function openAlbumCoverEditor\(album, item\)/);
+    assert.match(source, /type="range"[\s\S]*水平焦点[\s\S]*type="range"[\s\S]*垂直焦点/);
+    assert.match(source, /pointerdown[\s\S]*setPointerCapture[\s\S]*pointermove[\s\S]*updateFromDrag/);
+    assert.match(source, /drag\.focusX\s*-\s*\(event\.clientX\s*-\s*drag\.clientX\)/);
+    assert.match(source, /let activeDialogClose = null[\s\S]*activeDialogClose\?\.\(\)[\s\S]*document\.removeEventListener\('keydown', closeOnEscape\)/);
+    assert.match(source, /coverFileId: item\.id, coverPositionX: Number\(xInput\.value\), coverPositionY: Number\(yInput\.value\)/);
+    assert.match(discoverSource, /album\.coverPositionX[\s\S]*object-position/);
+    assert.match(styles, /\.cover-focus-preview\s*\{[^}]*cursor:\s*grab[^}]*touch-action:\s*none/);
+    assert.doesNotMatch(source, /把文件整理成可分享的图库/);
   });
 });

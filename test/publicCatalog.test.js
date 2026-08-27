@@ -118,10 +118,37 @@ describe('public catalog policy', () => {
         };
         const albums = await catalog.listDiscoverAlbums(env, 'https://example.test/api/public/discover');
         assert.match(queries[0], /a\.visibility = 'public'/);
+        assert.match(queries[0], /FROM album_covers ac/);
+        assert.match(queries[0], /ai\.file_id = ac\.file_id/);
+        assert.match(queries[0], /f\.file_type LIKE 'image\/%'/);
+        assert.doesNotMatch(queries[0].split('), explicit_covers AS')[0], /file_type LIKE/);
         assert.match(queries[0], /f\.moderation_status = 'active'/);
-        assert.strictEqual((queries[0].match(/f\.visibility = 'public'/g) || []).length, 2);
+        assert.strictEqual((queries[0].match(/f\.visibility = 'public'/g) || []).length, 3);
         assert.strictEqual(albums[0].url, 'https://example.test/gallery/master/summer');
         assert.strictEqual(albums[0].coverUrl, null);
         assert.strictEqual(albums[0].coverThumbnailUrl, null);
+    });
+
+    it('uses a public selected image and its saved focal point for Discover', () => {
+        const album = catalog.presentDiscoverAlbum({
+            id: 'album-id', slug: 'summer', name: 'Summer', updated_at: 1,
+            creator_name: 'Master', creator_handle: 'master', cover_id: 'cover.png',
+            cover_type: 'image/png', cover_visibility: 'public', cover_timestamp: 1, cover_position_x: 18, cover_position_y: 76,
+        }, 'https://example.test/api/public/discover');
+        assert.strictEqual(album.coverUrl, 'https://example.test/file/cover.png');
+        assert.strictEqual(album.coverThumbnailUrl, 'https://example.test/thumb/cover.png?v=1');
+        assert.strictEqual(album.coverPositionX, 18);
+        assert.strictEqual(album.coverPositionY, 76);
+    });
+
+    it('keeps the existing public video fallback when no eligible image cover is selected', () => {
+        const album = catalog.presentDiscoverAlbum({
+            id: 'album-id', slug: 'summer', name: 'Summer', updated_at: 1,
+            creator_name: 'Master', creator_handle: 'master', cover_id: 'clip.webm',
+            cover_type: 'video/webm', cover_visibility: 'public', cover_timestamp: 1,
+        }, 'https://example.test/api/public/discover');
+        assert.strictEqual(album.coverUrl, 'https://example.test/file/clip.webm');
+        assert.strictEqual(album.coverThumbnailUrl, null);
+        assert.strictEqual(album.coverType, 'video/webm');
     });
 });

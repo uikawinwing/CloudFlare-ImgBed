@@ -79,13 +79,22 @@ export async function listDiscover(env, query, requestUrl) {
 export async function listDiscoverAlbums(env, requestUrl, limit = 12) {
     const pageSize = Math.min(Math.max(Number(limit) || 12, 1), 24);
     const sql = `WITH ranked_items AS (
-        SELECT ai.album_id, f.id AS cover_id, f.file_type AS cover_type, f.visibility AS cover_visibility,
-            f.timestamp AS cover_timestamp,
-            json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS cover_thumbnail_created_at,
+        SELECT ai.album_id, f.id AS fallback_cover_id, f.file_type AS fallback_cover_type,
+            f.visibility AS fallback_cover_visibility,
+            f.timestamp AS fallback_cover_timestamp,
+            json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS fallback_cover_thumbnail_created_at,
             ROW_NUMBER() OVER (PARTITION BY ai.album_id ORDER BY ai.position, ai.created_at) AS item_rank
         FROM album_items ai
         JOIN files f ON f.id = ai.file_id
         WHERE f.visibility = 'public' AND f.moderation_status = 'active'
+    ), explicit_covers AS (
+        SELECT ac.album_id, f.id AS cover_id, f.file_type AS cover_type, f.visibility AS cover_visibility, f.timestamp AS cover_timestamp,
+            json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS cover_thumbnail_created_at,
+            ac.position_x AS cover_position_x, ac.position_y AS cover_position_y
+        FROM album_covers ac
+        JOIN album_items ai ON ai.album_id = ac.album_id AND ai.file_id = ac.file_id
+        JOIN files f ON f.id = ac.file_id
+        WHERE f.visibility = 'public' AND f.moderation_status = 'active' AND f.file_type LIKE 'image/%'
     ), item_counts AS (
         SELECT ai.album_id, COUNT(*) AS item_count
         FROM album_items ai
@@ -95,11 +104,18 @@ export async function listDiscoverAlbums(env, requestUrl, limit = 12) {
     )
     SELECT a.id, a.slug, a.name, a.description, a.updated_at,
         u.username AS creator_name, u.public_handle AS creator_handle,
-        cover.cover_id, cover.cover_type, cover.cover_visibility, cover.cover_timestamp, cover.cover_thumbnail_created_at,
+        COALESCE(explicit.cover_id, fallback.fallback_cover_id) AS cover_id,
+        COALESCE(explicit.cover_type, fallback.fallback_cover_type) AS cover_type,
+        COALESCE(explicit.cover_visibility, fallback.fallback_cover_visibility) AS cover_visibility,
+        COALESCE(explicit.cover_timestamp, fallback.fallback_cover_timestamp) AS cover_timestamp,
+        COALESCE(explicit.cover_thumbnail_created_at, fallback.fallback_cover_thumbnail_created_at) AS cover_thumbnail_created_at,
+        COALESCE(explicit.cover_position_x, 50) AS cover_position_x,
+        COALESCE(explicit.cover_position_y, 50) AS cover_position_y,
         COALESCE(counts.item_count, 0) AS item_count
     FROM albums a
     JOIN users u ON u.discord_id = a.owner_id
-    LEFT JOIN ranked_items cover ON cover.album_id = a.id AND cover.item_rank = 1
+    LEFT JOIN explicit_covers explicit ON explicit.album_id = a.id
+    LEFT JOIN ranked_items fallback ON fallback.album_id = a.id AND fallback.item_rank = 1
     LEFT JOIN item_counts counts ON counts.album_id = a.id
     WHERE a.visibility = 'public' AND u.status = 'active' AND u.public_handle IS NOT NULL
     ORDER BY a.updated_at DESC, a.id DESC
@@ -167,8 +183,15 @@ export function presentDiscoverAlbum(album, requestUrl) {
         url: url.toString(),
         coverUrl,
         coverThumbnailUrl,
-        coverType: album.cover_type || null,
+        coverType: hasDiscoverableCover ? album.cover_type : null,
+        coverPositionX: normalizeCoverPosition(album.cover_position_x),
+        coverPositionY: normalizeCoverPosition(album.cover_position_y),
     };
+}
+
+function normalizeCoverPosition(value) {
+    const position = Number(value);
+    return Number.isInteger(position) && position >= 0 && position <= 100 ? position : 50;
 }
 
 export function absoluteFileUrl(requestUrl, fileId) {

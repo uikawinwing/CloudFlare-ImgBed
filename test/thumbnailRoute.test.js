@@ -214,6 +214,50 @@ describe('thumbnail route visibility and cache contract', () => {
         }
     });
 
+    it('does not change immutable bytes by falling back when a permanent source is unavailable', async () => {
+        const originalFetch = globalThis.fetch;
+        const fetchedUrls = [];
+        globalThis.fetch = async url => {
+            fetchedUrls.push(String(url));
+            return new Response('Discord unavailable', { status: 503 });
+        };
+        const metadata = {
+            ModerationStatus: 'active',
+            FileType: 'image/png',
+            TimeStamp: 100,
+            Thumbnail: {
+                Channel: 'Discord',
+                ChannelName: 'Discord_env',
+                DiscordMessageId: 'message-id',
+                FileType: 'image/webp',
+                Width: 720,
+                CreatedAt: 200,
+            },
+        };
+        const env = {
+            DISCORD_BOT_TOKEN: 'token',
+            DISCORD_CHANNEL_ID: 'channel-id',
+            img_url: {
+                get: async () => null,
+                getWithMetadata: async () => ({ value: '', metadata }),
+            },
+        };
+
+        try {
+            const response = await serveThumbnail({
+                request: new Request('https://example.test/thumb/private.png?variant=avatar&v=200'),
+                env,
+                params: { path: 'private.png' },
+            });
+            assert.strictEqual(response.status, 502);
+            assert.strictEqual(response.headers.get('cache-control'), 'private, no-store, max-age=0');
+            assert.ok(fetchedUrls.some(url => url.startsWith('https://discord.com/api/v10/')));
+            assert.ok(fetchedUrls.every(url => !url.includes('/file/private.png')));
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+
     it('rejects unknown variants without touching storage', async () => {
         const response = await serveThumbnail({
             request: new Request('https://example.test/thumb/image.png?variant=huge'),

@@ -200,6 +200,7 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
         // 同一数据库事务中结清相册引用、额度和文件记录。
         if (env.img_d1?.prepare) {
             const statements = [
+                env.img_d1.prepare('DELETE FROM album_covers WHERE file_id = ?').bind(fileId),
                 env.img_d1.prepare('DELETE FROM album_items WHERE file_id = ?').bind(fileId),
                 env.img_d1.prepare('DELETE FROM files WHERE id = ?').bind(fileId),
             ];

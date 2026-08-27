@@ -171,6 +171,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .album-item-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .album-item-copy span { color: var(--muted); font-size: 12px; }
 .album-item-actions { display: flex; align-items: center; gap: 7px; }
+.cover-editor-body { display: grid; gap: 18px; }
+.cover-focus-preview { aspect-ratio: 16 / 10; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #040912; cursor: grab; touch-action: none; }
+.cover-focus-preview.is-dragging { cursor: grabbing; }
+.cover-focus-preview img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.cover-focus-control { display: grid; gap: 8px; color: var(--text); font-size: 13px; font-weight: 650; }
+.cover-focus-control > span { display: flex; justify-content: space-between; gap: 12px; }
+.cover-focus-control output { color: var(--muted-strong); font-variant-numeric: tabular-nums; }
+.cover-focus-control input[type="range"] { width: 100%; accent-color: var(--accent); touch-action: pan-y; }
 
 .admin-tabs { margin-bottom: 24px; }
 .admin-toolbar { justify-content: space-between; }
