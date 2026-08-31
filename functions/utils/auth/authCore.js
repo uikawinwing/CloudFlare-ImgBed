@@ -24,6 +24,11 @@ export const AUTH_SCOPE = {
 
 const AUTHORIZED = (authType) => ({ authorized: true, authType });
 const UNAUTHORIZED = { authorized: false, authType: null };
+const ADMIN_AUTH_NOT_CONFIGURED = {
+    authorized: false,
+    authType: null,
+    error: 'admin_auth_not_configured',
+};
 
 /**
  * 管理员会话认证
@@ -32,19 +37,19 @@ const UNAUTHORIZED = { authorized: false, authType: null };
  * @returns {Promise<{authorized: boolean, authType: string|null}|null>}
  *          认证通过返回结果，未通过返回 null（交给调用方继续）
  */
-async function checkAdmin({ env, request, adminConfigured }) {
+async function checkAdmin({ env, request, adminAuthConfigured }) {
     const discordIdentity = await getDiscordIdentity(env, request);
     if (discordIdentity && ['admin', 'owner'].includes(discordIdentity.role)) {
         return AUTHORIZED('admin');
     }
 
-    if (!adminConfigured && !isDiscordAuthConfigured(env)) {
-        return AUTHORIZED('admin'); // 未配置管理员认证，视为管理员身份放行
-    }
-
     const session = await validateSession(env, request, 'admin');
     if (session.valid) {
         return AUTHORIZED('admin');
+    }
+
+    if (!adminAuthConfigured) {
+        return ADMIN_AUTH_NOT_CONFIGURED;
     }
 
     return null;
@@ -109,7 +114,9 @@ export async function authenticate({
     const adminPassword = securityConfig.auth.admin.adminPassword;
     const userAuthCode = securityConfig.auth.user.authCode;
 
-    const adminConfigured = !!(adminUsername && adminUsername.trim()) || !!(adminPassword && adminPassword.trim());
+    const adminCredentialsConfigured = !!(adminUsername && adminUsername.trim()) && !!(adminPassword && adminPassword.trim());
+    const apiTokenConfigured = Object.keys(securityConfig.apiTokens?.tokens || {}).length > 0;
+    const adminAuthConfigured = adminCredentialsConfigured || isDiscordAuthConfigured(env) || apiTokenConfigured;
     const authCodeConfigured = !!(userAuthCode && userAuthCode.trim());
 
     // --- API Token 验证（公共层，所有 scope 通用） ---
@@ -120,7 +127,7 @@ export async function authenticate({
     }
 
     // --- 会话/凭据验证 ---
-    const adminCtx = { env, request, adminConfigured };
+    const adminCtx = { env, request, adminAuthConfigured };
     const userCtx = { env, request, url, authCodeConfigured, userAuthCode };
 
     if (authScope === AUTH_SCOPE.ADMIN) {

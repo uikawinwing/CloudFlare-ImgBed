@@ -1,18 +1,16 @@
 import sentryPlugin from "@cloudflare/pages-plugin-sentry";
 import '@sentry/tracing';
-import { fetchOthersConfig } from "./sysConfig";
+import { fetchOthersConfig } from "./sysConfig.js";
 import { checkDatabaseConfig as checkDbConfig } from './databaseAdapter.js';
-
-let disableTelemetry = false;
 
 export async function errorHandling(context) {
   // 读取KV中的设置
   const othersConfig = await fetchOthersConfig(context.env);
-  disableTelemetry = !othersConfig.telemetry.enabled;
+  const telemetryEnabled = othersConfig.telemetry.enabled === true;
+  context.data.telemetry = telemetryEnabled;
 
   const env = context.env;
-  if (!disableTelemetry) {
-    context.data.telemetry = true;
+  if (telemetryEnabled) {
     let remoteSampleRate = 0.001;
     try {
       const sampleRate = await fetchSampleRate(context)
@@ -32,55 +30,37 @@ export async function errorHandling(context) {
 }
 
 export async function telemetryData(context) {
-  // 读取KV中的设置
-  const othersConfig = await fetchOthersConfig(context.env);
-  disableTelemetry = !othersConfig.telemetry.enabled;
-  
-  if (!disableTelemetry) {
+  if (context.data.telemetry === true) {
+    let transaction;
     try {
-      const parsedHeaders = {};
-      context.request.headers.forEach((value, key) => {
-        parsedHeaders[key] = value
-        //check if the value is empty
-        if (value.length > 0) {
-          context.data.sentry.setTag(key, value);
-        }
-      });
-      const CF = JSON.parse(JSON.stringify(context.request.cf));
-      const parsedCF = {};
-      for (const key in CF) {
-        if (typeof CF[key] == "object") {
-          parsedCF[key] = JSON.stringify(CF[key]);
-        } else {
-          parsedCF[key] = CF[key];
-          if (CF[key].length > 0) {
-            context.data.sentry.setTag(key, CF[key]);
-          }
-        }
-      }
+      const requestUrl = new URL(context.request.url);
+      const cf = {};
+      if (context.request.cf?.colo) cf.colo = context.request.cf.colo;
+      if (context.request.cf?.country) cf.country = context.request.cf.country;
+
       const data = {
-        headers: parsedHeaders,
-        cf: parsedCF,
-        url: context.request.url,
         method: context.request.method,
-        redirect: context.request.redirect,
+        pathname: requestUrl.pathname,
+        cf,
       }
-      //get the url path
-      const urlPath = new URL(context.request.url).pathname;
-      const hostname = new URL(context.request.url).hostname;
-      context.data.sentry.setTag("path", urlPath);
-      context.data.sentry.setTag("url", data.url);
+
+      context.data.sentry.setTag("path", requestUrl.pathname);
       context.data.sentry.setTag("method", context.request.method);
-      context.data.sentry.setTag("redirect", context.request.redirect);
+      if (cf.colo) context.data.sentry.setTag("colo", cf.colo);
+      if (cf.country) context.data.sentry.setTag("country", cf.country);
       context.data.sentry.setContext("request", data);
-      const transaction = context.data.sentry.startTransaction({ name: `${context.request.method} ${hostname}` });
+      transaction = context.data.sentry.startTransaction({ name: `${context.request.method} ${requestUrl.pathname}` });
       //add the transaction to the context
       context.data.transaction = transaction;
-      return await context.next();
     } catch (e) {
       console.log(e);
+      return context.next();
+    }
+
+    try {
+      return await context.next();
     } finally {
-      context.data.transaction.finish();
+      transaction.finish();
     }
   }
 

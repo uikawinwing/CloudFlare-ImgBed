@@ -42,6 +42,19 @@ function UnauthorizedException(reason) {
   });
 }
 
+function AdminAuthNotConfiguredException() {
+  const reason = 'Administrator authentication is not configured';
+  return new Response(reason, {
+    status: 503,
+    statusText: 'Service Unavailable',
+    headers: {
+      'Content-Type': 'text/plain;charset=UTF-8',
+      'Cache-Control': 'no-store',
+      'Content-Length': reason.length,
+    },
+  });
+}
+
 /**
  * 根据请求路径提取所需权限
  * @param {string} pathname - 请求路径
@@ -90,6 +103,9 @@ async function authentication(context) {
   });
 
   if (!result.authorized) {
+    if (result.error === 'admin_auth_not_configured') {
+      return AdminAuthNotConfiguredException();
+    }
     return UnauthorizedException('You need to login');
   }
 
