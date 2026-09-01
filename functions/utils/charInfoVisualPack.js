@@ -47,7 +47,7 @@ function buildGalleryItem(file, visualConfig, requestUrl) {
     const hidden = visualConfig?.viewerHiddenFileIds?.includes(id) || false;
     return {
         title: file.file_name || file.id,
-        sources: [absoluteFileUrl(requestUrl, file.id)],
+        sources: [absoluteFileUrl(requestUrl, file.id, file.timestamp)],
         thumbnail: String(file.file_type || '').startsWith('image/')
             ? absoluteThumbnailUrl(requestUrl, file.id, 'gallery', thumbnailContentVersion(file))
             : null,
@@ -77,7 +77,7 @@ function buildVisualPayload(config, fileById, requestUrl) {
 
 function firstImageUrl(fileById, requestUrl) {
     for (const file of fileById.values()) {
-        if (String(file.file_type || '').startsWith('image/')) return absoluteFileUrl(requestUrl, file.id);
+        if (String(file.file_type || '').startsWith('image/')) return absoluteFileUrl(requestUrl, file.id, file.timestamp);
     }
     return null;
 }
@@ -86,5 +86,5 @@ function imageUrlFor(fileId, fileById, requestUrl) {
     if (!fileId) return null;
     const file = fileById.get(fileId);
     if (!file || !String(file.file_type || '').startsWith('image/')) return null;
-    return absoluteFileUrl(requestUrl, file.id);
+    return absoluteFileUrl(requestUrl, file.id, file.timestamp);
 }
