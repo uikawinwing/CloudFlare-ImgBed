@@ -101,8 +101,8 @@ describe('stable CharInfo visual URL', () => {
         assert.strictEqual(firstPack.version, 1);
         assert.strictEqual(firstPack.profileId, 'album-id');
         assert.strictEqual(firstPack.visual.entranceQuote, 'Hello');
-        assert.strictEqual(firstPack.visual.avatarUrl, 'https://example.test/file/first.png');
-        assert.strictEqual(firstPack.visual.coverUrl, 'https://example.test/file/first.png', 'an unavailable cover selection falls back to the first album image');
+        assert.strictEqual(firstPack.visual.avatarUrl, 'https://example.test/file/first.png?v=1');
+        assert.strictEqual(firstPack.visual.coverUrl, 'https://example.test/file/first.png?v=1', 'an unavailable cover selection falls back to the first album image');
         assert.strictEqual('skills' in firstPack.visual, false);
         assert.strictEqual('mvu' in firstPack.visual, false);
         assert.deepStrictEqual(firstPack.gallery.map((item) => item.title), ['First.png', 'Second.webm']);
