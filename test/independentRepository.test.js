@@ -29,4 +29,28 @@ describe('independent repository deployment configuration', () => {
         assert.match(workflow, /name: Sync production Discord OAuth secret/);
         assert.match(workflow, /name: Smoke test production Worker/);
     });
+
+    it('keeps user-facing repository links on the standalone repository', () => {
+        const frontendFiles = collectFiles(join(repositoryRoot, 'frontend-dist'))
+            .filter((path) => /\.(?:html|js|map)$/.test(path));
+        const files = [
+            join(repositoryRoot, 'README.md'),
+            join(repositoryRoot, 'README_zh.md'),
+            join(repositoryRoot, '.github', 'ISSUE_TEMPLATE', 'config.yml'),
+            join(repositoryRoot, 'functions', 'api', 'manage', 'sysConfig', 'page.js'),
+            ...frontendFiles,
+        ];
+        const content = files.map((path) => readFileSync(path, 'utf8')).join('\n');
+
+        assert.doesNotMatch(content, /github\.com\/MarSeventh\/CloudFlare-ImgBed/i);
+        assert.doesNotMatch(content, /cfbed\.sanyue\.de/i);
+        assert.match(content, /github\.com\/uikawinwing\/CloudFlare-ImgBed/);
+    });
 });
+
+function collectFiles(directory) {
+    return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+        const path = join(directory, entry.name);
+        return entry.isDirectory() ? collectFiles(path) : [path];
+    });
+}
