@@ -1,6 +1,6 @@
 services:
   imgbed:
-    image: marseventh/cloudflare-imgbed:latest
+    build: .
     ports:
       - "7658:8080"
     volumes:

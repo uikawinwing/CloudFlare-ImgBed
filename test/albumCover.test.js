@@ -138,8 +138,11 @@ describe('album covers', () => {
     });
 
     it('applies the idempotent cover schema only through the staging Worker binding before deploy', () => {
-        const stagingWorkflow = readFileSync(new URL('../.github/workflows/deploy-staging-pages.yml', import.meta.url), 'utf8');
-        assert.match(stagingWorkflow, /deploy --dry-run --config deploy\/worker\/wrangler\.staging\.toml[\s\S]*d1 execute img_d1 --remote --config deploy\/worker\/wrangler\.staging\.toml --file database\/migrations\/v2\.10\.0_album_covers\.sql[\s\S]*deploy --config deploy\/worker\/wrangler\.staging\.toml/);
+        const stagingWorkflow = readFileSync(new URL('../.github/workflows/deploy-staging-worker.yml', import.meta.url), 'utf8');
+        assert.match(stagingWorkflow, /name: Validate staging Worker bundle[\s\S]*deploy --dry-run --config deploy\/worker\/wrangler\.staging\.toml/);
+        assert.match(stagingWorkflow, /name: Apply staging D1 schema[\s\S]*d1 execute img_d1 --remote --config deploy\/worker\/wrangler\.staging\.toml --file database\/migrations\/v2\.10\.0_album_covers\.sql/);
+        assert.match(stagingWorkflow, /name: Deploy staging Worker[\s\S]*deploy --config deploy\/worker\/wrangler\.staging\.toml/);
+        assert.ok(stagingWorkflow.indexOf('name: Apply staging D1 schema') < stagingWorkflow.indexOf('name: Deploy staging Worker'));
     });
 });
 

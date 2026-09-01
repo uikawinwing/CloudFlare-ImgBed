@@ -5,6 +5,7 @@
  * 环境变量：
  *   WORKER_NAME      - Worker 名称（默认 cloudflare-imgbed）
  *   D1_DATABASE_ID   - D1 数据库 ID
+ *   D1_DATABASE_NAME - D1 数据库名称（默认 img_d1）
  *   KV_NAMESPACE_ID  - KV 命名空间 ID
  *   R2_BUCKET_NAME   - R2 存储桶名称
  *   WORKER_VARS      - JSON 格式的业务环境变量
@@ -18,49 +19,49 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const outputPath = join(__dirname, 'wrangler.toml');
 
 const env = process.env;
-const name = env.WORKER_NAME || 'cloudflare-imgbed';
+const name = env.WORKER_NAME?.trim() || 'cloudflare-imgbed';
+const databaseId = requiredEnv('D1_DATABASE_ID');
+const databaseName = env.D1_DATABASE_NAME?.trim() || 'img_d1';
+const kvNamespaceId = requiredEnv('KV_NAMESPACE_ID');
+const r2BucketName = requiredEnv('R2_BUCKET_NAME');
 
 let toml = `name = "${name}"
 main = "index.js"
-compatibility_date = "2024-08-21"
+compatibility_date = "2026-08-25"
 compatibility_flags = ["global_fetch_strictly_public"]
+workers_dev = true
 
 [assets]
 directory = "../../frontend-dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+run_worker_first = ["/api", "/api/*", "/dav", "/dav/*", "/file", "/file/*", "/gallery", "/gallery/*", "/my-albums", "/my-files", "/random", "/random/*", "/thumb", "/thumb/*", "/upload", "/upload/*"]
 
 [images]
 binding = "IMAGES"
 `;
 
-// D1 数据库
-if (env.D1_DATABASE_ID) {
-    toml += `
+toml += `
 [[d1_databases]]
 binding = "img_d1"
-database_name = "img_d1"
-database_id = "${env.D1_DATABASE_ID}"
+database_name = "${databaseName}"
+database_id = "${databaseId}"
+remote = true
 `;
-}
 
-// KV 命名空间
-if (env.KV_NAMESPACE_ID) {
-    toml += `
+toml += `
 [[kv_namespaces]]
 binding = "img_url"
-id = "${env.KV_NAMESPACE_ID}"
+id = "${kvNamespaceId}"
+remote = true
 `;
-}
 
-// R2 存储桶
-if (env.R2_BUCKET_NAME) {
-    toml += `
+toml += `
 [[r2_buckets]]
 binding = "img_r2"
-bucket_name = "${env.R2_BUCKET_NAME}"
+bucket_name = "${r2BucketName}"
+remote = true
 `;
-}
 
 // 业务环境变量（从 JSON 解析）
 if (env.WORKER_VARS) {
@@ -74,7 +75,8 @@ if (env.WORKER_VARS) {
             }
         }
     } catch (e) {
-        console.error('Warning: WORKER_VARS is not valid JSON, skipping:', e.message);
+        console.error('WORKER_VARS must be valid JSON:', e.message);
+        process.exit(1);
     }
 }
 
@@ -90,3 +92,12 @@ const safeToml = toml
 
 console.log('Generated deploy/worker/wrangler.toml:');
 console.log(safeToml);
+
+function requiredEnv(name) {
+    const value = env[name]?.trim();
+    if (!value) {
+        console.error(`Missing ${name}. Refusing to generate an incomplete production Worker configuration.`);
+        process.exit(1);
+    }
+    return value;
+}
