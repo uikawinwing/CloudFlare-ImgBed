@@ -22,4 +22,11 @@ describe('independent repository deployment configuration', () => {
         assert.match(compose, /^\s+build: \.\s*$/m);
         assert.doesNotMatch(compose, /marseventh\/cloudflare-imgbed/i);
     });
+
+    it('deploys production with its own domain and Discord OAuth secret', () => {
+        const workflow = readFileSync(join(repositoryRoot, '.github', 'workflows', 'deploy-worker.yml'), 'utf8');
+        assert.match(workflow, /WORKER_CUSTOM_DOMAIN: \$\{\{ vars\.WORKER_CUSTOM_DOMAIN/);
+        assert.match(workflow, /name: Sync production Discord OAuth secret/);
+        assert.match(workflow, /name: Smoke test production Worker/);
+    });
 });

@@ -9,6 +9,9 @@
  *   KV_NAMESPACE_ID  - KV 命名空间 ID
  *   R2_BUCKET_NAME   - R2 存储桶名称
  *   WORKER_VARS      - JSON 格式的业务环境变量
+ *   WORKER_CUSTOM_DOMAIN - Worker 自定义域名
+ *   DISCORD_CLIENT_ID    - Discord OAuth Client ID
+ *   DISCORD_CALLBACK_URL - Discord OAuth 回调 URL
  */
 
 import { writeFileSync } from 'fs';
@@ -24,6 +27,7 @@ const databaseId = requiredEnv('D1_DATABASE_ID');
 const databaseName = env.D1_DATABASE_NAME?.trim() || 'img_d1';
 const kvNamespaceId = requiredEnv('KV_NAMESPACE_ID');
 const r2BucketName = requiredEnv('R2_BUCKET_NAME');
+const customDomain = normalizeCustomDomain(requiredEnv('WORKER_CUSTOM_DOMAIN'));
 
 let toml = `name = "${name}"
 main = "index.js"
@@ -63,22 +67,32 @@ bucket_name = "${r2BucketName}"
 remote = true
 `;
 
-// 业务环境变量（从 JSON 解析）
+const workerVars = {};
 if (env.WORKER_VARS) {
     try {
-        const vars = JSON.parse(env.WORKER_VARS);
-        const entries = Object.entries(vars);
-        if (entries.length > 0) {
-            toml += '\n[vars]\n';
-            for (const [key, value] of entries) {
-                toml += `${key} = "${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"\n`;
-            }
-        }
+        Object.assign(workerVars, JSON.parse(env.WORKER_VARS));
     } catch (e) {
         console.error('WORKER_VARS must be valid JSON:', e.message);
         process.exit(1);
     }
 }
+
+if (env.DISCORD_CLIENT_ID?.trim()) workerVars.DISCORD_CLIENT_ID = env.DISCORD_CLIENT_ID.trim();
+if (env.DISCORD_CALLBACK_URL?.trim()) workerVars.DISCORD_CALLBACK_URL = env.DISCORD_CALLBACK_URL.trim();
+
+const workerVarEntries = Object.entries(workerVars);
+if (workerVarEntries.length > 0) {
+    toml += '\n[vars]\n';
+    for (const [key, value] of workerVarEntries) {
+        toml += `${key} = "${escapeTomlString(value)}"\n`;
+    }
+}
+
+toml += `
+[[routes]]
+pattern = "${customDomain}"
+custom_domain = true
+`;
 
 writeFileSync(outputPath, toml, 'utf8');
 
@@ -100,4 +114,17 @@ function requiredEnv(name) {
         process.exit(1);
     }
     return value;
+}
+
+function normalizeCustomDomain(value) {
+    const hostname = value.toLowerCase();
+    if (!/^(?=.{1,253}$)(?![.-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(hostname)) {
+        console.error('WORKER_CUSTOM_DOMAIN must be a bare DNS hostname.');
+        process.exit(1);
+    }
+    return hostname;
+}
+
+function escapeTomlString(value) {
+    return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }

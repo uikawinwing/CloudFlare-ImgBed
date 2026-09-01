@@ -24,6 +24,12 @@ on:
 #   KV_NAMESPACE_ID       - KV 命名空间 ID
 #   R2_BUCKET_NAME        - R2 存储桶名称
 #   WORKER_NAME           - Worker 名称
+#   WORKER_CUSTOM_DOMAIN  - Worker 自定义域名
+#   DISCORD_CLIENT_ID     - Discord OAuth Client ID
+#   DISCORD_CALLBACK_URL  - Discord OAuth 回调 URL
+#
+# 必填 Secret：
+#   STAGING_DISCORD_CLIENT_SECRET - staging/production 共用同一个 Discord App
 #
 # 可选 Secret：
 #   WORKER_VARS           - JSON 格式的业务环境变量（非必要不建议配置，
@@ -41,6 +47,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      production_url: ${{ steps.production_url.outputs.url }}
     steps:
       - name: Check production deployment configuration
         env:
@@ -51,6 +59,10 @@ jobs:
           KV_NAMESPACE_ID: ${{ vars.KV_NAMESPACE_ID || secrets.KV_NAMESPACE_ID }}
           R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME || secrets.R2_BUCKET_NAME }}
           WORKER_NAME: ${{ inputs.worker_name || vars.WORKER_NAME || secrets.WORKER_NAME }}
+          WORKER_CUSTOM_DOMAIN: ${{ vars.WORKER_CUSTOM_DOMAIN || secrets.WORKER_CUSTOM_DOMAIN }}
+          DISCORD_CLIENT_ID: ${{ vars.DISCORD_CLIENT_ID }}
+          DISCORD_CALLBACK_URL: ${{ vars.DISCORD_CALLBACK_URL }}
+          DISCORD_CLIENT_SECRET: ${{ secrets.STAGING_DISCORD_CLIENT_SECRET }}
         run: |
           missing=0
           for name in \
@@ -60,7 +72,11 @@ jobs:
             D1_DATABASE_NAME \
             KV_NAMESPACE_ID \
             R2_BUCKET_NAME \
-            WORKER_NAME
+            WORKER_NAME \
+            WORKER_CUSTOM_DOMAIN \
+            DISCORD_CLIENT_ID \
+            DISCORD_CALLBACK_URL \
+            DISCORD_CLIENT_SECRET
           do
             if [ -z "${!name}" ]; then
               echo "::error::$name is required for the production Worker deployment."
@@ -91,12 +107,16 @@ jobs:
           KV_NAMESPACE_ID: ${{ vars.KV_NAMESPACE_ID || secrets.KV_NAMESPACE_ID }}
           R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME || secrets.R2_BUCKET_NAME }}
           WORKER_VARS: ${{ secrets.WORKER_VARS }}
+          WORKER_CUSTOM_DOMAIN: ${{ vars.WORKER_CUSTOM_DOMAIN || secrets.WORKER_CUSTOM_DOMAIN }}
+          DISCORD_CLIENT_ID: ${{ vars.DISCORD_CLIENT_ID }}
+          DISCORD_CALLBACK_URL: ${{ vars.DISCORD_CALLBACK_URL }}
         run: node deploy/worker/generate-toml.js
 
       - name: Validate production Worker bundle
         run: npx wrangler deploy --dry-run --config deploy/worker/wrangler.toml
 
       - name: Deploy to Cloudflare Workers
+        id: deploy
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -104,3 +124,37 @@ jobs:
           wranglerVersion: "4"
           command: deploy --config deploy/worker/wrangler.toml
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync production Discord OAuth secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DISCORD_CLIENT_SECRET: ${{ secrets.STAGING_DISCORD_CLIENT_SECRET }}
+        run: printf '%s' "$DISCORD_CLIENT_SECRET" | npx wrangler secret put DISCORD_CLIENT_SECRET --config deploy/worker/wrangler.toml
+
+      - name: Publish production URL
+        id: production_url
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
+          WORKER_CUSTOM_DOMAIN: ${{ vars.WORKER_CUSTOM_DOMAIN || secrets.WORKER_CUSTOM_DOMAIN }}
+        run: |
+          if [ -n "$WORKER_CUSTOM_DOMAIN" ]; then
+            PRODUCTION_URL="https://$WORKER_CUSTOM_DOMAIN"
+          elif [ -n "$DEPLOYMENT_URL" ]; then
+            PRODUCTION_URL="$DEPLOYMENT_URL"
+          else
+            echo "::error::Wrangler did not report the production Worker URL."
+            exit 1
+          fi
+
+          echo "url=$PRODUCTION_URL" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Production Worker"
+            echo
+            echo "URL: $PRODUCTION_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test production Worker
+        env:
+          PRODUCTION_URL: ${{ steps.production_url.outputs.url }}
+        run: curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 2 "$PRODUCTION_URL/api/public/discover" > /dev/null
