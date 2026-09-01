@@ -4,19 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#121212">
-  <meta name="description" content="发现由创作者公开分享的图片、动图与视频。">
+  <meta name="description" content="CloudFlare ImgBed 欢迎页。快速上传文件，或进入 Discover 浏览公开作品。">
   <link rel="icon" href="/static/media/logo.png">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('imgbed-theme')||((matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light')}catch{}</script>
   <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/discover/discover.css">
-  <link rel="stylesheet" href="/preview-style.css">
-  <title>发现 · CloudFlare ImgBed</title>
+  <link rel="stylesheet" href="/welcome/welcome.css">
+  <title>CloudFlare ImgBed</title>
 </head>
 <body>
-  <a class="skip-link" href="#explore">跳到作品列表</a>
+  <a class="skip-link" href="#welcome">跳到欢迎页</a>
   <header class="public-nav">
-    <a class="brand" href="/" aria-label="CloudFlare ImgBed 发现页"><span class="brand-mark" aria-hidden="true">I</span><span>ImgBed <small>Community</small></span></a>
-    <nav class="public-links" aria-label="公共导航"><a class="is-active" href="#explore">发现</a><a href="#featured">精选</a><a href="#explore">最新</a><a href="/charinfo/">CharInfo Creator</a></nav>
+    <a class="brand" href="/" aria-label="CloudFlare ImgBed 首页"><span class="brand-mark" aria-hidden="true">I</span><span>ImgBed <small>Community</small></span></a>
+    <nav class="public-links" aria-label="公共导航">
+      <a class="is-active" href="/">首页</a>
+      <a href="/discover/">Discover</a>
+      <a href="/charinfo/">CharInfo Creator</a>
+    </nav>
     <div class="nav-actions">
       <a class="text-button" data-account-action href="/api/auth/discord?returnTo=/">登录</a>
       <a class="primary-button" data-upload-action href="/api/auth/discord?returnTo=%2Faccount%2F%3Fview%3Dfiles%26upload%3D1">上传</a>
@@ -24,36 +28,47 @@
     </div>
   </header>
 
-  <main class="discover-wrap">
-    <section id="featured" class="featured-section" aria-labelledby="featuredTitle" hidden>
-      <header class="section-intro"><h1 id="featuredTitle">精选推荐</h1></header>
-      <div class="featured-showcase">
-        <article class="hero-feature" id="heroFeature" hidden></article>
-        <div class="featured-rail" id="featuredRail"></div>
+  <main id="welcome" class="welcome-wrap">
+    <section class="welcome-hero" aria-labelledby="welcomeTitle">
+      <div class="welcome-copy">
+        <p class="welcome-eyebrow">CloudFlare ImgBed</p>
+        <h1 id="welcomeTitle">上传，分享，或者随便看看。</h1>
+        <p class="welcome-lead">首页只展示站长挑选的 Featured 作品。想上传就直接进入工作室；想浏览社区内容，再进入 Discover。</p>
+        <div class="welcome-actions">
+          <a class="primary-button welcome-primary" data-upload-action href="/api/auth/discord?returnTo=%2Faccount%2F%3Fview%3Dfiles%26upload%3D1">开始上传</a>
+          <a class="text-button welcome-secondary" href="/discover/">进入 Discover</a>
+        </div>
       </div>
+
+      <article class="welcome-feature" id="welcomeFeature" aria-live="polite">
+        <div class="welcome-feature-placeholder" id="featurePlaceholder">
+          <span>Featured</span>
+          <strong>正在读取精选作品…</strong>
+        </div>
+      </article>
     </section>
 
-    <section id="albumDiscover" class="album-discover" aria-labelledby="albumDiscoverTitle" hidden>
-      <header class="section-intro"><h2 id="albumDiscoverTitle">公开图库</h2></header>
-      <div id="albumGrid" class="album-grid" aria-live="polite"></div>
-    </section>
-
-    <section id="explore" class="explore-section" aria-labelledby="exploreTitle">
-      <header class="section-intro explore-heading"><h2 id="exploreTitle">发现</h2></header>
-      <div class="explore-tools">
-        <div class="filter-group" aria-label="作品类型"><button class="filter-chip is-active" type="button" data-type="all" aria-pressed="true">全部</button><button class="filter-chip" type="button" data-type="image" aria-pressed="false">图片</button><button class="filter-chip" type="button" data-type="video" aria-pressed="false">视频</button></div>
-        <label class="search-control"><span class="sr-only">搜索作品或创作者</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.2 4.2"/></svg><input id="searchInput" type="search" placeholder="搜索作品或创作者"></label>
-      </div>
-      <div id="feedStatus" class="feed-status" aria-live="polite"></div>
-      <div id="masonry" class="masonry" aria-live="polite"></div>
-      <div id="feedSentinel" class="feed-sentinel" aria-hidden="true"></div>
-      <div class="load-more-wrap"><button id="loadMore" class="text-button" type="button" hidden>加载更多</button></div>
+    <section class="welcome-shortcuts" aria-label="快速入口">
+      <a class="welcome-shortcut" data-upload-action href="/api/auth/discord?returnTo=%2Faccount%2F%3Fview%3Dfiles%26upload%3D1">
+        <small>UPLOAD</small>
+        <strong>上传文件</strong>
+        <span>直接进入自己的工作室，不需要先加载社区 Feed。</span>
+      </a>
+      <a class="welcome-shortcut" href="/discover/">
+        <small>DISCOVER</small>
+        <strong>发现作品</strong>
+        <span>主动进入后才加载公开作品、图库与无限滚动。</span>
+      </a>
+      <a class="welcome-shortcut" href="/charinfo/">
+        <small>TOOLS</small>
+        <strong>CharInfo Creator</strong>
+        <span>继续使用角色资料与图库工具。</span>
+      </a>
     </section>
   </main>
 
   <footer class="public-footer"><span>CloudFlare ImgBed</span><span>公开内容由各自创作者维护</span></footer>
-  <div id="dialogRoot"></div>
   <script type="module" src="/theme.js"></script>
-  <script type="module" src="/discover/discover.js"></script>
+  <script type="module" src="/welcome/welcome.js"></script>
 </body>
 </html>
