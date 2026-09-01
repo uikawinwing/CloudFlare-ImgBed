@@ -1,4 +1,7 @@
 const featureRoot = document.querySelector('#welcomeFeature');
+const FEATURED_CACHE_KEY = 'imgbed:welcome-featured:v1';
+const FEATURED_CACHE_TTL_MS = 10 * 60 * 1000;
+const FEATURED_CACHE_STALE_MS = 24 * 60 * 60 * 1000;
 let featuredItems = [];
 let featureOrder = [];
 let featureIndex = 0;
@@ -20,6 +23,39 @@ function shuffledIndexes(length) {
 function currentFeature() {
   if (!featureOrder.length) return null;
   return featuredItems[featureOrder[featureIndex % featureOrder.length]] || null;
+}
+
+function applyFeatured(items) {
+  featuredItems = Array.isArray(items) ? items : [];
+  featureOrder = shuffledIndexes(featuredItems.length);
+  featureIndex = 0;
+  renderFeature();
+}
+
+function readFeaturedCache() {
+  try {
+    const raw = localStorage.getItem(FEATURED_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    const savedAt = Number(cached?.savedAt) || 0;
+    const items = Array.isArray(cached?.items) ? cached.items : null;
+    if (!items || !savedAt) throw new Error('Invalid Featured cache');
+    const age = Date.now() - savedAt;
+    if (age > FEATURED_CACHE_STALE_MS) {
+      localStorage.removeItem(FEATURED_CACHE_KEY);
+      return null;
+    }
+    return { items, fresh: age <= FEATURED_CACHE_TTL_MS };
+  } catch {
+    try { localStorage.removeItem(FEATURED_CACHE_KEY); } catch {}
+    return null;
+  }
+}
+
+function writeFeaturedCache(items) {
+  try {
+    localStorage.setItem(FEATURED_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), items }));
+  } catch {}
 }
 
 function renderFeature() {
@@ -61,18 +97,25 @@ function renderFeature() {
 }
 
 async function loadFeatured() {
+  const cached = readFeaturedCache();
+  if (cached) {
+    applyFeatured(cached.items);
+    if (cached.fresh) return;
+  }
+
   try {
     const response = await fetch('/api/public/discover?limit=12&sort=featured', {
       headers: { Accept: 'application/json' },
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || 'Unable to load Featured');
-    featuredItems = Array.isArray(body.files) ? body.files : [];
-    featureOrder = shuffledIndexes(featuredItems.length);
-    featureIndex = 0;
-    renderFeature();
+    const items = Array.isArray(body.files) ? body.files : [];
+    writeFeaturedCache(items);
+    applyFeatured(items);
   } catch {
-    featureRoot.innerHTML = `<div class="welcome-feature-placeholder"><span>Featured</span><strong>精选作品暂时无法读取</strong><p>上传和 Discover 入口仍可正常使用。</p></div>`;
+    if (!cached) {
+      featureRoot.innerHTML = `<div class="welcome-feature-placeholder"><span>Featured</span><strong>精选作品暂时无法读取</strong><p>上传和 Discover 入口仍可正常使用。</p></div>`;
+    }
   }
 }
 
