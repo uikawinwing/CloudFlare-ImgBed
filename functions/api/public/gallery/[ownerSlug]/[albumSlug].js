@@ -49,7 +49,7 @@ export function createGalleryPack(album, albumSlug, files, requestUrl) {
         } : {}),
         gallery: files.map((file) => ({
             title: file.file_name || file.id,
-            sources: [absoluteFileUrl(requestUrl, file.id)],
+            sources: [absoluteFileUrl(requestUrl, file.id, file.timestamp)],
             thumbnail: isThumbnailImage(file)
                 ? absoluteThumbnailUrl(requestUrl, file.id, 'gallery', thumbnailContentVersion(file))
                 : null,
@@ -57,8 +57,8 @@ export function createGalleryPack(album, albumSlug, files, requestUrl) {
     };
 }
 
-export function absoluteFileUrl(requestUrl, fileId) {
-    return catalogFileUrl(requestUrl, fileId);
+export function absoluteFileUrl(requestUrl, fileId, version = '') {
+    return catalogFileUrl(requestUrl, fileId, version);
 }
 
 export function absoluteThumbnailUrl(requestUrl, fileId, variant, version) {
