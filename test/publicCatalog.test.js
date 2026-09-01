@@ -35,7 +35,7 @@ describe('public catalog policy', () => {
 
     it('does not invent a video thumbnail', () => {
         const video = presentDiscoverFile({ id: 'clip.mp4', file_name: 'Clip', file_type: 'video/mp4', timestamp: 1 }, 'http://example.test/api/public/discover');
-        assert.strictEqual(video.url, 'https://example.test/file/clip.mp4');
+        assert.strictEqual(video.url, 'https://example.test/file/clip.mp4?v=1');
         assert.strictEqual(video.thumbnailUrl, null);
     });
 
@@ -51,7 +51,7 @@ describe('public catalog policy', () => {
             file_type: 'image/png',
             timestamp: 1,
         }, 'https://staging.cloudflare-imgbed-dxx.pages.dev/api/public/discover');
-        assert.match(image.url, /\/file\/users\/589790434960867328\/55226fd2-d75d-44d7-be34-f392ce2bd2d8\.png$/);
+        assert.match(image.url, /\/file\/users\/589790434960867328\/55226fd2-d75d-44d7-be34-f392ce2bd2d8\.png\?v=1$/);
         assert.match(image.thumbnailUrl, /\/thumb\/users\/589790434960867328\/55226fd2-d75d-44d7-be34-f392ce2bd2d8\.png\?v=1$/);
         assert.strictEqual(image.name, 'venus_divinity.png');
     });
@@ -135,7 +135,7 @@ describe('public catalog policy', () => {
             creator_name: 'Master', creator_handle: 'master', cover_id: 'cover.png',
             cover_type: 'image/png', cover_visibility: 'public', cover_timestamp: 1, cover_position_x: 18, cover_position_y: 76,
         }, 'https://example.test/api/public/discover');
-        assert.strictEqual(album.coverUrl, 'https://example.test/file/cover.png');
+        assert.strictEqual(album.coverUrl, 'https://example.test/file/cover.png?v=1');
         assert.strictEqual(album.coverThumbnailUrl, 'https://example.test/thumb/cover.png?v=1');
         assert.strictEqual(album.coverPositionX, 18);
         assert.strictEqual(album.coverPositionY, 76);
@@ -147,7 +147,7 @@ describe('public catalog policy', () => {
             creator_name: 'Master', creator_handle: 'master', cover_id: 'clip.webm',
             cover_type: 'video/webm', cover_visibility: 'public', cover_timestamp: 1,
         }, 'https://example.test/api/public/discover');
-        assert.strictEqual(album.coverUrl, 'https://example.test/file/clip.webm');
+        assert.strictEqual(album.coverUrl, 'https://example.test/file/clip.webm?v=1');
         assert.strictEqual(album.coverThumbnailUrl, null);
         assert.strictEqual(album.coverType, 'video/webm');
     });
