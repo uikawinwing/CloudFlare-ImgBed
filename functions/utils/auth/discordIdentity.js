@@ -62,7 +62,7 @@ export function resolveAppRole(discordId, discordRoles, env) {
     return discordId === DISCORD_OWNER_ID ? 'owner' : 'member';
 }
 
-export async function upsertDiscordUser(env, user, discordRoles) {
+export async function upsertDiscordUser(env, user) {
     if (!env.img_d1?.prepare) throw new Error('Discord identity requires D1');
     const now = Date.now();
     const existing = await env.img_d1.prepare('SELECT role, status, public_handle FROM users WHERE discord_id = ?').bind(user.id).first();
@@ -70,11 +70,7 @@ export async function upsertDiscordUser(env, user, discordRoles) {
     const role = user.id === DISCORD_OWNER_ID ? 'owner' : (existing?.role || 'member');
     const username = user.global_name || user.username;
     const avatar = user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png` : null;
-    await env.img_d1.batch([
-        env.img_d1.prepare('INSERT INTO users (discord_id, username, avatar, role, status, used_bytes, last_login_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(discord_id) DO UPDATE SET username = excluded.username, avatar = excluded.avatar, role = excluded.role, last_login_at = excluded.last_login_at, updated_at = excluded.updated_at').bind(user.id, username, avatar, role, 'active', 0, now, now, now),
-        env.img_d1.prepare('DELETE FROM user_roles WHERE discord_id = ?').bind(user.id),
-        ...[...new Set([...discordRoles, role])].map((value) => env.img_d1.prepare('INSERT INTO user_roles (discord_id, role) VALUES (?, ?)').bind(user.id, value)),
-    ]);
+    await env.img_d1.prepare('INSERT INTO users (discord_id, username, avatar, role, status, used_bytes, last_login_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(discord_id) DO UPDATE SET username = excluded.username, avatar = excluded.avatar, role = excluded.role, last_login_at = excluded.last_login_at, updated_at = excluded.updated_at').bind(user.id, username, avatar, role, 'active', 0, now, now, now).run();
     return { id: user.id, username, avatar, role, publicHandle: existing?.public_handle || null };
 }
 
