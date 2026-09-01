@@ -52,6 +52,7 @@ export function isFromPublicBrowse(Referer, origin) {
 
 export const FILE_CACHE_CONTROL = {
     PUBLIC: 'public, max-age=2592000',
+    CLIENT_VERSIONED: 'private, max-age=300, must-revalidate',
     PRIVATE: 'private, max-age=86400',
     NO_STORE: 'private, no-store, max-age=0',
 };
@@ -153,6 +154,21 @@ export function isTgChannel(imgRecord) {
     return imgRecord.metadata?.Channel === 'Telegram' || imgRecord.metadata?.Channel === 'TelegramNew';
 }
 
+function normalizeFileVersion(value) {
+    const numericVersion = Number(value);
+    return Number.isFinite(numericVersion) && numericVersion > 0 ? String(numericVersion) : '';
+}
+
+function versionNotFoundResponse() {
+    return new Response('Error: File Version Not Found', {
+        status: 404,
+        headers: {
+            'Content-Type': 'text/plain;charset=UTF-8',
+            'Cache-Control': FILE_CACHE_CONTROL.NO_STORE,
+        },
+    });
+}
+
 // 图片可访问性检查
 export async function returnWithCheck(context, imgRecord) {
     const { url, securityConfig } = context;
@@ -176,10 +192,25 @@ export async function returnWithCheck(context, imgRecord) {
         return response;
     }
 
-    // 账号所属文件要支持即时撤下；禁用长缓存，避免查询参数产生无法整体清除的变体。
-    context.fileAccess.cacheControl = record.metadata.OwnerId
-        ? FILE_CACHE_CONTROL.NO_STORE
-        : FILE_CACHE_CONTROL.PUBLIC;
+    // 账号所属文件默认不缓存，确保改成 private / 删除后可以快速撤下。
+    // 只有公开文件使用与当前 TimeStamp 精确匹配的版本 URL 时，才允许浏览器短期缓存。
+    const isOwnedFile = Boolean(record.metadata.OwnerId);
+    const isPublicOwnedFile = isOwnedFile
+        && record.metadata.Visibility === 'public'
+        && (!record.metadata.ModerationStatus || record.metadata.ModerationStatus === 'active');
+
+    if (isPublicOwnedFile) {
+        const currentVersion = normalizeFileVersion(record.metadata.TimeStamp);
+        const requestedVersion = normalizeFileVersion(url.searchParams.get('v'));
+        if (requestedVersion && currentVersion && requestedVersion !== currentVersion) {
+            return versionNotFoundResponse();
+        }
+        context.fileAccess.cacheControl = requestedVersion && currentVersion && requestedVersion === currentVersion
+            ? FILE_CACHE_CONTROL.CLIENT_VERSIONED
+            : FILE_CACHE_CONTROL.NO_STORE;
+    } else {
+        context.fileAccess.cacheControl = isOwnedFile ? FILE_CACHE_CONTROL.NO_STORE : FILE_CACHE_CONTROL.PUBLIC;
+    }
 
     if (record.metadata.ListType == "White") {
         return response;
