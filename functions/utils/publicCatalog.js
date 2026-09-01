@@ -136,7 +136,7 @@ export async function listSharedAlbumFiles(env, albumId) {
 }
 
 export function presentDiscoverFile(file, requestUrl) {
-    const url = absoluteFileUrl(requestUrl, file.id);
+    const url = absoluteFileUrl(requestUrl, file.id, file.timestamp);
     const isImage = String(file.file_type || '').startsWith('image/');
     return {
         id: file.id,
@@ -157,7 +157,7 @@ export function presentDiscoverFile(file, requestUrl) {
 
 export function presentDiscoverAlbum(album, requestUrl) {
     const hasDiscoverableCover = album.cover_id && album.cover_visibility === 'public';
-    const coverUrl = hasDiscoverableCover ? absoluteFileUrl(requestUrl, album.cover_id) : null;
+    const coverUrl = hasDiscoverableCover ? absoluteFileUrl(requestUrl, album.cover_id, album.cover_timestamp) : null;
     const coverThumbnailUrl = hasDiscoverableCover
         && String(album.cover_type || '').startsWith('image/')
         ? absoluteThumbnailUrl(requestUrl, album.cover_id, 'gallery', thumbnailContentVersion({
@@ -194,11 +194,18 @@ function normalizeCoverPosition(value) {
     return Number.isInteger(position) && position >= 0 && position <= 100 ? position : 50;
 }
 
-export function absoluteFileUrl(requestUrl, fileId) {
+export function normalizePublicFileVersion(version) {
+    const numericVersion = Number(version);
+    return Number.isFinite(numericVersion) && numericVersion > 0 ? String(numericVersion) : '';
+}
+
+export function absoluteFileUrl(requestUrl, fileId, version = '') {
     const url = new URL(requestUrl);
     url.protocol = 'https:';
     url.pathname = `/file/${String(fileId).split('/').map(encodeURIComponent).join('/')}`;
     url.search = '';
+    const normalizedVersion = normalizePublicFileVersion(version);
+    if (normalizedVersion) url.searchParams.set('v', normalizedVersion);
     url.hash = '';
     return url.toString();
 }
