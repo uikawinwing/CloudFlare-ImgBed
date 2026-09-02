@@ -7,7 +7,8 @@ const shellSource = readFileSync(new URL('../frontend-dist/account/shell.js', im
 const uploadSource = readFileSync(new URL('../frontend-dist/account/upload-in-files.js', import.meta.url), 'utf8');
 const creatorSource = readFileSync(new URL('../frontend-dist/charinfo/index.html', import.meta.url), 'utf8');
 const discoverSource = readFileSync(new URL('../frontend-dist/discover/discover.js', import.meta.url), 'utf8');
-const discoverPage = readFileSync(new URL('../frontend-dist/index.html', import.meta.url), 'utf8');
+const welcomeSource = readFileSync(new URL('../frontend-dist/welcome/welcome.js', import.meta.url), 'utf8');
+const welcomePage = readFileSync(new URL('../frontend-dist/index.html', import.meta.url), 'utf8');
 const discoverRoutePage = readFileSync(new URL('../frontend-dist/discover/index.html', import.meta.url), 'utf8');
 const accountPage = readFileSync(new URL('../frontend-dist/account/index.html', import.meta.url), 'utf8');
 const previewStyles = readFileSync(new URL('../frontend-dist/preview-style.css', import.meta.url), 'utf8');
@@ -87,17 +88,25 @@ describe('account media and album UI', () => {
   });
 
   it('renders public albums returned by Discover', () => {
-    assert.match(discoverPage, /id="albumGrid"/);
+    assert.match(discoverRoutePage, /id="albumGrid"/);
     assert.match(discoverSource, /const firstPage = reset \|\| !state\.items\.length/);
     assert.match(discoverSource, /if \(firstPage\) state\.albums = Array\.isArray\(body\.albums\)/);
     assert.match(discoverSource, /album\.coverThumbnailUrl \|\| album\.coverUrl/);
   });
 
+  it('keeps the root welcome page bounded and the full feed in Discover', () => {
+    assert.match(welcomePage, /id="welcomeFeature"/);
+    assert.match(welcomePage, /href="\/discover\/"/);
+    assert.doesNotMatch(welcomePage, /id="albumGrid"/);
+    assert.match(welcomeSource, /fetch\('\/api\/public\/discover\?limit=12&sort=featured'/);
+    assert.doesNotMatch(welcomeSource, /loadFeed|cursor/);
+    assert.match(welcomeSource, /<video[^>]*controls[^>]*preload="none"/);
+    assert.doesNotMatch(welcomeSource, /<video[^>]*autoplay|<video[^>]*loop/);
+  });
+
   it('keeps public section headings free of designer commentary', () => {
-    for (const page of [discoverPage, discoverRoutePage]) {
-      assert.doesNotMatch(page, /section-intro[^>]*>[\s\S]*?<p>/);
-      assert.doesNotMatch(page, /浏览创作者选择展示|所有设为公开的作品|由站点精选与推荐系统/);
-    }
+    assert.doesNotMatch(discoverRoutePage, /section-intro[^>]*>[\s\S]*?<p>/);
+    assert.doesNotMatch(discoverRoutePage, /浏览创作者选择展示|所有设为公开的作品|由站点精选与推荐系统/);
   });
 
   it('keeps albums as compact cards and reveals secondary actions on demand', () => {

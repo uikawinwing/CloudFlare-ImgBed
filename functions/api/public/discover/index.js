@@ -5,7 +5,7 @@ const CORS_HEADERS = {
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
 };
 
-const FEATURED_CACHE_CONTROL = 'public, max-age=60, s-maxage=300, stale-while-revalidate=600';
+const FEATURED_CACHE_CONTROL = 'public, max-age=60, s-maxage=300';
 
 export async function onRequestOptions() {
     return new Response(null, { status: 204, headers: CORS_HEADERS });

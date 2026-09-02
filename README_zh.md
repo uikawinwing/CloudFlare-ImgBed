@@ -23,13 +23,20 @@
 
 CloudFlare ImgBed 是支持 Docker 与 Serverless 部署的自建图床和文件托管方案，可将 **Telegram**、**Discord**、**Cloudflare R2**、**S3 兼容存储**、**Hugging Face**、**WebDAV** 等渠道统一接入一个管理界面。项目提供文件管理、身份认证、目录组织、内容审核、RESTful API 与 WebDAV，适用于个人图床、网站资源管理和轻量文件分发。
 
+## 公共入口
+
+- `/` 是轻量欢迎页，提供上传、Discover 与 CharInfo Creator 入口。页面只展示一项由站点运营者控制的 Featured 内容，不加载近期公开 Feed、公开图库或无限滚动。
+- `/discover/` 是完整的公共发现页。访客主动进入后，页面才加载 Featured 作品、公开图库、近期媒体、筛选与分页内容。
+
+欢迎页的 Featured 内容仅来自所属用户状态正常、审核状态正常、可见性为公开且已设置 `featured_at` 的文件。页面读取数量有上限的 Featured 清单，每次只渲染一项媒体，并复用浏览器与边缘缓存，使默认入口的请求量保持可控。没有可用 Featured 内容时，页面显示空状态，不会回退加载 Discover Feed。
+
 ![CloudFlare](readme/海报.png)
 
 # 2. 🖥️ 在线演示
 
 **在线站点**：[CloudFlare ImgBed](https://imgbed.uika.cc.cd/)
 
-![文件上传页面](readme/upload.png)
+![Creator Studio 文件上传页面](readme/upload.png)
 
 <details>
     <summary>其他页面效果展示</summary>

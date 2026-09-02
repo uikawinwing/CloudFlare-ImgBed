@@ -70,7 +70,7 @@ function renderFeature() {
   const title = item.name || item.id || '精选作品';
   const creator = item.creator?.name || item.creator?.handle || 'Creator';
   const media = isVideo(item)
-    ? `<video src="${escapeHtml(mediaUrl)}" autoplay muted loop playsinline preload="metadata" aria-label="${escapeHtml(title)}"></video>`
+    ? `<video src="${escapeHtml(mediaUrl)}" controls playsinline preload="none" aria-label="${escapeHtml(title)}"></video>`
     : `<img src="${escapeHtml(mediaUrl)}" alt="${escapeHtml(title)}" decoding="async" fetchpriority="high">`;
 
   featureRoot.innerHTML = `

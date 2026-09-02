@@ -11,6 +11,7 @@ import {
     listSharedAlbumFiles,
 } from '../functions/utils/publicCatalog.js';
 import { parseImageTransform, transformImageRequestViaUrl } from '../functions/file/imageTransform.js';
+import { onRequestGet as getPublicDiscover } from '../functions/api/public/discover/index.js';
 
 describe('public catalog policy', () => {
     const activeOwner = { status: 'active' };
@@ -31,6 +32,58 @@ describe('public catalog policy', () => {
         const cursor = encodeCursor({ value: 1234, id: 'folder/a.png' });
         assert.deepStrictEqual(decodeCursor(cursor), { value: 1234, id: 'folder/a.png' });
         assert.throws(() => parseDiscoverQuery(new URL('https://example.test/api/public/discover?cursor=nope')), /Invalid cursor/);
+    });
+
+    it('edge-caches only successful first-page Featured responses', async () => {
+        const originalCaches = globalThis.caches;
+        const writes = [];
+        let queryCount = 0;
+        let cacheWrite;
+        globalThis.caches = {
+            default: {
+                match: async () => null,
+                put: async (request, response) => {
+                    writes.push({ url: request.url, body: await response.json() });
+                },
+            },
+        };
+
+        try {
+            const env = {
+                img_d1: {
+                    prepare() {
+                        queryCount += 1;
+                        return { bind: () => ({ all: async () => ({ results: [] }) }) };
+                    },
+                },
+            };
+            const request = new Request('https://example.test/api/public/discover?limit=12&sort=featured');
+            const response = await getPublicDiscover({ request, env, waitUntil: promise => { cacheWrite = promise; } });
+            await cacheWrite;
+
+            assert.strictEqual(response.status, 200);
+            assert.strictEqual(response.headers.get('Cache-Control'), 'public, max-age=60, s-maxage=300');
+            assert.strictEqual(queryCount, 1);
+            assert.deepStrictEqual(writes, [{
+                url: request.url,
+                body: { files: [], nextCursor: null, albums: [], type: 'all', sort: 'featured' },
+            }]);
+
+            globalThis.caches.default.match = async () => new Response(JSON.stringify({ files: [{ id: 'cached' }] }), {
+                headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, s-maxage=300' },
+            });
+            env.img_d1.prepare = () => { throw new Error('D1 must not run on a cache hit'); };
+            const cachedResponse = await getPublicDiscover({ request, env, waitUntil() {} });
+            assert.deepStrictEqual(await cachedResponse.json(), { files: [{ id: 'cached' }] });
+
+            globalThis.caches.default.match = async () => null;
+            const failedResponse = await getPublicDiscover({ request, env, waitUntil() {} });
+            assert.strictEqual(failedResponse.status, 500);
+            assert.strictEqual(writes.length, 1);
+        } finally {
+            if (originalCaches === undefined) delete globalThis.caches;
+            else globalThis.caches = originalCaches;
+        }
     });
 
     it('does not invent a video thumbnail', () => {

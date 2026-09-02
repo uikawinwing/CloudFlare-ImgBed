@@ -116,9 +116,9 @@ describe('Discord identity policy', () => {
         assert.strictEqual(pack.avatarThumbnail, 'https://example.test/thumb/folder/a%20b.png?variant=avatar&v=1');
         assert.strictEqual(pack.libraryThumbnail, 'https://example.test/thumb/folder/a%20b.png?variant=library&v=1');
         assert.deepStrictEqual(pack.gallery, [
-            { title: 'First image.png', sources: ['https://example.test/file/folder/a%20b.png'], thumbnail: 'https://example.test/thumb/folder/a%20b.png?v=1' },
-            { title: 'Second video.mp4', sources: ['https://example.test/file/second.mp4'], thumbnail: null },
-            { title: 'Third video.webm', sources: ['https://example.test/file/third.webm'], thumbnail: null },
+            { title: 'First image.png', sources: ['https://example.test/file/folder/a%20b.png?v=1'], thumbnail: 'https://example.test/thumb/folder/a%20b.png?v=1' },
+            { title: 'Second video.mp4', sources: ['https://example.test/file/second.mp4?v=2'], thumbnail: null },
+            { title: 'Third video.webm', sources: ['https://example.test/file/third.webm?v=3'], thumbnail: null },
         ]);
         assert.strictEqual(absoluteFileUrl('http://example.test/x', 'a.png'), 'https://example.test/file/a.png');
     });

@@ -23,13 +23,20 @@
 
 CloudFlare ImgBed is a self-hosted image and file hosting solution for Docker and serverless environments, bringing **Telegram**, **Discord**, **Cloudflare R2**, **S3-compatible storage**, **Hugging Face**, **WebDAV**, and more into one management interface. It provides file management, authentication, directory organization, content moderation, a RESTful API, and WebDAV for personal image hosting, website asset management, and lightweight file distribution.
 
+## Public entry points
+
+- `/` is a lightweight welcome page with upload, Discover, and CharInfo Creator shortcuts. It displays one item from the operator-curated Featured set and does not load the recent public feed, public albums, or infinite scrolling.
+- `/discover/` is the full public catalog. Featured works, public albums, recent media, filters, and pagination load only after a visitor enters Discover.
+
+Featured welcome content is limited to public files whose owner and moderation status are active and whose `featured_at` value is set. The welcome page reads a bounded Featured manifest, renders one media item at a time, and reuses browser and edge caches to keep default-page traffic predictable. If no Featured item is available, the page shows an empty state without falling back to the Discover feed.
+
 ![CloudFlare](readme/海报.png)
 
 # 2. 🖥️ Demo
 
 **Live site**: [CloudFlare ImgBed](https://imgbed.uika.cc.cd/)
 
-![Upload Page](readme/upload.png)
+![Creator Studio upload page](readme/upload.png)
 
 <details>
     <summary>Other page screenshots</summary>

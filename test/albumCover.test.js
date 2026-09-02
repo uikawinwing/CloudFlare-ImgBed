@@ -184,7 +184,7 @@ describe('album cover D1 integration', () => {
             assert.deepStrictEqual(orderAfter, orderBefore, 'choosing a cover must not reorder Gallery Pack items');
 
             const discover = await listDiscoverAlbums(env, 'https://example.test/api/public/discover');
-            assert.strictEqual(discover[0].coverUrl, 'https://example.test/file/clip.webm');
+            assert.strictEqual(discover[0].coverUrl, 'https://example.test/file/clip.webm?v=1');
             assert.strictEqual(discover[0].coverType, 'video/webm');
 
             const otherResponse = await onRequest({ env, request: new Request('https://example.test/api/user/albums/album-id', {
