@@ -168,7 +168,7 @@ body { min-width: 320px; }
 
 @media (max-width: 760px) {
   .welcome-wrap { width: min(100% - 24px, 1480px); padding-top: 28px; }
-  .welcome-copy h1 { font-size: clamp(42px, 14vw, 68px); }
+  .welcome-copy h1 { font-size: clamp(42px, 12vw, 60px); }
   .welcome-lead { font-size: 14px; }
   .welcome-feature { min-height: 58dvh; border-radius: 24px; }
   .welcome-feature-meta strong { max-width: 100%; }
