@@ -18,10 +18,22 @@
 >
 > **For bugs, compatibility problems, or feature requests, use this repository's [Issues](https://github.com/uikawinwing/CloudFlare-ImgBed/issues).**
 
+> [!NOTE]
+> This repository is now **independently maintained by uikawinwing**. It no longer follows the original repository's development branches, release cadence, or automatic synchronization. Production and staging are maintained through this repository's Cloudflare Workers deployments.
+
 
 # 1. 💡 Introduction
 
 CloudFlare ImgBed is a self-hosted image and file hosting solution for Docker and serverless environments, bringing **Telegram**, **Discord**, **Cloudflare R2**, **S3-compatible storage**, **Hugging Face**, **WebDAV**, and more into one management interface. It provides file management, authentication, directory organization, content moderation, a RESTful API, and WebDAV for personal image hosting, website asset management, and lightweight file distribution.
+
+## Current standalone focus
+
+- **Workers-first deployment**: production and staging run on Cloudflare Workers with Worker Static Assets serving the frontend.
+- **Cloudflare-native storage**: R2, D1, and KV are used for files, metadata, and site state where appropriate.
+- **Creator Studio**: upload, file management, galleries, member administration, and site management are maintained in this repository.
+- **Discover and public galleries**: public browsing, Featured content, filtering, pagination, and creator entry points are part of the standalone experience.
+- **CharInfo Creator**: an integrated creative-tool entry point that works alongside ImgBed's media capabilities.
+- **Independent auth and deployment flow**: Discord OAuth, production/staging Workers, and repository CI are maintained here.
 
 ## Public entry points
 
@@ -102,17 +114,17 @@ Thank you to everyone who has contributed code, documentation, ideas, and feedba
   <img alt="Star History" src="https://api.star-history.com/svg?repos=uikawinwing/CloudFlare-ImgBed&type=Date" />
 </a>
 
-# 5. ⚖️ License & Related Projects
+# 5. ⚖️ License & Acknowledgements
 
 ## 📄 License
 
 > [!IMPORTANT]
 > This project is licensed under the [MIT License](LICENSE). You may use, modify, and distribute it, provided that the original copyright and license notices are retained in all copies or substantial portions of the software.
 
-## 🔗 Related Open Source Projects
+## 🙏 Project origin and thanks
 
-- **Web frontend**: [MarSeventh/Sanyue-ImgHub](https://github.com/MarSeventh/Sanyue-ImgHub)
-- **Desktop client**: [MarSeventh/satellite](https://github.com/MarSeventh/satellite)
-- **Upstream project**: [cf-pages/Telegraph-Image](https://github.com/cf-pages/Telegraph-Image)
+This project continues development based on [MarSeventh/CloudFlare-ImgBed](https://github.com/MarSeventh/CloudFlare-ImgBed). It is now maintained independently in this repository and no longer follows the original repository's branches or release cadence.
 
-CloudFlare ImgBed evolved from Telegraph-Image. Thanks to its original authors and contributors.
+
+
+Thank you to **MarSeventh** and every contributor to the original project for building the foundation of CloudFlare ImgBed.
