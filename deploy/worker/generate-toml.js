@@ -50,21 +50,18 @@ toml += `
 binding = "img_d1"
 database_name = "${databaseName}"
 database_id = "${databaseId}"
-remote = true
 `;
 
 toml += `
 [[kv_namespaces]]
 binding = "img_url"
 id = "${kvNamespaceId}"
-remote = true
 `;
 
 toml += `
 [[r2_buckets]]
 binding = "img_r2"
 bucket_name = "${r2BucketName}"
-remote = true
 `;
 
 const workerVars = {};

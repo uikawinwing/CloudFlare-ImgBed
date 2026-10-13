@@ -1,4 +1,4 @@
-.wrangler/*
+.wrangler/
 data/*
 node_modules
 /wrangler.toml
@@ -12,3 +12,4 @@ node_modules
 .vscode/
 .claude/
 .agents/
+.codegraph/

@@ -1,6 +1,8 @@
 import { transformImageResponse } from '../file/imageTransform.js';
 import { getDatabase } from '../utils/databaseAdapter.js';
 import { DiscordAPI } from '../utils/storage/discordAPI.js';
+import { fetchSecurityConfig } from '../utils/sysConfig.js';
+import { legacyFileRestriction } from '../utils/files/fileAccess.js';
 import {
     createThumbnailTransform,
     getPermanentThumbnail,
@@ -41,6 +43,11 @@ export async function onRequest(context) {
     if (!metadata
         || (metadata.ModerationStatus && metadata.ModerationStatus !== 'active')
         || !String(metadata.FileType || '').startsWith('image/')) {
+        return new Response('Thumbnail not found', { status: 404, headers: noStoreHeaders() });
+    }
+
+    const securityConfig = await fetchSecurityConfig(env);
+    if (legacyFileRestriction(metadata, securityConfig.access.whiteListMode)) {
         return new Response('Thumbnail not found', { status: 404, headers: noStoreHeaders() });
     }
 

@@ -2,7 +2,6 @@
 import { createResponse, selectConsistentChannel, getUploadIp, getIPAddress, buildUniqueFileId, endUpload } from './uploadTools';
 import { TelegramAPI } from '../utils/storage/telegramAPI';
 import { DiscordAPI } from '../utils/storage/discordAPI';
-import { S3Client, CreateMultipartUploadCommand, UploadPartCommand, AbortMultipartUploadCommand } from "@aws-sdk/client-s3";
 import { getDatabase, checkDatabaseConfig } from '../utils/databaseAdapter.js';
 import { fetchPageConfig } from '../utils/sysConfig.js';
 
@@ -34,9 +33,6 @@ export async function initializeChunkedUpload(context) {
 
         // 获取上传渠道
         const uploadChannel = url.searchParams.get('uploadChannel') || 'telegram';
-        if (uploadChannel === 'webdav') {
-            return createResponse('Error: WebDAV channel does not support chunked uploads. Please use non-chunked upload within your Cloudflare request body limit.', { status: 400 });
-        }
         // 获取指定的渠道名称
         const channelName = url.searchParams.get('channelName') || '';
 
@@ -125,9 +121,6 @@ export async function handleChunkUpload(context) {
 
         // 获取上传渠道
         const uploadChannel = url.searchParams.get('uploadChannel') || sessionInfo.uploadChannel || 'telegram';
-        if (uploadChannel === 'webdav') {
-            return createResponse('Error: WebDAV channel does not support chunked uploads. Please use non-chunked upload within your Cloudflare request body limit.', { status: 400 });
-        }
         // 获取指定的渠道名称
         const channelName = url.searchParams.get('channelName') || sessionInfo.channelName || '';
 
@@ -290,8 +283,6 @@ async function uploadChunkToStorage(context, chunkIndex, totalChunks, uploadId, 
 
             if (uploadChannel === 'cfr2') {
                 uploadResult = await uploadSingleChunkToR2Multipart(context, chunkData, chunkIndex, totalChunks, uploadId, originalFileName, originalFileType);
-            } else if (uploadChannel === 's3') {
-                uploadResult = await uploadSingleChunkToS3Multipart(context, chunkData, chunkIndex, totalChunks, uploadId, originalFileName, originalFileType);
             } else if (uploadChannel === 'telegram') {
                 uploadResult = await uploadSingleChunkToTelegram(context, chunkData, chunkIndex, totalChunks, uploadId, originalFileName, originalFileType);
             } else if (uploadChannel === 'discord') {
@@ -444,128 +435,6 @@ async function uploadSingleChunkToR2Multipart(context, chunkData, chunkIndex, to
         };
 
     } catch (error) {
-        return {
-            success: false,
-            error: error.message
-        };
-    }
-}
-
-// 上传单个分块到S3 (Multipart Upload)
-async function uploadSingleChunkToS3Multipart(context, chunkData, chunkIndex, totalChunks, uploadId, originalFileName, originalFileType) {
-    const { env, uploadConfig, specifiedChannelName } = context;
-    const db = getDatabase(env);
-
-    try {
-        const s3Settings = uploadConfig.s3;
-        const s3Channels = s3Settings.channels;
-        
-        // 优先使用指定的渠道名称
-        let s3Channel;
-        if (specifiedChannelName) {
-            s3Channel = s3Channels.find(ch => ch.name === specifiedChannelName);
-        }
-        if (!s3Channel) {
-            s3Channel = selectConsistentChannel(s3Channels, uploadId, s3Settings.loadBalance.enabled);
-        }
-
-        console.log(`Uploading S3 chunk ${chunkIndex} for uploadId: ${uploadId}, selected channel: ${s3Channel.name || 'default'}`);
-
-        if (!s3Channel) {
-            return { success: false, error: 'No S3 channel provided' };
-        }
-
-        const { endpoint, pathStyle, accessKeyId, secretAccessKey, bucketName, region } = s3Channel;
-
-        const s3Client = new S3Client({
-            region: region || "auto",
-            endpoint,
-            credentials: { accessKeyId, secretAccessKey },
-            forcePathStyle: pathStyle
-        });
-
-        const multipartKey = `multipart_${uploadId}`;
-
-
-        let finalFileId;
-
-        // 如果是第一个分块，生成并保存 finalFileId
-        if (chunkIndex === 0) {
-            finalFileId = await buildUniqueFileId(context, originalFileName, originalFileType);
-
-            const createResponse = await s3Client.send(new CreateMultipartUploadCommand({
-                Bucket: bucketName,
-                Key: finalFileId,
-                ContentType: originalFileType || 'application/octet-stream'
-            }));
-
-            const multipartInfo = {
-                uploadId: createResponse.UploadId,
-                key: finalFileId
-            };
-
-            // 保存multipart info
-            await db.put(multipartKey, JSON.stringify(multipartInfo), {
-                expirationTtl: 3600 // 1小时过期
-            });
-        } else {
-            // 其他分块需要等待第一个分块完成multipart upload初始化
-            let multipartInfoData = null;
-            let retryCount = 0;
-            const maxRetries = 30; // 最多等待60秒
-
-            while (!multipartInfoData && retryCount < maxRetries) {
-                multipartInfoData = await db.get(multipartKey);
-                if (!multipartInfoData) {
-                    // 等待2秒后重试
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    retryCount++;
-                    console.log(`S3 chunk ${chunkIndex} waiting for multipart initialization... (${retryCount}/${maxRetries})`);
-                }
-            }
-
-            if (!multipartInfoData) {
-                return { success: false, error: 'Multipart upload not initialized after waiting' };
-            }
-
-            const multipartInfo = JSON.parse(multipartInfoData);
-            finalFileId = multipartInfo.key;
-        }
-
-        // 获取multipart info
-        const multipartInfoData = await db.get(multipartKey);
-        if (!multipartInfoData) {
-            return { success: false, error: 'Multipart upload not initialized' };
-        }
-
-        const multipartInfo = JSON.parse(multipartInfoData);
-
-        // 上传分块
-        const uploadResponse = await s3Client.send(new UploadPartCommand({
-            Bucket: bucketName,
-            Key: finalFileId,
-            PartNumber: chunkIndex + 1,
-            UploadId: multipartInfo.uploadId,
-            Body: new Uint8Array(chunkData)
-        }));
-
-        if (!uploadResponse || !uploadResponse.ETag) {
-            throw new Error(`Failed to upload part ${chunkIndex + 1} to S3`);
-        }
-
-        return {
-            success: true,
-            partNumber: chunkIndex + 1,
-            etag: uploadResponse.ETag,
-            size: chunkData.byteLength,
-            uploadTime: Date.now(),
-            s3Channel: s3Channel.name,
-            multipartUploadId: multipartInfo.uploadId,
-            key: finalFileId
-        };
-
-    } catch (error) {
-        console.error(`S3 chunk upload error (chunk ${chunkIndex}):`, error.message, error.name, error.$metadata);
         return {
             success: false,
             error: error.message
@@ -880,8 +749,6 @@ async function retrySingleChunk(context, chunk, uploadChannel, maxRetries = 5, r
             const retryPromise = (async () => {
                 if (uploadChannel === 'cfr2') {
                     return await uploadSingleChunkToR2Multipart(context, chunkData, chunk.index, totalChunks, uploadId, originalFileName, originalFileType);
-                } else if (uploadChannel === 's3') {
-                    return await uploadSingleChunkToS3Multipart(context, chunkData, chunk.index, totalChunks, uploadId, originalFileName, originalFileType);
                 } else if (uploadChannel === 'telegram') {
                     return await uploadSingleChunkToTelegram(context, chunkData, chunk.index, totalChunks, uploadId, originalFileName, originalFileType);
                 } else if (uploadChannel === 'discord') {
@@ -964,7 +831,7 @@ async function retrySingleChunk(context, chunk, uploadChannel, maxRetries = 5, r
 
 // 清理失败的multipart upload
 export async function cleanupFailedMultipartUploads(context, uploadId, uploadChannel) {
-    const { env, uploadConfig } = context;
+    const { env } = context;
     const db = getDatabase(env);
 
     try {
@@ -982,38 +849,6 @@ export async function cleanupFailedMultipartUploads(context, uploadId, uploadCha
             const R2DataBase = env.img_r2;
             const multipartUpload = R2DataBase.resumeMultipartUpload(multipartInfo.key, multipartInfo.uploadId);
             await multipartUpload.abort();
-
-        } else if (uploadChannel === 's3') {
-            // 清理S3 multipart upload
-            const s3Settings = uploadConfig.s3;
-            const s3Channels = s3Settings.channels;
-            
-            // 优先使用指定的渠道名称
-            let s3Channel;
-            const specifiedChannelName = context.specifiedChannelName;
-            if (specifiedChannelName) {
-                s3Channel = s3Channels.find(ch => ch.name === specifiedChannelName);
-            }
-            if (!s3Channel) {
-                s3Channel = selectConsistentChannel(s3Channels, uploadId, s3Settings.loadBalance.enabled);
-            }
-
-            if (s3Channel) {
-                const { endpoint, pathStyle, accessKeyId, secretAccessKey, bucketName, region } = s3Channel;
-
-                const s3Client = new S3Client({
-                    region: region || "auto",
-                    endpoint,
-                    credentials: { accessKeyId, secretAccessKey },
-                    forcePathStyle: pathStyle
-                });
-
-                await s3Client.send(new AbortMultipartUploadCommand({
-                    Bucket: bucketName,
-                    Key: multipartInfo.key,
-                    UploadId: multipartInfo.uploadId
-                }));
-            }
         }
 
         // 清理multipart info

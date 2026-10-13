@@ -1,5 +1,5 @@
 import { getDatabase } from '../../../utils/databaseAdapter.js';
-import { createApiToken, deleteApiToken } from '../apiTokens.js';
+import { deleteApiToken } from '../apiTokens.js';
 
 export async function onRequest(context) {
     // 其他设置相关，GET方法读取设置，POST方法保存设置
@@ -28,33 +28,12 @@ export async function onRequest(context) {
     // POST保存设置
     if (request.method === 'POST') {
         const body = await request.json()
-        const settings = body
-
-        // WebDAV internal token 管理
-        const webDAV = settings.webDAV || {};
-        const oldSettings = await getOthersConfig(db, env);
-        const wasEnabled = oldSettings.webDAV?.enabled;
-        const isEnabled = webDAV.enabled;
-
-        if (isEnabled && !webDAV.internalToken) {
-            // 启用 WebDAV 且没有 token，创建一个 internal 类型的 API Token
-            const tokenResult = await createApiToken(
-                db,
-                'WebDAV Internal Token',
-                ['list', 'upload', 'delete'],
-                'system',
-                null,   // 不过期
-                false,  // 不自动删除
-                'internal'
-            );
-            settings.webDAV.internalToken = tokenResult.token;
-            settings.webDAV.internalTokenId = tokenResult.id;
-        } else if (!isEnabled && oldSettings.webDAV?.internalTokenId) {
-            // 禁用 WebDAV，删除 internal token
+        const settings = { ...body };
+        const oldSettings = JSON.parse(await db.get('manage@sysConfig@others') || '{}');
+        if (oldSettings.webDAV?.internalTokenId) {
             await deleteApiToken(db, oldSettings.webDAV.internalTokenId);
-            settings.webDAV.internalToken = '';
-            settings.webDAV.internalTokenId = '';
         }
+        delete settings.webDAV;
 
         // 写入数据库
         await db.put('manage@sysConfig@others', JSON.stringify(settings))
@@ -98,19 +77,6 @@ export async function getOthersConfig(db, env) {
         fixed: false,
     }
 
-    // WebDAV
-    const kvWebDAV = settingsKV.webDAV || {}
-    settings.webDAV = {
-        enabled: kvWebDAV.enabled ?? false,
-        username: kvWebDAV.username || '',
-        password: kvWebDAV.password || '',
-        uploadChannel: kvWebDAV.uploadChannel || '',
-        channelName: kvWebDAV.channelName || '',
-        internalToken: kvWebDAV.internalToken || '',
-        internalTokenId: kvWebDAV.internalTokenId || '',
-        fixed: false,
-    }
-
     // 公开浏览
     const kvPublicBrowse = settingsKV.publicBrowse || {}
     settings.publicBrowse = {
@@ -118,6 +84,12 @@ export async function getOthersConfig(db, env) {
         allowedDir: kvPublicBrowse.allowedDir || '',
         fixed: false,
     }
+
+    // The bundled settings page reads this shape; the retired service stays disabled.
+    settings.webDAV = {
+        enabled: false, username: '', password: '', uploadChannel: '', channelName: '',
+        internalToken: '', internalTokenId: '', fixed: true,
+    };
 
 
     return settings;

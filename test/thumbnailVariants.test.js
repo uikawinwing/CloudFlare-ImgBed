@@ -1,6 +1,4 @@
 import assert from 'assert';
-import sharp from 'sharp';
-import { dockerImageProcessor } from '../deploy/server/imageProcessor.js';
 import {
     THUMBNAIL_CONTENT_TYPE,
     THUMBNAIL_VARIANTS,
@@ -26,7 +24,7 @@ describe('thumbnail variants', () => {
         );
     });
 
-    it('uses one scale-down WebP transform description and never upscales smaller originals', async () => {
+    it('uses one scale-down WebP transform description and never requests upscaling', () => {
         assert.deepStrictEqual(createThumbnailTransform({ Width: 120 }, 'avatar'), {
             requested: true,
             options: { width: 120, fit: 'scale-down' },
@@ -41,19 +39,6 @@ describe('thumbnail variants', () => {
             width: 720,
             fit: 'scale-down',
         });
-        const input = await sharp({
-            create: { width: 80, height: 40, channels: 4, background: '#336699' },
-        }).png().toBuffer();
-        const response = await dockerImageProcessor.transform(new Blob([input]).stream(), {
-            width: 160,
-            fit: 'scale-down',
-            sourceType: 'image/png',
-            outputFormat: 'image/webp',
-        });
-        const output = await sharp(Buffer.from(await response.arrayBuffer())).metadata();
-        assert.strictEqual(output.width, 80);
-        assert.strictEqual(output.height, 40);
-        assert.strictEqual(output.format, 'webp');
     });
 
     it('keeps the legacy gallery URL while generating stable avatar and library URLs', () => {

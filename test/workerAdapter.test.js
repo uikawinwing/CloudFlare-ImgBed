@@ -178,6 +178,30 @@ describe('Worker route adapter', () => {
         assert.strictEqual(cacheMatches, 1, 'the generic Worker cache must not run ahead of the thumbnail route');
     });
 
+    it('does not send retired storage IDs to Telegraph', async () => {
+        const originalFetch = globalThis.fetch;
+        let externalReads = 0;
+        globalThis.fetch = async () => {
+            externalReads += 1;
+            throw new Error('Retired storage must not fall through to Telegraph');
+        };
+        try {
+            for (const channel of ['S3', 'WebDAV']) {
+                const metadata = { Channel: channel, FileType: 'image/png', ModerationStatus: 'active' };
+                const response = await worker.fetch(
+                    new Request('https://staging.example.test/file/legacy.png'),
+                    { img_url: { get: async () => null, getWithMetadata: async () => ({ value: '', metadata }) } },
+                    executionContext(),
+                );
+                assert.strictEqual(response.status, 410);
+                assert.match(response.headers.get('cache-control'), /no-store/);
+            }
+            assert.strictEqual(externalReads, 0);
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    });
+
     it('does not let the generic Worker cache bypass original-file moderation checks', async () => {
         let genericCacheMatches = 0;
         globalThis.caches = {

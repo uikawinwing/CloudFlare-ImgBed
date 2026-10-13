@@ -24,11 +24,13 @@
 
 # 1. 💡 项目介绍
 
-CloudFlare ImgBed 是支持 Docker 与 Serverless 部署的自建图床和文件托管方案，可将 **Telegram**、**Discord**、**Cloudflare R2**、**S3 兼容存储**、**Hugging Face**、**WebDAV** 等渠道统一接入一个管理界面。项目提供文件管理、身份认证、目录组织、内容审核、RESTful API 与 WebDAV，适用于个人图床、网站资源管理和轻量文件分发。
+CloudFlare ImgBed 是运行于 **Cloudflare Workers** 的自建图床和文件托管方案。当前可用的上传存储渠道为 **Telegram**、**Discord** 与 **Cloudflare R2**；Hugging Face 保留已有文件的读取与删除，停止新上传。项目提供文件管理、身份认证、目录组织、内容审核与 RESTful API，适用于个人图床、网站资源管理和轻量文件分发。
+
+文件和图库设为 Private 时，仅从 Discover 隐藏；持有分享链接的人仍可访问。
 
 ## 当前独立版本重点
 
-- **Workers-first 部署**：生产与 Staging 统一运行在 Cloudflare Workers，并使用 Worker Static Assets 提供前端资源。
+- **Workers-only 部署**：生产与 Staging 统一运行在 Cloudflare Workers，并使用 Worker Static Assets 提供前端资源；不再支持 Docker 或 Node.js 服务端。
 - **Cloudflare 原生存储**：按用途接入 R2、D1 与 KV，管理文件、元数据和站点状态。
 - **Creator Studio**：提供上传、文件管理、图库、成员与站点管理等后台能力。
 - **Discover 与公开图库**：支持公开内容浏览、Featured 内容、筛选、分页及创作者入口。
@@ -89,6 +91,25 @@ CloudFlare ImgBed 是支持 Docker 与 Serverless 部署的自建图床和文件
 </details>
 
 # 3. 📚 文档与更新
+
+## Worker 开发与部署
+
+安装依赖并使用本地 binding 存储启动 Worker：
+
+```bash
+npm ci
+npm start
+```
+
+`npm start` 会重新生成 Worker 路由适配层，并在 8787 端口启动 `wrangler dev`。使用 `npm test` 运行仓库测试。`npm run start:staging` 和 `npm run deploy:staging` 需要设置 `STAGING_D1_DATABASE_ID`、`STAGING_KV_NAMESPACE_ID` 与 `STAGING_R2_BUCKET_NAME`，且只会连接 Staging binding。生产部署使用 `npm run deploy:worker`，并需要对应的生产部署变量。
+
+GitHub Actions 会在生成路由、验证 bundle 和部署前执行 `npm test`。数据库结构变更刻意与常规部署分开。新建本地 D1 数据库时，请明确审核后执行初始化：
+
+```bash
+npx wrangler d1 execute img_d1 --config deploy/worker/wrangler.local.toml --local --persist-to ./data --file database/init.sql
+```
+
+Staging 或生产环境必须先逐个审核迁移文件和目标数据库名称，才可使用 `--remote`；工作流不会自动执行远程 D1 结构或数据变更。已有数据库可单独执行 `database/migrations/v2.11.0_file_query_indexes.sql`，优化文件列表和 Discover 查询所用的索引。数据库选择与本地存储参数见 [D1 命令参考](https://developers.cloudflare.com/d1/wrangler-commands/)。
 
 ## 📖 项目文档
 

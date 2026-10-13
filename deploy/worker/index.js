@@ -13,7 +13,6 @@ import * as mw_api_admin from '../../functions/api/admin/_middleware.js';
 import * as mw_api_manage from '../../functions/api/manage/_middleware.js';
 import * as mw_api_moderation from '../../functions/api/moderation/_middleware.js';
 import * as mw_api_user from '../../functions/api/user/_middleware.js';
-import * as mw_dav from '../../functions/dav/_middleware.js';
 import * as mw_file from '../../functions/file/_middleware.js';
 import * as mw_random from '../../functions/random/_middleware.js';
 import * as mw_upload from '../../functions/upload/_middleware.js';
@@ -165,7 +164,7 @@ const routes = [
     { path: '/api/moderation/quarantine/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"moderation"},{"type":"static","value":"quarantine"},{"type":"catchAll","name":"path","array":true}], module: apiModerationQuarantineCatchAllPath, middlewares: [mw_api, mw_api_moderation], catchAll: true },
     { path: '/api/moderation/restore/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"moderation"},{"type":"static","value":"restore"},{"type":"catchAll","name":"path","array":true}], module: apiModerationRestoreCatchAllPath, middlewares: [mw_api, mw_api_moderation], catchAll: true },
     { path: '/api/user/files/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"files"},{"type":"catchAll","name":"path","array":true}], module: apiUserFilesCatchAllPath, middlewares: [mw_api, mw_api_user], catchAll: true },
-    { path: '/dav/*path', segments: [{"type":"static","value":"dav"},{"type":"catchAll","name":"path","array":true}], module: davCatchAllPath, middlewares: [mw_dav], catchAll: true },
+    { path: '/dav/*path', segments: [{"type":"static","value":"dav"},{"type":"catchAll","name":"path","array":true}], module: davCatchAllPath, middlewares: [], catchAll: true },
     { path: '/file/*path', segments: [{"type":"static","value":"file"},{"type":"catchAll","name":"path","array":true}], module: fileCatchAllPath, middlewares: [mw_file], catchAll: true },
     { path: '/thumb/*path', segments: [{"type":"static","value":"thumb"},{"type":"catchAll","name":"path","array":true}], module: thumbCatchAllPath, middlewares: [], catchAll: true },
 ];

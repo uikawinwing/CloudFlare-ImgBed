@@ -32,6 +32,9 @@ jobs:
       - name: Install Worker dependencies
         run: npm ci
 
+      - name: Run automated tests
+        run: npm test
+
       - name: Check staging deployment configuration
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

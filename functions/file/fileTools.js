@@ -1,4 +1,5 @@
 import { ALLOWED_UPLOAD_TYPES, normalizeMediaType } from '../utils/fileSignature.js';
+import { legacyFileRestriction } from '../utils/files/fileAccess.js';
 
 /* ======== 文件读取工具函数 ======== */
 
@@ -212,17 +213,9 @@ export async function returnWithCheck(context, imgRecord) {
         context.fileAccess.cacheControl = isOwnedFile ? FILE_CACHE_CONTROL.NO_STORE : FILE_CACHE_CONTROL.PUBLIC;
     }
 
-    if (record.metadata.ListType == "White") {
-        return response;
-    } else if (record.metadata.ListType == "Block") {
-        return await returnBlockImg(url);
-    } else if (record.metadata.Label == "adult") {
-        return await returnBlockImg(url);
-    }
-
-    if (whiteListMode) {
-        return await returnWhiteListImg(url);
-    }
+    const restriction = legacyFileRestriction(record.metadata, whiteListMode);
+    if (restriction === 'blocked') return await returnBlockImg(url);
+    if (restriction === 'whitelist') return await returnWhiteListImg(url);
 
     return response;
 }

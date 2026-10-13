@@ -6,6 +6,9 @@ const VIEW_CACHE_TTL = 30000;
 const state = {
   user: null,
   files: [],
+  filesNextCursor: null,
+  filesUsedBytes: 0,
+  filesRequestId: 0,
   albums: [],
   selected: new Set(),
   selectionMode: false,
@@ -223,10 +226,25 @@ async function applyConfiguredWallpaper() {
   } catch {}
 }
 
-async function loadFiles() {
-  const data = await api('/api/user/files');
-  state.files = Array.isArray(data.files) ? data.files : [];
-  state.selected = new Set([...state.selected].filter(id => state.files.some(file => file.id === id)));
+async function loadFiles({ reset = true } = {}) {
+  if (!reset && !state.filesNextCursor) return;
+  const requestId = ++state.filesRequestId;
+  const params = new URLSearchParams({ limit: '50', sort: state.fileSort, filter: state.filter });
+  if (!reset) params.set('cursor', state.filesNextCursor);
+  if (state.fileQuery.trim()) params.set('query', state.fileQuery.trim());
+  let data;
+  try {
+    data = await api(`/api/user/files?${params}`);
+  } catch (error) {
+    if (requestId !== state.filesRequestId) return;
+    throw error;
+  }
+  if (requestId !== state.filesRequestId) return;
+  const files = Array.isArray(data.files) ? data.files : [];
+  state.files = reset ? files : [...state.files, ...files.filter(file => !state.files.some(existing => existing.id === file.id))];
+  state.filesNextCursor = typeof data.nextCursor === 'string' ? data.nextCursor : null;
+  state.filesUsedBytes = Number(data.usedBytes) || 0;
+  if (reset) state.selected = new Set([...state.selected].filter(id => state.files.some(file => file.id === id)));
   markViewFresh('files');
 }
 
@@ -263,20 +281,12 @@ function fileCard(file) {
 }
 
 function visibleFiles() {
-  const query = state.fileQuery.trim().toLocaleLowerCase('zh-CN');
-  return state.files
-    .filter(file => state.filter === 'all' || (state.filter === 'video' ? isVideoFile(file) : !isVideoFile(file)))
-    .filter(file => !query || String(file.file_name || file.id).toLocaleLowerCase('zh-CN').includes(query))
-    .sort((a, b) => {
-      if (state.fileSort === 'oldest') return Number(a.timestamp || 0) - Number(b.timestamp || 0);
-      if (state.fileSort === 'name') return String(a.file_name || a.id).localeCompare(String(b.file_name || b.id), 'zh-CN');
-      return Number(b.timestamp || 0) - Number(a.timestamp || 0);
-    });
+  return state.files;
 }
 
-function renderFiles() {
+function renderFiles({ focusSearch = false } = {}) {
   syncNavigation();
-  const used = state.files.reduce((total, file) => total + (Number(file.file_size_bytes) || 0), 0);
+  const used = state.filesUsedBytes;
   const quota = state.user.role === 'owner' ? null : MEMBER_QUOTA_BYTES;
   const filtered = visibleFiles();
   main.innerHTML = `<section class="page-section">
@@ -304,10 +314,16 @@ function renderFiles() {
       <div class="selection-copy"><strong>已选择 ${state.selected.size} 项</strong><button class="button ghost" id="clearSelection" type="button">取消选择</button></div>
       <div class="selection-actions"><button class="button" id="addToAlbum" type="button">${icons.folder}加入图库</button><button class="button danger" id="deleteSelected" type="button">${icons.trash}永久删除</button></div>
     </div>` : ''}
-    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '试试更换筛选条件或搜索词。' : '使用上方“上传文件”，或直接拖拽 / Ctrl+V 粘贴 JPG、PNG、GIF、WebP、AVIF、MP4 或 WebM。'}</p></div>`}
+    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.fileQuery || state.filter !== 'all' ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.fileQuery || state.filter !== 'all' ? '试试更换筛选条件或搜索词。' : '使用上方“上传文件”，或直接拖拽 / Ctrl+V 粘贴 JPG、PNG、GIF、WebP、AVIF、MP4 或 WebM。'}</p></div>`}
+    ${state.filesNextCursor ? `<div class="load-more"><button class="button" id="loadMoreFiles" type="button">加载更多</button></div>` : ''}
   </section>`;
   bindFileEvents();
   observeVideos();
+  if (focusSearch) {
+    const search = document.querySelector('#fileSearch');
+    search?.focus();
+    search?.setSelectionRange(search.value.length, search.value.length);
+  }
 }
 
 function albumRow(album) {
@@ -570,10 +586,28 @@ function previewFile(file) {
 }
 
 function bindFileEvents() {
-  document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => { state.filter = button.dataset.filter; renderFiles(); }));
-  document.querySelector('#fileSearch')?.addEventListener('change', event => { state.fileQuery = event.target.value; renderFiles(); });
-  document.querySelector('#fileSearch')?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); state.fileQuery = event.currentTarget.value; renderFiles(); } });
-  document.querySelector('#fileSort')?.addEventListener('change', event => { state.fileSort = event.target.value; renderFiles(); });
+  const reload = async (focusSearch = false) => {
+    try {
+      await loadFiles();
+      renderFiles({ focusSearch });
+    } catch (error) {
+      toast(error.message || '无法读取文件。', 'error');
+    }
+  };
+  document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', async () => { state.filter = button.dataset.filter; await reload(); }));
+  document.querySelector('#fileSearch')?.addEventListener('change', async event => { state.fileQuery = event.target.value; await reload(); });
+  document.querySelector('#fileSearch')?.addEventListener('keydown', async event => { if (event.key === 'Enter') { event.preventDefault(); state.fileQuery = event.currentTarget.value; await reload(true); } });
+  document.querySelector('#fileSort')?.addEventListener('change', async event => { state.fileSort = event.target.value; await reload(); });
+  document.querySelector('#loadMoreFiles')?.addEventListener('click', async event => {
+    event.currentTarget.disabled = true;
+    try {
+      await loadFiles({ reset: false });
+      renderFiles();
+    } catch (error) {
+      event.currentTarget.disabled = false;
+      toast(error.message || '无法读取更多文件。', 'error');
+    }
+  });
   document.querySelector('#toggleSelectionMode')?.addEventListener('click', () => {
     state.selectionMode = !state.selectionMode;
     if (!state.selectionMode) state.selected.clear();
@@ -786,13 +820,10 @@ function manageAlbumItems(album) {
         toast(error.message, 'error');
       }
     };
-    const reorder = async (otherFile, nextPosition, otherPosition) => {
+    const reorder = async (otherFile) => {
       row.classList.add('busy');
       try {
-        await Promise.all([
-          api(`/api/user/albums/${encodeURIComponent(album.id)}/items`, { method: 'PATCH', body: JSON.stringify({ fileId, position: nextPosition }) }),
-          api(`/api/user/albums/${encodeURIComponent(album.id)}/items`, { method: 'PATCH', body: JSON.stringify({ fileId: otherFile.id, position: otherPosition }) }),
-        ]);
+        await api(`/api/user/albums/${encodeURIComponent(album.id)}/items`, { method: 'PATCH', body: JSON.stringify({ fileId, swapWithFileId: otherFile.id }) });
         await loadAlbums(true);
         manageAlbumItems(state.albums.find(item => item.id === album.id) || album);
       } catch (error) {
@@ -802,11 +833,11 @@ function manageAlbumItems(album) {
     };
     row.querySelector('[data-move-up]')?.addEventListener('click', async () => {
       const previous = items[index - 1];
-      await reorder(previous, index - 1, index);
+      await reorder(previous);
     });
     row.querySelector('[data-move-down]')?.addEventListener('click', async () => {
       const next = items[index + 1];
-      await reorder(next, index + 1, index);
+      await reorder(next);
     });
     row.querySelector('[data-edit-cover]')?.addEventListener('click', () => openAlbumCoverEditor(album, items[index]));
     row.querySelector('[data-remove-item]')?.addEventListener('click', () => mutate('DELETE', null, `?fileId=${encodeURIComponent(fileId)}`));

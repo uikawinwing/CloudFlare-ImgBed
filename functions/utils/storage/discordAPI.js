@@ -41,7 +41,12 @@ export class DiscordAPI {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(`Discord API error: ${response.status} - ${errorData.message || response.statusText}`);
+            const tooLarge = response.status === 413 || errorData.code === 40005;
+            const error = new Error(tooLarge
+                ? 'File exceeds this Discord server\'s upload limit; use R2 or another configured channel'
+                : `Discord API error: ${response.status} - ${errorData.message || response.statusText}`);
+            error.status = tooLarge ? 413 : response.status;
+            throw error;
         }
 
         const responseData = await response.json();

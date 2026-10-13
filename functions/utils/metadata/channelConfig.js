@@ -12,22 +12,6 @@ const CHANNEL_IDENTITY_RULES = {
       ['chatId', 'TgChatId'],
     ],
   ],
-  s3: [
-    [
-      ['accessKeyId', 'S3AccessKeyId'],
-      ['endpoint', 'S3Endpoint'],
-      ['bucketName', 'S3BucketName'],
-    ],
-    [
-      ['endpoint', 'S3Endpoint'],
-      ['bucketName', 'S3BucketName'],
-      ['pathStyle', 'S3PathStyle'],
-    ],
-    [
-      ['endpoint', 'S3Endpoint'],
-      ['bucketName', 'S3BucketName'],
-    ],
-  ],
   discord: [
     [
       ['botToken', 'DiscordBotToken'],
@@ -43,27 +27,9 @@ const CHANNEL_IDENTITY_RULES = {
       ['repo', 'HfRepo'],
     ],
   ],
-  webdav: [
-    [
-      ['baseUrl', 'WebDAVBaseUrl'],
-      ['username', 'WebDAVUsername'],
-    ],
-    [
-      ['baseUrl', 'WebDAVBaseUrl'],
-    ],
-  ],
 };
 
-const URL_IDENTITY_FIELDS = new Set([
-  'endpoint',
-  'S3Endpoint',
-  'baseUrl',
-  'WebDAVBaseUrl',
-]);
-
 const BOOLEAN_IDENTITY_FIELDS = new Set([
-  'pathStyle',
-  'S3PathStyle',
   'isPrivate',
   'HfIsPrivate',
 ]);
@@ -79,7 +45,6 @@ export async function loadChannelConfig(db, env, logContext = 'channel config') 
     return null;
   }
 }
-
 // 根据 ChannelName、历史身份字段和旧 Telegram 默认名查找匹配渠道
 export function findConfiguredChannel(uploadConfig, groupName, metadata = {}) {
   if (!uploadConfig) return null;
@@ -96,7 +61,6 @@ export function findConfiguredChannel(uploadConfig, groupName, metadata = {}) {
 
   return findLegacyTelegramEnvChannel(channels, groupName, metadata);
 }
-
 /* ========== 关键函数 ========== */
 
 // 兼容旧版默认 Telegram 环境变量渠道
@@ -108,7 +72,6 @@ function findLegacyTelegramEnvChannel(channels, groupName, metadata = {}) {
 
   return null;
 }
-
 // 使用 metadata 中残留的身份字段反向匹配当前渠道配置
 function findChannelByPersistedIdentity(channels, groupName, metadata = {}) {
   const ruleGroups = CHANNEL_IDENTITY_RULES[groupName] || [];
@@ -124,7 +87,6 @@ function findChannelByPersistedIdentity(channels, groupName, metadata = {}) {
 
   return null;
 }
-
 // 确保某组匹配规则所需的 metadata 字段都存在
 function hasAllMetadataFields(metadata, fields) {
   return fields.every(([, metadataKey]) => hasIdentityValue(metadata?.[metadataKey]));
@@ -155,11 +117,6 @@ function hasIdentityValue(value) {
 function normalizeIdentityValue(value, fieldName = '') {
   const text = String(value).trim();
 
-  // URL 与布尔值需要规范化后再比较，避免协议、斜杠或类型差异导致匹配失败
-  if (URL_IDENTITY_FIELDS.has(fieldName)) {
-    return normalizeUrlIdentityValue(text);
-  }
-
   if (BOOLEAN_IDENTITY_FIELDS.has(fieldName)) {
     return normalizeBooleanIdentityValue(value);
   }
@@ -171,34 +128,4 @@ function normalizeIdentityValue(value, fieldName = '') {
 function normalizeBooleanIdentityValue(value) {
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   return String(value).trim().toLowerCase() === 'true' ? 'true' : 'false';
-}
-
-// 规范化 URL 身份字段，忽略协议、userinfo、查询、hash 和尾部斜杠差异
-function normalizeUrlIdentityValue(value) {
-  try {
-    const url = new URL(ensureUrlProtocol(value));
-    url.username = '';
-    url.password = '';
-    url.hash = '';
-    url.search = '';
-    if (url.pathname.endsWith('/')) {
-      url.pathname = url.pathname.replace(/\/+$/, '/');
-    }
-    return url.toString()
-      .replace(/^https?:\/\//i, '')
-      .replace(/\/+$/, '');
-  } catch {
-    return value
-      .replace(/^https?:\/\//i, '')
-      .replace(/\/+$/, '');
-  }
-}
-
-// 为缺少协议的地址补充默认协议，便于 URL 解析
-function ensureUrlProtocol(value) {
-  if (/^[a-z][a-z\d+.-]*:\/\//i.test(value)) {
-    return value;
-  }
-
-  return `https://${value}`;
 }

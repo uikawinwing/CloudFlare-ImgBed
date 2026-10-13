@@ -3,6 +3,26 @@ import { onRequest as serveThumbnail } from '../functions/thumb/[[path]].js';
 import { returnWithCheck } from '../functions/file/fileTools.js';
 
 describe('thumbnail route visibility and cache contract', () => {
+    it('checks legacy block, adult and whitelist rules before reading an edge-cached thumbnail', async () => {
+        const originalCaches = globalThis.caches;
+        globalThis.caches = { default: { match: async () => { throw new Error('Blocked thumbnail reached edge cache'); } } };
+        try {
+            for (const [extra, whiteListMode] of [[{ ListType: 'Block' }, false], [{ Label: 'adult' }, false], [{}, true]]) {
+                const metadata = { ModerationStatus: 'active', FileType: 'image/png', TimeStamp: 123, ...extra };
+                const env = { img_url: {
+                    get: async key => key === 'manage@sysConfig@security' ? JSON.stringify({ access: { whiteListMode } }) : null,
+                    getWithMetadata: async () => ({ value: '', metadata }),
+                } };
+                const response = await serveThumbnail({ env, request: new Request('https://example.test/thumb/file.png?v=123'), params: { path: 'file.png' } });
+                assert.equal(response.status, 404);
+                assert.match(response.headers.get('cache-control'), /\bno-store\b/);
+            }
+        } finally {
+            if (originalCaches === undefined) delete globalThis.caches;
+            else globalThis.caches = originalCaches;
+        }
+    });
+
     it('does not treat private visibility as thumbnail authorization', async () => {
         const metadata = {
             Visibility: 'private',

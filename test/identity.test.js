@@ -190,10 +190,10 @@ describe('Discord identity policy', () => {
         assert.strictEqual(resolveUploadTarget({ config: [{ id: 'defaultUploadChannel', value: 'external' }] }).channel, 'telegram');
     });
 
-    it('retires the public WebDAV service without removing WebDAV as a storage backend', () => {
+    it('retires the public WebDAV service and its storage backend', () => {
         const response = legacyDavRoute();
         assert.strictEqual(response.status, 410);
-        assert.deepStrictEqual(resolveUploadTarget({ config: [{ id: 'defaultUploadChannel', value: 'webdav' }] }).channel, 'webdav');
+        assert.strictEqual(resolveUploadTarget({ config: [{ id: 'defaultUploadChannel', value: 'webdav' }] }).channel, 'telegram');
     });
 
     it('keeps storage selection under administrator control for Discord members', () => {

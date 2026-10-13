@@ -14,6 +14,8 @@ if (!databaseId) {
 
 const workerName = env.STAGING_WORKER_NAME?.trim() || 'cloudflare-imgbed-staging';
 const databaseName = env.STAGING_D1_DATABASE_NAME?.trim() || 'imgbed_staging_d1';
+const kvNamespaceId = requiredEnv('STAGING_KV_NAMESPACE_ID');
+const r2BucketName = requiredEnv('STAGING_R2_BUCKET_NAME');
 const customDomain = normalizeCustomDomain(env.STAGING_WORKER_CUSTOM_DOMAIN);
 
 let toml = `name = "${workerName}"
@@ -38,23 +40,19 @@ database_id = "${databaseId}"
 remote = true
 `;
 
-if (env.STAGING_KV_NAMESPACE_ID?.trim()) {
-    toml += `
+toml += `
 [[kv_namespaces]]
 binding = "img_url"
-id = "${env.STAGING_KV_NAMESPACE_ID.trim()}"
+id = "${kvNamespaceId}"
 remote = true
 `;
-}
 
-if (env.STAGING_R2_BUCKET_NAME?.trim()) {
-    toml += `
+toml += `
 [[r2_buckets]]
 binding = "img_r2"
-bucket_name = "${env.STAGING_R2_BUCKET_NAME.trim()}"
+bucket_name = "${r2BucketName}"
 remote = true
 `;
-}
 
 const workerVars = {};
 if (env.STAGING_WORKER_VARS) {
@@ -105,6 +103,15 @@ function normalizeCustomDomain(value) {
         process.exit(1);
     }
     return hostname;
+}
+
+function requiredEnv(name) {
+    const value = env[name]?.trim();
+    if (!value) {
+        console.error(`Missing ${name}. Refusing to generate an incomplete staging Worker configuration.`);
+        process.exit(1);
+    }
+    return value;
 }
 
 function escapeTomlString(value) {

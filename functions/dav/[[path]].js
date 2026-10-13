@@ -1,5 +1,4 @@
-// Legacy public WebDAV service has been removed.
-// WebDAV remains available only as an administrator-managed storage backend.
+// The WebDAV service and storage backend have been retired.
 export function onRequest() {
     return new Response('WebDAV service has been removed', {
         status: 410,

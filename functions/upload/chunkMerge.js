@@ -1,7 +1,6 @@
 /* ========== 分块合并处理 ========== */
 import { createResponse, getUploadIp, getIPAddress, selectConsistentChannel, buildUniqueFileId, endUpload, sanitizeUploadFolder } from './uploadTools';
 import { retryFailedChunks, cleanupFailedMultipartUploads, checkChunkUploadStatuses, cleanupChunkData, cleanupUploadSession } from './chunkUpload';
-import { S3Client, CompleteMultipartUploadCommand } from "@aws-sdk/client-s3";
 import { getDatabase } from '../utils/databaseAdapter.js';
 import { fetchPageConfig } from '../utils/sysConfig.js';
 
@@ -47,9 +46,6 @@ export async function handleChunkMerge(context) {
 
         // 使用会话中的上传渠道，或者从URL参数获取
         uploadChannel = url.searchParams.get('uploadChannel') || sessionInfo.uploadChannel || 'telegram';
-        if (uploadChannel === 'webdav') {
-            return createResponse('Error: WebDAV channel does not support chunked uploads. Please use non-chunked upload within your Cloudflare request body limit.', { status: 400 });
-        }
 
         // 获取指定的渠道名称（优先URL参数，其次会话信息）
         const channelName = url.searchParams.get('channelName') || sessionInfo.channelName || '';
@@ -70,7 +66,7 @@ export async function handleChunkMerge(context) {
 
     } catch (error) {
         // 清理失败的multipart uploads
-        if (uploadChannel === 'cfr2' || uploadChannel === 's3') {
+        if (uploadChannel === 'cfr2') {
             waitUntil(cleanupFailedMultipartUploads(context, uploadId, uploadChannel));
         }
 
@@ -135,7 +131,7 @@ async function startMerge(context, uploadId, totalChunks, originalFileName, orig
 
     } catch (error) {
         // 清理失败的multipart uploads
-        if (uploadChannel === 'cfr2' || uploadChannel === 's3') {
+        if (uploadChannel === 'cfr2') {
             await cleanupFailedMultipartUploads(context, uploadId, uploadChannel);
         }
 
@@ -220,8 +216,6 @@ async function handleChannelBasedMerge(context, uploadId, totalChunks, originalF
         let result;
         if (uploadChannel === 'cfr2') {
             result = await mergeR2ChunksInfo(context, uploadId, completedChunks, metadata);
-        } else if (uploadChannel === 's3') {
-            result = await mergeS3ChunksInfo(context, uploadId, completedChunks, metadata);
         } else if (uploadChannel === 'telegram') {
             result = await mergeTelegramChunksInfo(context, uploadId, completedChunks, metadata);
         } else if (uploadChannel === 'discord') {
@@ -319,104 +313,6 @@ async function mergeR2ChunksInfo(context, uploadId, completedChunks, metadata) {
 
     } catch (error) {
         throw new Error(`R2 merge failed: ${error.message}`);
-    }
-}
-
-// 合并S3分块信息
-async function mergeS3ChunksInfo(context, uploadId, completedChunks, metadata) {
-    const { env, waitUntil, uploadConfig, url, specifiedChannelName } = context;
-    const db = getDatabase(env);
-
-    try {
-        const s3Settings = uploadConfig.s3;
-        const s3Channels = s3Settings.channels;
-        
-        // 优先使用指定的渠道名称
-        let s3Channel;
-        if (specifiedChannelName) {
-            s3Channel = s3Channels.find(ch => ch.name === specifiedChannelName);
-        }
-        if (!s3Channel) {
-            s3Channel = selectConsistentChannel(s3Channels, uploadId, s3Settings.loadBalance.enabled);
-        }
-
-        console.log(`Merging S3 chunks for uploadId: ${uploadId}, selected channel: ${s3Channel.name || 'default'}`);
-
-        const { endpoint, pathStyle, accessKeyId, secretAccessKey, bucketName, region } = s3Channel;
-
-        const s3Client = new S3Client({
-            region: region || "auto",
-            endpoint,
-            credentials: { accessKeyId, secretAccessKey },
-            forcePathStyle: pathStyle
-        });
-
-        const multipartKey = `multipart_${uploadId}`;
-
-        // 获取multipart info
-        const multipartInfoData = await db.get(multipartKey);
-        if (!multipartInfoData) {
-            throw new Error('Multipart upload info not found');
-        }
-
-        const multipartInfo = JSON.parse(multipartInfoData);
-
-        // 组织所有分块
-        const sortedChunks = completedChunks.sort((a, b) => a.index - b.index);
-        const parts = [];
-
-        for (const chunk of sortedChunks) {
-            const part = {
-                ETag: chunk.uploadResult.etag,
-                PartNumber: chunk.uploadResult.partNumber
-            };
-            parts.push(part);
-        }
-
-        // 完成multipart upload
-        await s3Client.send(new CompleteMultipartUploadCommand({
-            Bucket: bucketName,
-            Key: multipartInfo.key,
-            UploadId: multipartInfo.uploadId,
-            MultipartUpload: { Parts: parts }
-        }));
-
-        // 计算总大小
-        const totalSize = completedChunks.reduce((sum, chunk) => sum + chunk.uploadResult.size, 0);
-
-        // 使用multipart info中的finalFileId更新metadata
-        const finalFileId = multipartInfo.key;
-        metadata.Channel = "S3";
-        metadata.ChannelName = s3Channel.name;
-        metadata.FileSize = (totalSize / 1024 / 1024).toFixed(2);
-        metadata.FileSizeBytes = totalSize;
-        metadata.S3FileKey = finalFileId;
-
-        // 清理multipart info
-        await db.delete(multipartKey);
-
-        // 写入数据库
-        await db.put(finalFileId, "", { metadata });
-
-        // 异步结束上传
-        waitUntil(endUpload(context, finalFileId, metadata));
-
-        // 更新返回链接
-        const returnFormat = url.searchParams.get('returnFormat') || 'default';
-        let updatedReturnLink = '';
-        if (returnFormat === 'full') {
-            updatedReturnLink = `${url.origin}/file/${finalFileId}`;
-        } else {
-            updatedReturnLink = `/file/${finalFileId}`;
-        }
-
-        return {
-            success: true,
-            result: [{ src: updatedReturnLink }]
-        };
-
-    } catch (error) {
-        throw new Error(`S3 merge failed: ${error.message}`);
     }
 }
 

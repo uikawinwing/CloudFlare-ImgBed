@@ -1,18 +1,15 @@
-import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { purgeCFCache, purgeRandomFileListCache, purgePublicFileListCache } from "../../../utils/purgeCache";
+import { purgeCFCache, purgeRandomFileListCache, purgePublicFileListCache } from "../../../utils/purgeCache.js";
 import { removeFileFromIndex, batchRemoveFilesFromIndex } from "../../../utils/indexManager.js";
 import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { DiscordAPI } from '../../../utils/storage/discordAPI.js';
 import { HuggingFaceAPI } from '../../../utils/storage/huggingfaceAPI.js';
-import { WebDAVAPI } from '../../../utils/storage/webdavAPI.js';
 import {
     resolveDiscordCredentials,
     resolveHuggingFaceCredentials,
-    resolveS3Credentials,
-    resolveWebDAVCredentials,
 } from '../../../utils/metadata/channelCredentials.js';
 import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
 import { deletePermanentThumbnail, thumbnailContentVersion, thumbnailVariantUrls } from '../../../utils/thumbnail.js';
+import { settleFileDeletion } from '../../../utils/files/fileLifecycle.js';
 
 // CORS 跨域响应头
 const corsHeaders = {
@@ -156,6 +153,10 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
             return true;
         }
 
+        if (img.metadata?.Channel === 'S3' || img.metadata?.Channel === 'WebDAV') {
+            throw new Error('Retired storage must be cleaned at its source before removing its file record');
+        }
+
         // 先隐藏记录并清缓存；后续任何一步失败都能安全重试。
         if (env.img_d1?.prepare) {
             const deletingMetadata = { ...img.metadata, ModerationStatus: 'deleting' };
@@ -177,11 +178,6 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
             await R2DataBase.delete(fileId);
         }
 
-        // S3 渠道的图片，需要删除S3中对应的图片
-        if (img.metadata?.Channel === 'S3') {
-            if (!await deleteS3File(env, img)) throw new Error('Failed to delete file from S3');
-        }
-
         // Discord 渠道的图片，需要删除 Discord 中对应的消息
         if (img.metadata?.Channel === 'Discord') {
             if (!await deleteDiscordFile(env, img)) throw new Error('Failed to delete Discord message');
@@ -192,22 +188,9 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
             if (!await deleteHuggingFaceFile(env, img)) throw new Error('Failed to delete Hugging Face file');
         }
 
-        // WebDAV 渠道的图片，需要删除 WebDAV 中对应的文件
-        if (img.metadata?.Channel === 'WebDAV') {
-            if (!await deleteWebDAVFile(env, img)) throw new Error('Failed to delete WebDAV file');
-        }
-
         // 同一数据库事务中结清相册引用、额度和文件记录。
         if (env.img_d1?.prepare) {
-            const statements = [
-                env.img_d1.prepare('DELETE FROM album_covers WHERE file_id = ?').bind(fileId),
-                env.img_d1.prepare('DELETE FROM album_items WHERE file_id = ?').bind(fileId),
-                env.img_d1.prepare('DELETE FROM files WHERE id = ?').bind(fileId),
-            ];
-            if (img.metadata?.OwnerId && img.metadata?.FileSizeBytes) {
-                statements.splice(1, 0, env.img_d1.prepare('UPDATE users SET used_bytes = MAX(0, used_bytes - ?), updated_at = ? WHERE discord_id = ?').bind(Number(img.metadata.FileSizeBytes), Date.now(), img.metadata.OwnerId));
-            }
-            await env.img_d1.batch(statements);
+            await settleFileDeletion(env.img_d1, fileId);
             if (env.img_url?.delete) await env.img_url.delete(fileId);
         } else {
             await db.delete(fileId);
@@ -228,35 +211,6 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
 async function purgeThumbnailCaches(env, requestUrl, fileId, version) {
     for (const thumbnailUrl of thumbnailVariantUrls(requestUrl, fileId, version)) {
         await purgeCFCache(env, thumbnailUrl);
-    }
-}
-
-// 删除 S3 渠道的图片
-async function deleteS3File(env, img) {
-    const db = getDatabase(env);
-    const s3Credentials = await resolveS3Credentials(db, env, img.metadata);
-    const s3Client = new S3Client({
-        region: s3Credentials.region || "auto",
-        endpoint: s3Credentials.endpoint,
-        credentials: {
-            accessKeyId: s3Credentials.accessKeyId,
-            secretAccessKey: s3Credentials.secretAccessKey
-        },
-        forcePathStyle: s3Credentials.pathStyle || false // 是否启用路径风格
-    });
-
-    const bucketName = s3Credentials.bucketName;
-    const key = s3Credentials.key;
-
-    try {
-        await s3Client.send(new DeleteObjectCommand({
-            Bucket: bucketName,
-            Key: key,
-        }));
-        return true;
-    } catch (error) {
-        console.error("S3 Delete Failed:", error);
-        return false;
     }
 }
 
@@ -285,8 +239,6 @@ async function deleteDiscordFile(env, img) {
         return false;
     }
 }
-
-
 // 删除 HuggingFace 渠道的图片
 async function deleteHuggingFaceFile(env, img) {
     const db = getDatabase(env);
@@ -310,32 +262,6 @@ async function deleteHuggingFaceFile(env, img) {
         return success;
     } catch (error) {
         console.error("HuggingFace Delete Failed:", error);
-        return false;
-    }
-}
-
-
-// 删除 WebDAV 渠道的图片
-async function deleteWebDAVFile(env, img) {
-    const filePath = img.metadata?.WebDAVFilePath;
-
-    if (!filePath) {
-        console.warn('WebDAV file missing required metadata for deletion');
-        return false;
-    }
-
-    try {
-        const db = getDatabase(env);
-        const webdavCredentials = await resolveWebDAVCredentials(db, env, img.metadata);
-        if (!webdavCredentials.baseUrl) {
-            console.warn('WebDAV channel config not found for deletion');
-            return false;
-        }
-
-        const webdavAPI = new WebDAVAPI(webdavCredentials);
-        return await webdavAPI.deleteFile(filePath);
-    } catch (error) {
-        console.error("WebDAV Delete Failed:", error);
         return false;
     }
 }

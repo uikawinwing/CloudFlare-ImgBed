@@ -24,11 +24,13 @@
 
 # 1. 💡 Introduction
 
-CloudFlare ImgBed is a self-hosted image and file hosting solution for Docker and serverless environments, bringing **Telegram**, **Discord**, **Cloudflare R2**, **S3-compatible storage**, **Hugging Face**, **WebDAV**, and more into one management interface. It provides file management, authentication, directory organization, content moderation, a RESTful API, and WebDAV for personal image hosting, website asset management, and lightweight file distribution.
+CloudFlare ImgBed is a self-hosted image and file hosting solution that runs on **Cloudflare Workers**. It uses **Telegram**, **Discord**, and **Cloudflare R2** as active storage backends. Existing Hugging Face files can still be read and deleted; new uploads are disabled. It provides file management, authentication, directory organization, content moderation, and a RESTful API for personal image hosting, website asset management, and lightweight file distribution.
+
+Setting a file or album to Private hides it from Discover. Anyone with its share link can still access it.
 
 ## Current standalone focus
 
-- **Workers-first deployment**: production and staging run on Cloudflare Workers with Worker Static Assets serving the frontend.
+- **Workers-only deployment**: production and staging run on Cloudflare Workers with Worker Static Assets serving the frontend. Docker and the Node.js server are not supported.
 - **Cloudflare-native storage**: R2, D1, and KV are used for files, metadata, and site state where appropriate.
 - **Creator Studio**: upload, file management, galleries, member administration, and site management are maintained in this repository.
 - **Discover and public galleries**: public browsing, Featured content, filtering, pagination, and creator entry points are part of the standalone experience.
@@ -89,6 +91,25 @@ Featured welcome content is limited to public files whose owner and moderation s
 </details>
 
 # 3. 📚 Documentation & Updates
+
+## Worker development and deployment
+
+Install dependencies and run the Worker with local binding storage:
+
+```bash
+npm ci
+npm start
+```
+
+`npm start` regenerates the Worker route adapter and starts `wrangler dev` on port 8787. Use `npm test` for the repository test suite. `npm run start:staging` and `npm run deploy:staging` require the `STAGING_D1_DATABASE_ID`, `STAGING_KV_NAMESPACE_ID`, and `STAGING_R2_BUCKET_NAME` environment variables and connect to staging bindings only. Production deployment uses `npm run deploy:worker` with the corresponding production deployment variables.
+
+The GitHub Actions workflows run `npm test` before route generation, bundle validation, and deployment. Database schema changes are intentionally separate from routine deployments. For a new local D1 database, run a reviewed initialization explicitly:
+
+```bash
+npx wrangler d1 execute img_d1 --config deploy/worker/wrangler.local.toml --local --persist-to ./data --file database/init.sql
+```
+
+For staging or production, review one migration file and the target database name before using `--remote`; no workflow applies remote D1 schema or data changes automatically. Existing databases can apply `database/migrations/v2.11.0_file_query_indexes.sql` separately to improve file list and Discover query indexes. See the [D1 command reference](https://developers.cloudflare.com/d1/wrangler-commands/) for database selection and local persistence options.
 
 ## 📖 Documentation
 

@@ -1,5 +1,4 @@
 import { getDatabase } from '../../../utils/databaseAdapter.js';
-import { normalizeWebDAVHeaders } from '../../../utils/storage/webdavAPI.js';
 
 export async function onRequest(context) {
     // 上传设置相关，GET方法读取设置，POST方法保存设置
@@ -28,7 +27,12 @@ export async function onRequest(context) {
     // POST保存设置
     if (request.method === 'POST') {
         const body = await request.json()
-        const settings = body
+        const settings = {
+            telegram: body.telegram,
+            cfr2: body.cfr2,
+            discord: body.discord,
+            huggingface: body.huggingface,
+        }
 
         // 写入数据库
         await db.put('manage@sysConfig@upload', JSON.stringify(settings))
@@ -131,52 +135,6 @@ export async function getUploadConfig(db, env) {
     cfr2.loadBalance = r2LoadBalance
 
 
-    // =====================读取s3渠道配置=====================
-    const s3 = {}
-    const s3Channels = []
-    s3.channels = s3Channels
-    if (env.S3_ACCESS_KEY_ID) {
-        s3Channels.push({
-            id: 1,
-            name: 'S3_env',
-            type: 's3',
-            savePath: 'environment variable',
-            accessKeyId: env.S3_ACCESS_KEY_ID,
-            secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-            region: env.S3_REGION || 'auto',
-            bucketName: env.S3_BUCKET_NAME,
-            endpoint: env.S3_ENDPOINT,
-            pathStyle: env.S3_PATH_STYLE === 'true',
-            cdnDomain: env.S3_CDN_DOMAIN || '',  // 可选的 CDN 域名
-            enabled: true,
-            fixed: true,
-        })
-    }
-    for (const s of settingsKV.s3?.channels || []) {
-        // 如果savePath是environment variable，修改可变参数
-        if (s.savePath === 'environment variable') {
-            // 如果环境变量未删除，进行覆盖操作
-            if (s3Channels[0]) {
-                s3Channels[0].enabled = s.enabled
-                s3Channels[0].quota = s.quota  // 保留容量限制配置
-                s3Channels[0].cdnDomain = s.cdnDomain  // 保留 CDN 域名配置
-            }
-
-            continue
-        }
-        // id自增
-        s.id = s3Channels.length + 1
-        s3Channels.push(s)
-    }
-
-    // 负载均衡
-    const s3LoadBalance = settingsKV.s3?.loadBalance || {
-        enabled: false,
-        channels: [],
-    }
-    s3.loadBalance = s3LoadBalance
-
-
     // =====================读取 Discord 渠道配置=====================
     const discord = {}
     const discordChannels = []
@@ -192,7 +150,6 @@ export async function getUploadConfig(db, env) {
             botToken: env.DISCORD_BOT_TOKEN,
             channelId: env.DISCORD_CHANNEL_ID,
             proxyUrl: env.DISCORD_PROXY_URL || '',  // 可选的代理 URL
-            isNitro: env.DISCORD_IS_NITRO === 'true',  // Nitro 会员，支持 25MB
             enabled: true,
             fixed: true,
         })
@@ -205,7 +162,6 @@ export async function getUploadConfig(db, env) {
             if (discordChannels[0]) {
                 discordChannels[0].enabled = dc.enabled
                 discordChannels[0].proxyUrl = dc.proxyUrl
-                discordChannels[0].isNitro = dc.isNitro
             }
             continue
         }
@@ -265,63 +221,14 @@ export async function getUploadConfig(db, env) {
     huggingface.loadBalance = huggingfaceLoadBalance
 
 
-    // =====================读取 WebDAV 渠道配置=====================
-    const webdav = {}
-    const webdavChannels = []
-    webdav.channels = webdavChannels
-
-    // 从环境变量读取 WebDAV 配置
-    if (env.WEBDAV_BASE_URL) {
-        webdavChannels.push({
-            id: 1,
-            name: 'WebDAV_env',
-            type: 'webdav',
-            savePath: 'environment variable',
-            baseUrl: env.WEBDAV_BASE_URL,
-            username: env.WEBDAV_USERNAME || '',
-            password: env.WEBDAV_PASSWORD || '',
-            publicUrl: env.WEBDAV_PUBLIC_URL || '',
-            headers: normalizeWebDAVHeaders(env.WEBDAV_HEADERS || {}),
-            createDirectory: env.WEBDAV_CREATE_DIRECTORY !== 'false',
-            enabled: true,
-            fixed: true,
-        })
-    }
-
-    for (const wd of settingsKV.webdav?.channels || []) {
-        // 如果 savePath 是 environment variable，修改可变参数
-        if (wd.savePath === 'environment variable') {
-            // 如果环境变量未删除，进行覆盖操作
-            if (webdavChannels[0]) {
-                webdavChannels[0].enabled = wd.enabled
-                webdavChannels[0].publicUrl = wd.publicUrl || webdavChannels[0].publicUrl
-                webdavChannels[0].headers = normalizeWebDAVHeaders(wd.headers || webdavChannels[0].headers)
-                webdavChannels[0].createDirectory = wd.createDirectory !== false
-                webdavChannels[0].quota = wd.quota
-            }
-            continue
-        }
-        // id 自增
-        wd.id = webdavChannels.length + 1
-        wd.headers = normalizeWebDAVHeaders(wd.headers || {})
-        wd.createDirectory = wd.createDirectory !== false
-        webdavChannels.push(wd)
-    }
-
-    // 负载均衡
-    const webdavLoadBalance = settingsKV.webdav?.loadBalance || {
-        enabled: false,
-        channels: [],
-    }
-    webdav.loadBalance = webdavLoadBalance
-
-
     settings.telegram = telegram
     settings.cfr2 = cfr2
-    settings.s3 = s3
     settings.discord = discord
     settings.huggingface = huggingface
-    settings.webdav = webdav
+
+    // The bundled settings UI still reads these keys; no credentials or channels are exposed.
+    settings.s3 = { channels: [], loadBalance: { enabled: false, channels: [] } }
+    settings.webdav = { channels: [], loadBalance: { enabled: false, channels: [] } }
 
     return settings;
 }
