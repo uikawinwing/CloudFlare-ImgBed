@@ -16,6 +16,7 @@ const workerName = env.STAGING_WORKER_NAME?.trim() || 'cloudflare-imgbed-staging
 const databaseName = env.STAGING_D1_DATABASE_NAME?.trim() || 'imgbed_staging_d1';
 const kvNamespaceId = requiredEnv('STAGING_KV_NAMESPACE_ID');
 const r2BucketName = requiredEnv('STAGING_R2_BUCKET_NAME');
+const thumbnailsBucketName = requiredEnv('STAGING_THUMBNAILS_R2_BUCKET_NAME');
 const customDomain = normalizeCustomDomain(env.STAGING_WORKER_CUSTOM_DOMAIN);
 
 let toml = `name = "${workerName}"
@@ -51,6 +52,11 @@ toml += `
 [[r2_buckets]]
 binding = "img_r2"
 bucket_name = "${r2BucketName}"
+remote = true
+
+[[r2_buckets]]
+binding = "THUMBNAILS"
+bucket_name = "${thumbnailsBucketName}"
 remote = true
 `;
 

@@ -103,7 +103,7 @@ export async function onRequest(context) {
         const newFileId = dist === '' ? fileKey : `${dist}/${fileKey}`;
         const cdnUrl = `https://${url.hostname}/file/${fileId}`;
 
-        const success = await moveFile(env, fileId, newFileId, cdnUrl, url);
+        const success = await moveFile(env, fileId, newFileId, cdnUrl, url, true);
         if (!success) {
             throw new Error('Move file failed');
         } else {
@@ -120,16 +120,22 @@ export async function onRequest(context) {
         return new Response(JSON.stringify({
             success: false,
             error: e.message
-        }), { status: 400 });
+        }), { status: e.status || 400 });
     }
 }
 // 移动单个文件的核心函数
-async function moveFile(env, fileId, newFileId, cdnUrl, url) {
+async function moveFile(env, fileId, newFileId, cdnUrl, url, propagateError = false) {
     try {
         const db = getDatabase(env);
 
         // 读取图片信息
         const img = await db.getWithMetadata(fileId);
+        if (!img) throw new Error('File not found');
+        if (fileId === newFileId) return true;
+        const existing = await db.getWithMetadata(newFileId);
+        if (existing) throw new Error('Target file already exists');
+        const originalMetadata = JSON.stringify(img.metadata);
+        let copiedR2 = false;
 
         if (img?.metadata?.Channel === 'S3' || img?.metadata?.Channel === 'WebDAV') {
             throw new Error('This storage backend is no longer available');
@@ -146,10 +152,9 @@ async function moveFile(env, fileId, newFileId, cdnUrl, url) {
             }
 
             // 复制到新位置
-            await R2DataBase.put(newFileId, object.body);
-
-            // 删除旧文件
-            await R2DataBase.delete(fileId);
+            const copied = await R2DataBase.put(newFileId, object.body, { onlyIf: { etagDoesNotMatch: '*' }, httpMetadata: object.httpMetadata });
+            if (copied === null) throw new Error('Target object already exists');
+            copiedR2 = true;
         }
 
         // 旧版 Telegram 渠道和 Telegraph 渠道不支持移动
@@ -162,9 +167,29 @@ async function moveFile(env, fileId, newFileId, cdnUrl, url) {
         img.metadata.Directory = DirectoryPath;
         img.metadata = cleanPersistedMetadata(img.metadata);
 
-        // 更新KV存储
-        await db.put(newFileId, img.value, { metadata: img.metadata });
-        await db.delete(fileId);
+        let rejectedUpdate = false;
+        try {
+            if (env.img_d1?.prepare) {
+                const moved = await env.img_d1.prepare(`UPDATE files SET id = ?, metadata = ?, directory = ?
+                    WHERE id = ? AND json(metadata) = json(?) AND moderation_status = 'active' RETURNING metadata`)
+                    .bind(newFileId, JSON.stringify(img.metadata), DirectoryPath, fileId, originalMetadata).first();
+                if (!moved) {
+                    rejectedUpdate = true;
+                    throw new Error('File state changed; reload before retrying');
+                }
+            } else {
+                await db.put(newFileId, img.value, { metadata: img.metadata });
+                await db.delete(fileId);
+            }
+        } catch (error) {
+            if (copiedR2 && (rejectedUpdate || /constraint failed/i.test(error.message))) {
+                const target = await env.img_d1.prepare('SELECT id FROM files WHERE id = ?').bind(newFileId).first();
+                if (!target) await env.img_r2.delete(newFileId);
+            }
+            throw error;
+        }
+        if (copiedR2) await env.img_r2.delete(fileId);
+        if (env.img_d1?.prepare && env.img_url?.delete) await env.img_url.delete(fileId);
 
         // 清除CDN缓存
         await purgeCFCache(env, cdnUrl);
@@ -178,6 +203,13 @@ async function moveFile(env, fileId, newFileId, cdnUrl, url) {
         return true;
     } catch (e) {
         console.error('Move file failed:', e);
+        if (propagateError) {
+            if (/FOREIGN KEY constraint/i.test(e.message)) {
+                throw Object.assign(new Error('File belongs to an album; remove it from the album before renaming or moving'), { status: 409 });
+            }
+            if (/File state changed/.test(e.message)) e.status = 409;
+            throw e;
+        }
         return false;
     }
 }

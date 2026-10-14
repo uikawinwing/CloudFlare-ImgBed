@@ -27,6 +27,7 @@ const databaseId = requiredEnv('D1_DATABASE_ID');
 const databaseName = env.D1_DATABASE_NAME?.trim() || 'img_d1';
 const kvNamespaceId = requiredEnv('KV_NAMESPACE_ID');
 const r2BucketName = requiredEnv('R2_BUCKET_NAME');
+const thumbnailsBucketName = requiredEnv('THUMBNAILS_R2_BUCKET_NAME');
 const customDomain = normalizeCustomDomain(requiredEnv('WORKER_CUSTOM_DOMAIN'));
 
 let toml = `name = "${name}"
@@ -62,6 +63,10 @@ toml += `
 [[r2_buckets]]
 binding = "img_r2"
 bucket_name = "${r2BucketName}"
+
+[[r2_buckets]]
+binding = "THUMBNAILS"
+bucket_name = "${thumbnailsBucketName}"
 `;
 
 const workerVars = {};

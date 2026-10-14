@@ -68,6 +68,25 @@ export async function onRequest(context) {
     if (cached) return request.method === 'HEAD' ? headResponse(cached) : cached;
 
     const permanent = getPermanentThumbnail(metadata);
+    if (permanent?.Channel === 'CloudflareR2') {
+        try {
+            const variant = permanent.Variants[variantName];
+            const object = request.method === 'HEAD'
+                ? await env.THUMBNAILS?.head(variant.Key)
+                : await env.THUMBNAILS?.get(variant.Key);
+            if (!object || (request.method !== 'HEAD' && !object.body)) {
+                return new Response('Permanent thumbnail source unavailable', { status: 502, headers: noStoreHeaders() });
+            }
+            const headers = new Headers({ 'Content-Type': THUMBNAIL_CONTENT_TYPE, 'Content-Length': String(object.size) });
+            if (object.httpEtag) headers.set('ETag', object.httpEtag);
+            const response = cacheableThumbnailResponse(new Response(request.method === 'HEAD' ? null : object.body, { headers }), fileId, variantName, metadata, cacheControl);
+            if (request.method !== 'HEAD') await putEdgeCache(context, edgeCache, cacheKey, response);
+            return response;
+        } catch (error) {
+            console.error('R2 thumbnail read failed:', error.message);
+            return new Response('Permanent thumbnail source unavailable', { status: 502, headers: noStoreHeaders() });
+        }
+    }
     if (request.method === 'HEAD' && variantName === 'gallery' && permanent) {
         return permanentThumbnailHead(permanent, fileId, metadata, cacheControl);
     }

@@ -64,95 +64,150 @@ export function createThumbnailTransform(metadata = {}, variantName) {
 
 export function getPermanentThumbnail(metadata = {}) {
     const thumbnail = metadata?.Thumbnail;
-    if (!thumbnail || thumbnail.Channel !== 'Discord' || !thumbnail.DiscordMessageId) return null;
-    return thumbnail;
+    if (thumbnail?.Channel === 'Discord' && thumbnail.DiscordMessageId) return thumbnail;
+    if (thumbnail?.Version === 2 && thumbnail.Channel === 'CloudflareR2'
+        && Object.keys(THUMBNAIL_VARIANTS).every(name => typeof thumbnail.Variants?.[name]?.Key === 'string' && thumbnail.Variants[name].Key.length > 0)) return thumbnail;
+    return null;
 }
 
 export function hasPermanentThumbnail(metadata = {}) {
     return Boolean(getPermanentThumbnail(metadata));
 }
 
-export async function ensurePermanentThumbnail(context, fileId, metadata = {}) {
+export async function ensurePermanentThumbnail(context, fileId, metadata = {}, sourceFile) {
     if (!String(metadata.FileType || '').startsWith('image/')) {
         return { metadata, ready: false, created: false, reason: 'not-image' };
+    }
+    if (metadata.ModerationStatus && metadata.ModerationStatus !== 'active') {
+        return { metadata, ready: false, created: false, reason: 'file-not-active' };
     }
     if (hasPermanentThumbnail(metadata)) {
         return { metadata, ready: true, created: false };
     }
-
+    const bucket = context.env.THUMBNAILS;
+    if (!bucket?.put || !bucket?.delete) {
+        return { metadata, ready: false, created: false, reason: 'thumbnail-storage-missing' };
+    }
+    const writtenKeys = [];
     try {
-        const sourceUrl = new URL(`/file/${encodeFilePath(fileId)}`, context.request.url);
-        const sourceResponse = await fetch(sourceUrl.toString(), {
-            headers: { Accept: 'image/*' },
-        });
-        if (!sourceResponse.ok || !sourceResponse.body) {
-            return { metadata, ready: false, created: false, reason: `source-${sourceResponse.status}` };
+        let source = sourceFile;
+        if (!source) {
+            const sourceUrl = new URL(`/file/${encodeFilePath(fileId)}`, context.request.url);
+            const sourceResponse = await fetch(sourceUrl.toString(), { headers: { Accept: 'image/*' } });
+            if (!sourceResponse.ok || !sourceResponse.body) {
+                return { metadata, ready: false, created: false, reason: `source-${sourceResponse.status}` };
+            }
+            const length = Number(sourceResponse.headers.get('Content-Length'));
+            if (length > 20 * 1024 * 1024) {
+                await sourceResponse.body.cancel();
+                return { metadata, ready: false, created: false, reason: 'source-too-large' };
+            }
+            const reader = sourceResponse.body.getReader();
+            const chunks = [];
+            let size = 0;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                size += value.byteLength;
+                if (size > 20 * 1024 * 1024) {
+                    await reader.cancel();
+                    return { metadata, ready: false, created: false, reason: 'source-too-large' };
+                }
+                chunks.push(value);
+            }
+            source = new Blob(chunks, { type: sourceResponse.headers.get('Content-Type') || metadata.FileType });
         }
-
-        const sourceType = normalizeContentType(sourceResponse.headers.get('Content-Type') || metadata.FileType);
+        const sourceType = normalizeContentType(source.type || metadata.FileType);
         if (!sourceType.startsWith('image/')) {
             return { metadata, ready: false, created: false, reason: 'invalid-source-type' };
         }
-
-        const imageTransform = createThumbnailTransform(metadata);
-        const targetWidth = imageTransform.options.width;
-        const transformed = await transformImageResponse({
-            env: context.env,
-            imageTransform,
-        }, sourceResponse);
-
-        if (!transformed.ok || !transformed.body || normalizeContentType(transformed.headers.get('Content-Type')) !== THUMBNAIL_CONTENT_TYPE) {
-            return { metadata, ready: false, created: false, reason: `transform-${transformed.status}` };
+        if (source.size > 20 * 1024 * 1024) {
+            return { metadata, ready: false, created: false, reason: 'source-too-large' };
         }
-
-        const channel = await resolveThumbnailUploadChannel(context.env, metadata);
-        if (!channel?.botToken || !channel?.channelId) {
-            return { metadata, ready: false, created: false, reason: 'discord-thumbnail-channel-missing' };
-        }
-
-        const blob = await transformed.blob();
-        if (!blob.size) {
-            return { metadata, ready: false, created: false, reason: 'empty-thumbnail' };
-        }
-
-        const discordAPI = new DiscordAPI(channel.botToken);
-        const thumbnailFileName = buildThumbnailFileName(fileId);
-        const thumbnailFile = new File([blob], thumbnailFileName, { type: THUMBNAIL_CONTENT_TYPE });
-        const response = await discordAPI.sendFile(thumbnailFile, channel.channelId, thumbnailFileName);
-        const fileInfo = discordAPI.getFileInfo(response);
-        if (!fileInfo?.message_id) {
-            return { metadata, ready: false, created: false, reason: 'discord-thumbnail-upload-failed' };
-        }
-
-        const dimensions = getThumbnailDimensions(metadata, targetWidth);
         const thumbnail = {
-            Version: 1,
-            Channel: 'Discord',
-            ChannelName: channel.name || 'Discord_env',
-            DiscordMessageId: fileInfo.message_id,
-            FileName: thumbnailFileName,
+            Version: 2,
+            Channel: 'CloudflareR2',
             FileType: THUMBNAIL_CONTENT_TYPE,
-            FileSizeBytes: Number(fileInfo.file_size) || blob.size,
-            Width: dimensions.width,
-            Height: dimensions.height,
             CreatedAt: Date.now(),
+            Variants: {},
         };
-
+        const prefix = `thumbnails/${crypto.randomUUID()}`;
+        for (const name of Object.keys(THUMBNAIL_VARIANTS)) {
+            const imageTransform = createThumbnailTransform(metadata, name);
+            const transformed = await transformImageResponse({ env: context.env, imageTransform }, new Response(source.stream(), {
+                headers: { 'Content-Type': sourceType, 'Content-Length': String(source.size) },
+            }));
+            if (!transformed.ok || !transformed.body || normalizeContentType(transformed.headers.get('Content-Type')) !== THUMBNAIL_CONTENT_TYPE) {
+                throw new Error(`transform-${transformed.status}`);
+            }
+            const blob = await transformed.blob();
+            if (!blob.size) throw new Error('empty-thumbnail');
+            const key = `${prefix}/${name}.webp`;
+            writtenKeys.push(key);
+            await bucket.put(key, blob, { httpMetadata: { contentType: THUMBNAIL_CONTENT_TYPE } });
+            const dimensions = getThumbnailDimensions(metadata, imageTransform.options.width);
+            thumbnail.Variants[name] = { Key: key, Width: dimensions.width, Height: dimensions.height, FileSizeBytes: blob.size };
+        }
         return {
-            metadata: { ...metadata, Thumbnail: thumbnail },
+            metadata: { ...metadata, Thumbnail: thumbnail, ThumbnailStatus: 'ready', ThumbnailReason: null },
             ready: true,
             created: true,
             thumbnail,
         };
     } catch (error) {
         console.error(`Permanent thumbnail generation failed for ${fileId}:`, error);
-        return { metadata, ready: false, created: false, reason: error.message || 'thumbnail-generation-failed' };
+        if (writtenKeys.length) await cleanupThumbnailKeys(bucket, writtenKeys);
+        const reason = /^(transform-\d+|empty-thumbnail)$/.test(error.message) ? error.message : 'thumbnail-generation-failed';
+        return { metadata, ready: false, created: false, reason };
+    }
+}
+
+export async function persistThumbnailResult(context, fileId, originalMetadata, result) {
+    if (result.ready && !result.created) return result;
+    const database = context.env.img_d1;
+    if (!database?.prepare) {
+        if (result.created) await deletePermanentThumbnail(context.env, result.metadata);
+        return { metadata: originalMetadata, ready: false, created: false, reason: 'thumbnail-persistence-unavailable' };
+    }
+    try {
+        const thumbnail = result.created ? result.thumbnail : originalMetadata.Thumbnail || null;
+        const updated = await database.prepare(`UPDATE files SET metadata = json_set(metadata,
+            '$.Thumbnail', json(?), '$.ThumbnailStatus', ?, '$.ThumbnailReason', ?), updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND moderation_status = 'active'
+            AND COALESCE(json_extract(metadata, '$.ModerationStatus'), 'active') = 'active'
+            AND json_extract(metadata, '$.TimeStamp') IS ?
+            AND json_extract(metadata, '$.Thumbnail') IS json_extract(?, '$') RETURNING metadata`).bind(
+            JSON.stringify(thumbnail), result.ready ? 'ready' : 'failed', result.reason || null, fileId,
+            originalMetadata.TimeStamp ?? null, JSON.stringify(originalMetadata.Thumbnail || null),
+        ).first();
+        if (updated) return { ...result, metadata: JSON.parse(updated.metadata) };
+        if (result.created) await deletePermanentThumbnail(context.env, result.metadata);
+        const latest = await database.prepare('SELECT metadata FROM files WHERE id = ?').bind(fileId).first();
+        const metadata = latest ? JSON.parse(latest.metadata) : null;
+        return { metadata, ready: Boolean(metadata && hasPermanentThumbnail(metadata)), created: false, reason: latest ? 'thumbnail-state-changed' : 'file-deleted' };
+    } catch (error) {
+        console.error(`Permanent thumbnail persistence failed for ${fileId}:`, error);
+        if (result.created) {
+            try {
+                const latest = await database.prepare('SELECT metadata FROM files WHERE id = ?').bind(fileId).first();
+                const metadata = latest ? JSON.parse(latest.metadata) : null;
+                const key = result.thumbnail.Variants.avatar.Key;
+                if (metadata?.Thumbnail?.Variants?.avatar?.Key === key) {
+                    return { ...result, metadata, ready: hasPermanentThumbnail(metadata) };
+                }
+                // The write may have committed and then been renamed; preserve uncertain objects.
+                console.error(`Uncertain thumbnail persistence for ${fileId}; preserving objects`);
+            } catch (verificationError) {
+                console.error(`Unable to verify thumbnail persistence for ${fileId}; preserving objects:`, verificationError);
+            }
+        }
+        return { metadata: originalMetadata, ready: false, created: false, reason: 'thumbnail-persistence-failed' };
     }
 }
 
 export async function resolvePermanentThumbnailCredentials(env, metadata = {}) {
     const thumbnail = getPermanentThumbnail(metadata);
-    if (!thumbnail) return null;
+    if (!thumbnail || thumbnail.Channel !== 'Discord') return null;
 
     const db = getDatabase(env);
     const uploadConfig = await loadChannelConfig(db, env, 'thumbnail read');
@@ -168,10 +223,16 @@ export async function resolvePermanentThumbnailCredentials(env, metadata = {}) {
 }
 
 export async function deletePermanentThumbnail(env, metadata = {}) {
-    const credentials = await resolvePermanentThumbnailCredentials(env, metadata);
-    if (!credentials) return true;
-
     try {
+        if (metadata.Thumbnail?.Channel === 'CloudflareR2') {
+            const keys = Object.values(metadata.Thumbnail.Variants || {}).map(variant => variant.Key).filter(Boolean);
+            if (!keys.length) return true;
+            if (!env.THUMBNAILS?.delete) return false;
+            return await cleanupThumbnailKeys(env.THUMBNAILS, keys);
+        }
+        if (!getPermanentThumbnail(metadata)) return true;
+        const credentials = await resolvePermanentThumbnailCredentials(env, metadata);
+        if (!credentials) return false;
         const discordAPI = new DiscordAPI(credentials.botToken);
         return await discordAPI.deleteMessage(credentials.channelId, credentials.messageId);
     } catch (error) {
@@ -180,24 +241,14 @@ export async function deletePermanentThumbnail(env, metadata = {}) {
     }
 }
 
-async function resolveThumbnailUploadChannel(env, metadata = {}) {
-    const db = getDatabase(env);
-    const uploadConfig = await loadChannelConfig(db, env, 'thumbnail storage');
-    if (!uploadConfig) return null;
-
-    const preferredName = metadata?.Thumbnail?.ChannelName
-        || (metadata.Channel === 'Discord' ? metadata.ChannelName : '');
-    if (preferredName) {
-        const preferred = findConfiguredChannel(uploadConfig, 'discord', { ChannelName: preferredName });
-        if (preferred) return preferred;
+async function cleanupThumbnailKeys(bucket, keys) {
+    try {
+        await bucket.delete([...new Set(keys)]);
+        return true;
+    } catch (error) {
+        console.error('Permanent thumbnail object cleanup failed:', error);
+        return false;
     }
-
-    return uploadConfig.discord?.channels?.[0] || null;
-}
-
-function buildThumbnailFileName(fileId) {
-    const base = String(fileId).split('/').pop().replace(/\.[^.]+$/, '') || 'image';
-    return `${base}.thumb.${THUMBNAIL_FORMAT}`;
 }
 
 function getThumbnailDimensions(metadata, targetWidth) {

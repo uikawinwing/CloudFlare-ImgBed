@@ -40,6 +40,7 @@ import * as apiManageSysConfigSecurity from '../../functions/api/manage/sysConfi
 import * as apiManageSysConfigUpload from '../../functions/api/manage/sysConfig/upload.js';
 import * as apiManageTagsAutocomplete from '../../functions/api/manage/tags/autocomplete.js';
 import * as apiManageTagsBatch from '../../functions/api/manage/tags/batch.js';
+import * as apiManageThumbnailsBackfill from '../../functions/api/manage/thumbnails/backfill.js';
 import * as apiPublicCharinfoParamAlbumId from '../../functions/api/public/charinfo/[albumId].js';
 import * as apiUserAlbumsParamId from '../../functions/api/user/albums/[id].js';
 import * as apiAdminMigrateKvFiles from '../../functions/api/admin/migrate-kv-files.js';
@@ -120,6 +121,7 @@ const routes = [
     { path: '/api/manage/sysConfig/upload', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"sysConfig"},{"type":"static","value":"upload"}], module: apiManageSysConfigUpload, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/tags/autocomplete', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"tags"},{"type":"static","value":"autocomplete"}], module: apiManageTagsAutocomplete, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/tags/batch', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"tags"},{"type":"static","value":"batch"}], module: apiManageTagsBatch, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/thumbnails/backfill', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"thumbnails"},{"type":"static","value":"backfill"}], module: apiManageThumbnailsBackfill, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/public/charinfo/:albumId', segments: [{"type":"static","value":"api"},{"type":"static","value":"public"},{"type":"static","value":"charinfo"},{"type":"dynamic","name":"albumId","array":false}], module: apiPublicCharinfoParamAlbumId, middlewares: [mw_api] },
     { path: '/api/user/albums/:id', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"albums"},{"type":"dynamic","name":"id","array":false}], module: apiUserAlbumsParamId, middlewares: [mw_api, mw_api_user] },
     { path: '/api/admin/migrate-kv-files', segments: [{"type":"static","value":"api"},{"type":"static","value":"admin"},{"type":"static","value":"migrate-kv-files"}], module: apiAdminMigrateKvFiles, middlewares: [mw_api, mw_api_admin] },

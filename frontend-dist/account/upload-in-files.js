@@ -99,7 +99,7 @@ function queueMarkup() {
   const failed = uploadState.queue.filter(item => item.status === 'error').length;
   return `<section class="integrated-upload-status" aria-live="polite">
     <div class="integrated-upload-status-head"><div><strong>${uploadState.busy ? '正在上传' : '上传结果'}</strong><small>${finished} 完成${failed ? ` · ${failed} 失败` : ''} · 共 ${uploadState.queue.length} 个</small></div>${uploadState.busy ? '' : '<button type="button" data-upload-clear>收起</button>'}</div>
-    <div class="integrated-upload-list">${uploadState.queue.map(item => `<div class="integrated-upload-row ${item.status}"><div class="integrated-upload-copy"><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong><small>${item.status === 'waiting' ? '等待上传' : item.status === 'uploading' ? `上传中 ${Math.round(item.progress || 0)}%` : item.status === 'done' ? '已上传到我的文件' : escapeHtml(item.error || '上传失败')}</small></div><div class="integrated-upload-progress" aria-hidden="true"><span style="width:${item.status === 'done' ? 100 : Math.max(2, Number(item.progress) || 0)}%"></span></div>${item.url ? `<button type="button" data-copy-upload-url="${escapeHtml(item.url)}">复制链接</button>` : ''}</div>`).join('')}</div>
+    <div class="integrated-upload-list">${uploadState.queue.map(item => `<div class="integrated-upload-row ${item.status}"><div class="integrated-upload-copy"><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong><small>${item.status === 'waiting' ? '等待上传' : item.status === 'uploading' ? `上传中 ${Math.round(item.progress || 0)}%` : item.status === 'done' ? escapeHtml(item.notice || '已上传到我的文件') : escapeHtml(item.error || '上传失败')}</small></div><div class="integrated-upload-progress" aria-hidden="true"><span style="width:${item.status === 'done' ? 100 : Math.max(2, Number(item.progress) || 0)}%"></span></div>${item.url ? `<button type="button" data-copy-upload-url="${escapeHtml(item.url)}">复制链接</button>` : ''}</div>`).join('')}</div>
   </section>`;
 }
 
@@ -109,7 +109,7 @@ function recentMarkup() {
   const failed = uploadState.recent.filter(item => !item.url);
   return `<section class="integrated-upload-status recent" aria-live="polite">
     <div class="integrated-upload-status-head"><div><strong>刚刚上传</strong><small>${success.length} 个已加入“我的文件”${failed.length ? ` · ${failed.length} 个失败` : ''}</small></div><button type="button" data-recent-upload-dismiss>关闭</button></div>
-    <div class="integrated-upload-list">${uploadState.recent.map(item => `<div class="integrated-upload-row ${item.url ? 'done' : 'error'}"><div class="integrated-upload-copy"><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong><small>${item.url ? '默认显示在发现页，可在文件卡中隐藏' : escapeHtml(item.error || '上传失败')}</small></div>${item.url ? `<button type="button" data-copy-upload-url="${escapeHtml(item.url)}">复制链接</button>` : ''}</div>`).join('')}</div>
+    <div class="integrated-upload-list">${uploadState.recent.map(item => `<div class="integrated-upload-row ${item.url ? 'done' : 'error'}"><div class="integrated-upload-copy"><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong><small>${item.url ? escapeHtml(item.notice || '默认显示在发现页，可在文件卡中隐藏') : escapeHtml(item.error || '上传失败')}</small></div>${item.url ? `<button type="button" data-copy-upload-url="${escapeHtml(item.url)}">复制链接</button>` : ''}</div>`).join('')}</div>
   </section>`;
 }
 
@@ -165,7 +165,10 @@ function parseUploadResponse(xhr, fileName) {
   const result = Array.isArray(body) ? body[0] : body;
   const src = result?.src || result?.publicUrl;
   if (!src) throw new Error(`${fileName} 已上传，但服务器没有返回资源链接。`);
-  return new URL(src, location.origin).href;
+  const notices = [];
+  if (result.moderationStatus && result.moderationStatus !== 'active') notices.push('原图已保存，正在等待审核');
+  if (result.thumbnailReady === false) notices.push('原图已保存，缩略图尚未就绪');
+  return { url: new URL(src, location.origin).href, notice: notices.join('；') };
 }
 
 function uploadOne(file, item) {
@@ -206,7 +209,7 @@ async function uploadFiles(files) {
     item.progress = 1;
     renderUploadUi();
     try {
-      item.url = await uploadOne(item.file, item);
+      Object.assign(item, await uploadOne(item.file, item));
       item.progress = 100;
       item.status = 'done';
     } catch (error) {
@@ -218,7 +221,7 @@ async function uploadFiles(files) {
   }
 
   uploadState.busy = false;
-  const results = uploadState.queue.map(({ name, size, url, error }) => ({ name, size, url, error }));
+  const results = uploadState.queue.map(({ name, size, url, error, notice }) => ({ name, size, url, error, notice }));
   const succeeded = results.filter(item => item.url).length;
   if (succeeded) {
     uploadState.recent = results;

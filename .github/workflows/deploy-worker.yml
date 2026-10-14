@@ -23,6 +23,7 @@ on:
 #   D1_DATABASE_NAME      - D1 数据库名称
 #   KV_NAMESPACE_ID       - KV 命名空间 ID
 #   R2_BUCKET_NAME        - R2 存储桶名称
+#   THUMBNAILS_R2_BUCKET_NAME - 私有缩略图存储桶名称
 #   WORKER_NAME           - Worker 名称
 #   WORKER_CUSTOM_DOMAIN  - Worker 自定义域名
 #   DISCORD_CLIENT_ID     - Discord OAuth Client ID
@@ -58,6 +59,7 @@ jobs:
           D1_DATABASE_NAME: ${{ vars.D1_DATABASE_NAME || secrets.D1_DATABASE_NAME }}
           KV_NAMESPACE_ID: ${{ vars.KV_NAMESPACE_ID || secrets.KV_NAMESPACE_ID }}
           R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME || secrets.R2_BUCKET_NAME }}
+          THUMBNAILS_R2_BUCKET_NAME: ${{ vars.THUMBNAILS_R2_BUCKET_NAME || secrets.THUMBNAILS_R2_BUCKET_NAME }}
           WORKER_NAME: ${{ inputs.worker_name || vars.WORKER_NAME || secrets.WORKER_NAME }}
           WORKER_CUSTOM_DOMAIN: ${{ vars.WORKER_CUSTOM_DOMAIN || secrets.WORKER_CUSTOM_DOMAIN }}
           DISCORD_CLIENT_ID: ${{ vars.DISCORD_CLIENT_ID }}
@@ -72,6 +74,7 @@ jobs:
             D1_DATABASE_NAME \
             KV_NAMESPACE_ID \
             R2_BUCKET_NAME \
+            THUMBNAILS_R2_BUCKET_NAME \
             WORKER_NAME \
             WORKER_CUSTOM_DOMAIN \
             DISCORD_CLIENT_ID \
@@ -109,6 +112,7 @@ jobs:
           D1_DATABASE_NAME: ${{ vars.D1_DATABASE_NAME || secrets.D1_DATABASE_NAME }}
           KV_NAMESPACE_ID: ${{ vars.KV_NAMESPACE_ID || secrets.KV_NAMESPACE_ID }}
           R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME || secrets.R2_BUCKET_NAME }}
+          THUMBNAILS_R2_BUCKET_NAME: ${{ vars.THUMBNAILS_R2_BUCKET_NAME || secrets.THUMBNAILS_R2_BUCKET_NAME }}
           WORKER_VARS: ${{ secrets.WORKER_VARS }}
           WORKER_CUSTOM_DOMAIN: ${{ vars.WORKER_CUSTOM_DOMAIN || secrets.WORKER_CUSTOM_DOMAIN }}
           DISCORD_CLIENT_ID: ${{ vars.DISCORD_CLIENT_ID }}

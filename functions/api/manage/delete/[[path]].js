@@ -159,17 +159,18 @@ export async function deleteFile(env, fileId, cdnUrl, url) {
 
         // 先隐藏记录并清缓存；后续任何一步失败都能安全重试。
         if (env.img_d1?.prepare) {
-            const deletingMetadata = { ...img.metadata, ModerationStatus: 'deleting' };
-            img.metadata = deletingMetadata;
-            await env.img_d1.prepare('UPDATE files SET metadata = ?, moderation_status = ? WHERE id = ?')
-                .bind(JSON.stringify(deletingMetadata), 'deleting', fileId).run();
+            const deleting = await env.img_d1.prepare(`UPDATE files
+                SET metadata = json_set(metadata, '$.ModerationStatus', 'deleting'), moderation_status = 'deleting'
+                WHERE id = ? RETURNING metadata`).bind(fileId).first();
+            if (!deleting) return false;
+            img.metadata = JSON.parse(deleting.metadata);
         }
         await purgeCFCache(env, cdnUrl);
         await purgeThumbnailCaches(env, url.toString(), fileId, thumbnailContentVersion(img.metadata));
 
-        // 缩图是原文件的派生资源，不作为独立作品；删除原文件时尽力一起清理。
+        // 保留删除中的记录，直到缩图和原图都已清理，失败时仍可重试。
         if (!await deletePermanentThumbnail(env, img.metadata)) {
-            console.warn(`Failed to delete permanent thumbnail for ${fileId}; continuing original deletion`);
+            throw new Error(`Failed to delete permanent thumbnail for ${fileId}`);
         }
 
         // 如果是R2渠道的图片，需要删除R2中对应的图片

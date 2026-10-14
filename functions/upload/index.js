@@ -14,6 +14,7 @@ import { assertUploadAllowed, getDiscordIdentity, isDiscordAuthConfigured, relea
 import { rejectCrossSiteMutation } from '../utils/auth/mutationSecurity.js';
 import { matchesAllowedFileSignature, validateDiscordAttachment, validateImageDimensions } from '../utils/fileSignature.js';
 import { resolveUploadTarget } from './memberUploadPolicy.js';
+import { ensurePermanentThumbnail, persistThumbnailResult } from '../utils/thumbnail.js';
 
 
 export async function onRequest(context) {  // Contents of context object
@@ -258,13 +259,33 @@ async function processFileUpload(context, formdata = null) {
 
     /* ====================================不同渠道上传======================================= */
     // 上传失败直接返回，避免文件在未经明确配置的后端中落库。
+    let response;
     if (uploadChannel === 'CloudflareR2') {
-        return await uploadFileToCloudflareR2(context, fullId, metadata, returnLink);
+        response = await uploadFileToCloudflareR2(context, fullId, metadata, returnLink);
     } else if (uploadChannel === 'Discord') {
-        return await uploadFileToDiscord(context, fullId, metadata, returnLink);
+        response = await uploadFileToDiscord(context, fullId, metadata, returnLink);
+    } else {
+        response = await uploadFileToTelegram(context, fullId, metadata, fileExt, storageFileName, fileType, returnLink);
     }
+    if (!response.ok || !fileType.startsWith('image/')) return response;
 
-    return await uploadFileToTelegram(context, fullId, metadata, fileExt, storageFileName, fileType, returnLink);
+    let thumbnailResult;
+    try {
+        const generated = await ensurePermanentThumbnail(context, fullId, metadata, file);
+        thumbnailResult = await persistThumbnailResult(context, fullId, metadata, generated);
+    } catch (error) {
+        console.error(`Uploaded image thumbnail failed for ${fullId}:`, error);
+        thumbnailResult = { ready: false, created: false, reason: 'thumbnail-persist-failed' };
+    }
+    const results = await response.json();
+    const result = results[0];
+    result.thumbnailReady = thumbnailResult.ready;
+    result.thumbnailCreated = thumbnailResult.created;
+    if (thumbnailResult.reason) result.thumbnailReason = thumbnailResult.reason;
+    if (!thumbnailResult.ready) {
+        result.warning = [result.warning, 'Original stored; thumbnail is not ready'].filter(Boolean).join('; ');
+    }
+    return new Response(JSON.stringify(results), { status: response.status, headers: response.headers });
 }
 
 // 构建上传成功响应，自动附带 publicUrl（如果已配置）

@@ -3,6 +3,64 @@ import { onRequest as serveThumbnail } from '../functions/thumb/[[path]].js';
 import { returnWithCheck } from '../functions/file/fileTools.js';
 
 describe('thumbnail route visibility and cache contract', () => {
+    it('reads every R2 variant without Discord or image processing and gates cached reads after removal', async () => {
+        const originalFetch = globalThis.fetch;
+        const originalCaches = globalThis.caches;
+        const stored = new Map();
+        const reads = [];
+        let metadata = { Visibility: 'private', ModerationStatus: 'active', FileType: 'image/png', TimeStamp: 123,
+            Thumbnail: { Version: 2, Channel: 'CloudflareR2', CreatedAt: 456,
+                Variants: Object.fromEntries(['avatar', 'library', 'gallery'].map(name => [name, { Key: `random/${name}.webp` }])) } };
+        globalThis.fetch = async () => { throw new Error('R2 thumbnail must not fetch Discord or original'); };
+        globalThis.caches = { default: {
+            match: async key => stored.get(key.url)?.clone(),
+            put: async (key, value) => { stored.set(key.url, value.clone()); },
+        } };
+        const env = { img_url: { get: async () => null, getWithMetadata: async () => metadata ? { value: '', metadata } : null },
+            IMAGE_PROCESSOR: { transform: () => { throw new Error('R2 variants must not be transformed'); } },
+            THUMBNAILS: {
+                get: async key => { reads.push(key); return { body: new Blob([key]).stream(), size: key.length, httpEtag: '"stored"' }; },
+                head: async key => { reads.push(`HEAD:${key}`); return { size: key.length, httpEtag: '"stored"' }; },
+            } };
+        const request = (variant, method = 'GET') => serveThumbnail({ env, params: { path: 'private.png' },
+            request: new Request(`https://example.test/thumb/private.png?variant=${variant}&v=456`, { method }) });
+        try {
+            for (const name of ['avatar', 'library', 'gallery']) {
+                const head = await request(name, 'HEAD');
+                assert.equal(head.status, 200);
+                assert.equal(await head.text(), '');
+                assert.equal(await (await request(name)).text(), `random/${name}.webp`);
+            }
+            assert.equal(reads.length, 6);
+            assert.equal((await request('gallery')).status, 200);
+            assert.equal(reads.length, 6);
+            metadata = { ...metadata, ModerationStatus: 'quarantined' };
+            assert.equal((await request('gallery')).status, 404);
+            metadata = null;
+            assert.equal((await request('gallery')).status, 404);
+        } finally {
+            globalThis.fetch = originalFetch;
+            if (originalCaches === undefined) delete globalThis.caches;
+            else globalThis.caches = originalCaches;
+        }
+    });
+
+    it('fails closed when a permanent R2 object is unavailable', async () => {
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = async () => { throw new Error('Must not replace versioned R2 bytes with an original'); };
+        const metadata = { FileType: 'image/png', TimeStamp: 123, Thumbnail: { Version: 2, Channel: 'CloudflareR2', CreatedAt: 456,
+            Variants: Object.fromEntries(['avatar', 'library', 'gallery'].map(name => [name, { Key: `${name}.webp` }])) } };
+        try {
+            for (const method of ['GET', 'HEAD']) {
+                const response = await serveThumbnail({ env: { img_url: { get: async () => null, getWithMetadata: async () => ({ metadata }) },
+                    THUMBNAILS: { get: async () => null, head: async () => null } }, params: { path: 'file.png' },
+                    request: new Request('https://example.test/thumb/file.png?v=456', { method }) });
+                assert.equal(response.status, 502);
+                assert.match(response.headers.get('Cache-Control'), /no-store/);
+            }
+        } finally { globalThis.fetch = originalFetch; }
+    });
+
     it('checks legacy block, adult and whitelist rules before reading an edge-cached thumbnail', async () => {
         const originalCaches = globalThis.caches;
         globalThis.caches = { default: { match: async () => { throw new Error('Blocked thumbnail reached edge cache'); } } };

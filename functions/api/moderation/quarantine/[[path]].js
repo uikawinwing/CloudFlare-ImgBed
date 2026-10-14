@@ -14,11 +14,15 @@ export async function onRequestPost(context) {
     const db = getDatabase(context.env);
     const file = await db.getWithMetadata(fileId);
     if (!file) return json({ error: 'File not found' }, 404);
-    const metadata = { ...file.metadata, ModerationStatus: 'quarantined' };
-    await context.env.img_d1.batch([
-        context.env.img_d1.prepare('UPDATE files SET metadata = ?, moderation_status = ?, quarantined_by = ?, quarantined_at = ? WHERE id = ?').bind(JSON.stringify(metadata), 'quarantined', identity.id, Date.now(), fileId),
-        prepareAuditLog(context.env, { actorId: identity.id, action: 'file.quarantine', targetType: 'file', targetId: fileId, reason }),
+    const updates = await context.env.img_d1.batch([
+        context.env.img_d1.prepare(`UPDATE files SET metadata = json_set(metadata, '$.ModerationStatus', 'quarantined'),
+            moderation_status = 'quarantined', quarantined_by = ?, quarantined_at = ?
+            WHERE id = ? AND moderation_status <> 'deleting' RETURNING metadata`).bind(identity.id, Date.now(), fileId),
+        prepareAuditLog(context.env, { actorId: identity.id, action: 'file.quarantine', targetType: 'file', targetId: fileId, reason, onlyIfFileAvailable: true }),
     ]);
+    const current = updates[0]?.results?.[0];
+    if (!current) return json({ error: 'File state changed; reload before retrying' }, 409);
+    const metadata = JSON.parse(current.metadata);
     await purgeCFCache(context.env, `${new URL(context.request.url).origin}/file/${fileId}`);
     for (const thumbnailUrl of thumbnailVariantUrls(context.request.url, fileId, thumbnailContentVersion(metadata))) {
         await purgeCFCache(context.env, thumbnailUrl);

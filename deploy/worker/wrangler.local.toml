@@ -20,6 +20,11 @@ binding = "img_r2"
 bucket_name = "imgbed-local-r2"
 remote = false
 
+[[r2_buckets]]
+binding = "THUMBNAILS"
+bucket_name = "imgbed-local-thumbnails"
+remote = false
+
 [[kv_namespaces]]
 binding = "img_url"
 id = "00000000000000000000000000000000"

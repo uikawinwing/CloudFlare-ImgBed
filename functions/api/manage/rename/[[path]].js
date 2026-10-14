@@ -117,6 +117,7 @@ export async function onRequest(context) {
 
         // 执行文件迁移
         const metadata = { ...fileData.metadata };
+        let copiedR2 = false;
 
         // 如果是 R2 渠道的图片，需要移动 R2 中对应的图片
         if (metadata?.Channel === 'CloudflareR2') {
@@ -129,10 +130,9 @@ export async function onRequest(context) {
             }
 
             // 复制到新位置
-            await R2DataBase.put(newFileId, object.body);
-
-            // 删除旧文件
-            await R2DataBase.delete(fileId);
+            const copied = await R2DataBase.put(newFileId, object.body, { onlyIf: { etagDoesNotMatch: '*' }, httpMetadata: object.httpMetadata });
+            if (copied === null) throw new Error('Target object already exists');
+            copiedR2 = true;
         }
 
         // 旧版 Telegram 渠道和 Telegraph 渠道不支持重命名
@@ -151,9 +151,29 @@ export async function onRequest(context) {
         metadata.Directory = DirectoryPath;
         cleanPersistedMetadataInPlace(metadata);
 
-        // 更新 KV 存储
-        await db.put(newFileId, fileData.value, { metadata });
-        await db.delete(fileId);
+        let rejectedUpdate = false;
+        try {
+            if (env.img_d1?.prepare) {
+                const renamed = await env.img_d1.prepare(`UPDATE files SET id = ?, metadata = ?, directory = ?
+                    WHERE id = ? AND json(metadata) = json(?) AND moderation_status = 'active' RETURNING metadata`)
+                    .bind(newFileId, JSON.stringify(metadata), DirectoryPath, fileId, JSON.stringify(fileData.metadata)).first();
+                if (!renamed) {
+                    rejectedUpdate = true;
+                    throw new Error('File state changed; reload before retrying');
+                }
+            } else {
+                await db.put(newFileId, fileData.value, { metadata });
+                await db.delete(fileId);
+            }
+        } catch (error) {
+            if (copiedR2 && (rejectedUpdate || /constraint failed/i.test(error.message))) {
+                const target = await env.img_d1.prepare('SELECT id FROM files WHERE id = ?').bind(newFileId).first();
+                if (!target) await env.img_r2.delete(newFileId);
+            }
+            throw error;
+        }
+        if (copiedR2) await env.img_r2.delete(fileId);
+        if (env.img_d1?.prepare && env.img_url?.delete) await env.img_url.delete(fileId);
 
         // 清除 CDN 缓存
         const cdnUrl = `https://${url.hostname}/file/${fileId}`;
@@ -179,11 +199,12 @@ export async function onRequest(context) {
 
     } catch (error) {
         console.error('Error renaming file:', error);
+        const albumConflict = /FOREIGN KEY constraint/i.test(error.message);
         return new Response(JSON.stringify({
             success: false,
-            message: error.message || 'Internal server error.',
+            message: albumConflict ? 'File belongs to an album; remove it from the album before renaming or moving' : error.message || 'Internal server error.',
         }), {
-            status: 500,
+            status: albumConflict || /File state changed/.test(error.message) ? 409 : 500,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
     }
