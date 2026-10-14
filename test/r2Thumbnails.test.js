@@ -1,6 +1,7 @@
 import assert from 'assert';
 import { TestD1 } from './helpers/d1.js';
 import { deletePermanentThumbnail, ensurePermanentThumbnail, hasPermanentThumbnail, persistThumbnailResult } from '../functions/utils/thumbnail.js';
+import { transformImageResponse } from '../functions/file/imageTransform.js';
 
 function fixture() {
     const objects = new Map();
@@ -43,13 +44,36 @@ describe('permanent R2 thumbnails', () => {
         assert.strictEqual(hasPermanentThumbnail(result.metadata), true);
         assert.strictEqual(f.objects.size, 3);
         assert.deepStrictEqual(f.transforms.map(item => item.options.width), [160, 256, 720]);
-        assert(f.transforms.every(item => item.input === 'source-bytes' && item.options.outputFormat === 'image/webp'));
+        assert(f.transforms.every(item => item.input === 'source-bytes' && item.options.outputFormat === 'image/webp' && item.options.quality === 85));
         for (const [name, variant] of Object.entries(result.thumbnail.Variants)) {
             assert(variant.Key.endsWith(`/${name}.webp`));
             assert.strictEqual(await f.objects.get(variant.Key).blob.text(), `webp-${variant.Width}`);
             assert.strictEqual(f.objects.get(variant.Key).options.httpMetadata.contentType, 'image/webp');
             assert.strictEqual(variant.Height, variant.Width / 2);
         }
+    });
+
+    it('sets thumbnail quality on IMAGES output and leaves generic image output unchanged', async () => {
+        const f = fixture();
+        const transforms = [];
+        const outputs = [];
+        f.env.IMAGES = { input(stream) {
+            return { transform(options) {
+                transforms.push(options);
+                return { async output(options) {
+                    await new Response(stream).arrayBuffer();
+                    outputs.push(options);
+                    return { response: () => new Response('webp', { headers: { 'Content-Type': 'image/webp' } }) };
+                } };
+            } };
+        } };
+        const result = await ensurePermanentThumbnail(f.context, 'image.png', f.metadata, f.source);
+        assert.strictEqual(result.ready, true);
+        assert.deepStrictEqual(transforms, [160, 256, 720].map(width => ({ width, fit: 'scale-down' })));
+        assert.deepStrictEqual(outputs, Array.from({ length: 3 }, () => ({ format: 'image/webp', quality: 85 })));
+        await transformImageResponse({ env: f.env, imageTransform: { requested: true, options: { width: 300 }, outputFormat: 'image/webp' } }, new Response(f.source.stream(), { headers: { 'Content-Type': 'image/png' } }));
+        assert.deepStrictEqual(outputs[3], { format: 'image/webp' });
+        assert.deepStrictEqual(transforms[3], { width: 300 });
     });
 
     it('downloads an old original once for all three transforms and uses independent stable keys', async () => {

@@ -58,6 +58,7 @@ export function createThumbnailTransform(metadata = {}, variantName) {
             fit: 'scale-down',
         },
         outputFormat: variant.outputFormat,
+        outputQuality: 85,
         fallback: null,
     };
 }

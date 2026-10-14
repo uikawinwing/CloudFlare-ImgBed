@@ -29,6 +29,7 @@ describe('thumbnail variants', () => {
             requested: true,
             options: { width: 120, fit: 'scale-down' },
             outputFormat: THUMBNAIL_CONTENT_TYPE,
+            outputQuality: 85,
             fallback: null,
         });
         assert.deepStrictEqual(createThumbnailTransform({ Width: 800 }, 'library').options, {

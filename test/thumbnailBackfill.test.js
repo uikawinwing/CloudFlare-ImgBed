@@ -34,7 +34,16 @@ function fixture() {
             ...(method === 'POST' ? { body: typeof body === 'string' ? body : JSON.stringify(body) } : {}),
         });
     }
-    return { env, database, values, objects, add, request };
+    function addPermanent(id) {
+        const Thumbnail = { Version: 2, Channel: 'CloudflareR2', CreatedAt: 100, Variants: {} };
+        for (const name of ['avatar', 'library', 'gallery']) {
+            const key = `old/${id}/${name}.webp`;
+            Thumbnail.Variants[name] = { Key: key };
+            objects.set(key, new Blob(['old-thumbnail']));
+        }
+        return add(id, { Thumbnail, ThumbnailStatus: 'ready', ThumbnailReason: null });
+    }
+    return { env, database, values, objects, add, addPermanent, request };
 }
 
 describe('explicit thumbnail backfill', () => {
@@ -84,7 +93,73 @@ describe('explicit thumbnail backfill', () => {
             const response = await backfill({ env: f.env, request: f.request(body) });
             assert.equal(response.status, 400);
         }
+        for (const regenerate of [null, 1, 'true', []]) {
+            const response = await backfill({ env: f.env, request: f.request({ fileIds: ['image.png'], regenerate }) });
+            assert.equal(response.status, 400);
+        }
         assert.equal(f.objects.size, 0);
+    });
+
+    it('keeps an existing thumbnail by default and replaces it only after explicitly requested successful persistence', async () => {
+        const f = fixture();
+        const original = f.addPermanent('image.png');
+        globalThis.fetch = async () => { throw new Error('default backfill must not reread an existing thumbnail'); };
+        const skipped = await backfill({ env: f.env, request: f.request({ fileIds: ['image.png'] }) });
+        assert.deepEqual((await skipped.json()).results, [{ fileId: 'image.png', ready: true, created: false, reason: null }]);
+        globalThis.fetch = async () => new Response('original', { headers: { 'Content-Type': 'image/png' } });
+        const remove = f.env.THUMBNAILS.delete;
+        f.env.THUMBNAILS.delete = async keys => {
+            const current = JSON.parse(f.database.db.prepare('SELECT metadata FROM files WHERE id = ?').get('image.png').metadata);
+            assert.notDeepEqual(current.Thumbnail, original.Thumbnail, 'new pointer must be committed before deleting old objects');
+            await remove(keys);
+        };
+        const replaced = await backfill({ env: f.env, request: f.request({ fileIds: ['image.png'], regenerate: true }) });
+        assert.deepEqual((await replaced.json()).results, [{ fileId: 'image.png', ready: true, created: true, reason: null }]);
+        const current = JSON.parse(f.database.db.prepare('SELECT metadata FROM files WHERE id = ?').get('image.png').metadata);
+        assert(current.Thumbnail.CreatedAt > original.Thumbnail.CreatedAt);
+        assert.equal(current.Visibility, original.Visibility);
+        assert.equal(f.objects.size, 3);
+        assert(Object.values(original.Thumbnail.Variants).every(variant => !f.objects.has(variant.Key)));
+        assert(Object.values(current.Thumbnail.Variants).every(variant => f.objects.has(variant.Key)));
+    });
+
+    it('preserves old thumbnail objects and state if regeneration fails or loses its conditional update', async () => {
+        for (const failure of ['generation', 'cas']) {
+            const f = fixture();
+            const original = f.addPermanent('image.png');
+            globalThis.fetch = async () => new Response('original', { headers: { 'Content-Type': 'image/png' } });
+            const transform = f.env.IMAGE_PROCESSOR.transform;
+            f.env.IMAGE_PROCESSOR.transform = async (...args) => {
+                if (failure === 'generation') return new Response('unavailable', { status: 503 });
+                f.database.db.prepare("UPDATE files SET metadata = json_set(metadata, '$.TimeStamp', 124) WHERE id = ?").run('image.png');
+                return transform(...args);
+            };
+            const response = await backfill({ env: f.env, request: f.request({ fileIds: ['image.png'], regenerate: true }) });
+            const result = (await response.json()).results[0];
+            assert.equal(result.created, false);
+            assert.equal(result.reason, failure === 'generation' ? 'transform-503' : 'thumbnail-state-changed');
+            const current = JSON.parse(f.database.db.prepare('SELECT metadata FROM files WHERE id = ?').get('image.png').metadata);
+            assert.deepEqual(current.Thumbnail, original.Thumbnail);
+            assert.equal(current.ThumbnailStatus, original.ThumbnailStatus);
+            assert.equal(current.ThumbnailReason, original.ThumbnailReason);
+            assert.equal(current.Visibility, original.Visibility);
+            assert.equal(f.objects.size, 3);
+            assert(Object.values(original.Thumbnail.Variants).every(variant => f.objects.has(variant.Key)));
+        }
+    });
+
+    it('reports old-object cleanup failure while preserving the newly committed thumbnail', async () => {
+        const f = fixture();
+        const original = f.addPermanent('image.png');
+        globalThis.fetch = async () => new Response('original', { headers: { 'Content-Type': 'image/png' } });
+        f.env.THUMBNAILS.delete = async () => { throw new Error('R2 deletion unavailable'); };
+        const response = await backfill({ env: f.env, request: f.request({ fileIds: ['image.png'], regenerate: true }) });
+        assert.deepEqual((await response.json()).results, [{ fileId: 'image.png', ready: true, created: true, reason: 'thumbnail-replaced-old-cleanup-failed' }]);
+        const current = JSON.parse(f.database.db.prepare('SELECT metadata FROM files WHERE id = ?').get('image.png').metadata);
+        assert.notDeepEqual(current.Thumbnail, original.Thumbnail);
+        assert.equal(current.ThumbnailStatus, 'ready');
+        assert.equal(f.objects.size, 6);
+        assert(Object.values(current.Thumbnail.Variants).every(variant => f.objects.has(variant.Key)));
     });
 
     it('generates sequentially, preserves private visibility, and skips completed images on repeat', async () => {

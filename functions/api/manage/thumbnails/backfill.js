@@ -3,7 +3,7 @@ import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
 import { validateSession } from '../../../utils/auth/sessionManager.js';
 import { validateApiToken } from '../../../utils/auth/tokenValidator.js';
 import { rejectCrossSiteMutation } from '../../../utils/auth/mutationSecurity.js';
-import { ensurePermanentThumbnail, hasPermanentThumbnail, persistThumbnailResult } from '../../../utils/thumbnail.js';
+import { deletePermanentThumbnail, ensurePermanentThumbnail, hasPermanentThumbnail, persistThumbnailResult } from '../../../utils/thumbnail.js';
 
 function json(body, status = 200) {
     return new Response(JSON.stringify(body), {
@@ -30,6 +30,9 @@ export async function onRequest(context) {
     let body;
     try { body = await request.json(); }
     catch { return json({ error: 'Invalid JSON' }, 400); }
+    if (body?.regenerate !== undefined && typeof body.regenerate !== 'boolean') {
+        return json({ error: 'regenerate must be a boolean' }, 400);
+    }
     const fileIds = body?.fileIds;
     if (!Array.isArray(fileIds) || !fileIds.length || fileIds.length > 3
         || fileIds.some(id => typeof id !== 'string' || !id.trim() || id.length > 2048 || /[\x00\r\n]/.test(id))
@@ -50,12 +53,25 @@ export async function onRequest(context) {
                 results.push({ fileId, ready: false, created: false, reason });
                 continue;
             }
-            if (hasPermanentThumbnail(metadata)) {
+            const existing = hasPermanentThumbnail(metadata);
+            if (existing && !body.regenerate) {
                 results.push({ fileId, ready: true, created: false, reason: null });
                 continue;
             }
-            const generated = await ensurePermanentThumbnail(context, fileId, metadata);
+            const generationMetadata = existing ? { ...metadata, Thumbnail: null } : metadata;
+            const generated = await ensurePermanentThumbnail(context, fileId, generationMetadata);
+            if (existing && (!generated.ready || !generated.created)) {
+                results.push({ fileId, ready: true, created: false, reason: generated.reason || 'thumbnail-regeneration-failed' });
+                continue;
+            }
+            if (existing) {
+                generated.thumbnail.CreatedAt = Math.max(generated.thumbnail.CreatedAt, (Number(metadata.Thumbnail.CreatedAt) || 0) + 1);
+            }
             const result = await persistThumbnailResult(context, fileId, metadata, generated);
+            if (existing && result.ready && result.created && !await deletePermanentThumbnail(env, metadata)) {
+                result.reason = 'thumbnail-replaced-old-cleanup-failed';
+                console.error(`Old thumbnail cleanup failed after replacement for ${fileId}`);
+            }
             results.push({ fileId, ready: result.ready, created: result.created, reason: result.reason || null });
         } catch (error) {
             console.error(`Thumbnail backfill failed for ${fileId}:`, error);
