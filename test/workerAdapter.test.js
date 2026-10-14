@@ -48,6 +48,29 @@ describe('Worker route adapter', () => {
         assert.match(await response.text(), /ImgBed staging/);
     });
 
+    it('protects settings reads and writes through the actual management middleware', async () => {
+        globalThis.caches = emptyCache();
+        for (const role of ['owner', 'admin', 'manager', 'member', null]) {
+            let writes = 0;
+            const values = new Map([['manage@session@test-session', JSON.stringify({ authType: 'user', expiresAt: Date.now() + 60000, identity: { id: 'test-user' } })]]);
+            const env = {
+                DISCORD_CLIENT_ID: 'test-client', DISCORD_CLIENT_SECRET: 'test-secret',
+                img_url: { get: async key => values.get(key) ?? null, put: async (key, value) => { writes++; values.set(key, value); } },
+                img_d1: { prepare: sql => ({ bind() { return this; }, first: async () => sql.includes('FROM users WHERE discord_id') ? { username: 'Test', role, status: 'active' } : null }) },
+            };
+            for (const section of ['upload', 'others']) for (const method of ['GET', 'POST']) {
+                const response = await worker.fetch(new Request(`https://staging.example.test/api/manage/sysConfig/${section}`, {
+                    method,
+                    headers: { ...(role ? { Cookie: 'user_session=test-session' } : {}), Origin: 'https://staging.example.test', 'Content-Type': 'application/json' },
+                    ...(method === 'POST' ? { body: '{}' } : {}),
+                }), env, executionContext());
+                if (role === 'owner' || role === 'admin') assert.strictEqual(response.status, 200, `${role} ${method} ${section}`);
+                else assert.ok([401, 403].includes(response.status), `${role} ${method} ${section}: ${response.status}`);
+            }
+            assert.strictEqual(writes, ['owner', 'admin'].includes(role) ? 2 : 0, `${role} settings writes`);
+        }
+    });
+
     it('matches required dynamic Gallery Pack segments on Workers', async () => {
         globalThis.caches = emptyCache();
         const album = {

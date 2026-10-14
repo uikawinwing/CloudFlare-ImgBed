@@ -1,234 +1,42 @@
 import { getDatabase } from '../../../utils/databaseAdapter.js';
+import { rejectCrossSiteMutation } from '../../../utils/auth/mutationSecurity.js';
+import { getUploadSettings, saveUploadSettings } from '../../../utils/storage/uploadSettings.js';
 
 export async function onRequest(context) {
-    // 上传设置相关，GET方法读取设置，POST方法保存设置
-    const {
-        request, // same as existing Worker API
-        env, // same as existing Worker API
-        params, // if filename includes [id] or [[path]]
-        waitUntil, // same as ctx.waitUntil in existing Worker API
-        next, // used for middleware or to fetch assets
-        data, // arbitrary space for passing data between middlewares
-    } = context;
-
+    const { request, env } = context;
     const db = getDatabase(env);
 
-    // GET读取设置
     if (request.method === 'GET') {
-        const settings = await getUploadConfig(db, env)
-
-        return new Response(JSON.stringify(settings), {
-            headers: {
-                'content-type': 'application/json',
-            },
-        })
+        const settings = await getUploadConfig(db, env, { exposeSecrets: false });
+        return new Response(JSON.stringify(settings), { headers: { 'content-type': 'application/json' } });
     }
 
-    // POST保存设置
     if (request.method === 'POST') {
-        const body = await request.json()
-        const settings = {
-            telegram: body.telegram,
-            cfr2: body.cfr2,
-            discord: body.discord,
-            huggingface: body.huggingface,
+        const rejected = rejectCrossSiteMutation(request);
+        if (rejected) return rejected;
+        const body = await request.json();
+        try {
+            const settings = await saveUploadSettings(body, await readUploadConfig(db), env);
+            await db.put('manage@sysConfig@upload', JSON.stringify(settings));
+            return new Response(JSON.stringify(getUploadSettings(settings, env, { exposeSecrets: false })), {
+                headers: { 'content-type': 'application/json' },
+            });
+        } catch (error) {
+            return new Response(JSON.stringify({ error: error.message, hint: error.hint }), {
+                status: error.status || 400,
+                headers: { 'content-type': 'application/json' },
+            });
         }
-
-        // 写入数据库
-        await db.put('manage@sysConfig@upload', JSON.stringify(settings))
-
-        return new Response(JSON.stringify(settings), {
-            headers: {
-                'content-type': 'application/json',
-            },
-        })
     }
 
+    return new Response('Method not allowed', { status: 405 });
 }
 
-export async function getUploadConfig(db, env) {
-    const settings = {}
-    // 读取数据库中的设置
-    const settingsStr = await db.get('manage@sysConfig@upload')
-    const settingsKV = settingsStr ? JSON.parse(settingsStr) : {}
+export async function getUploadConfig(db, env, options = {}) {
+    return getUploadSettings(await readUploadConfig(db), env, options);
+}
 
-    // =====================读取tg渠道配置=====================
-    const telegram = {}
-
-    const telegramChannels = []
-    telegram.channels = telegramChannels
-    if (env.TG_BOT_TOKEN) {
-        telegramChannels.push({
-            id: 1,
-            name: 'Telegram_env',
-            type: 'telegram',
-            savePath: 'environment variable',
-            botToken: env.TG_BOT_TOKEN,
-            chatId: env.TG_CHAT_ID,
-            proxyUrl: env.TG_PROXY_URL || '',  // 可选的代理 URL
-            enabled: true,
-            fixed: true,
-        })
-    }
-    for (const tg of settingsKV.telegram?.channels || []) {
-        // 如果savePath是environment variable，修改可变参数
-        if (tg.savePath === 'environment variable') {
-            // 如果环境变量未删除，进行覆盖操作
-            if (telegramChannels[0]) {
-                telegramChannels[0].enabled = tg.enabled
-                telegramChannels[0].proxyUrl = tg.proxyUrl
-            }
-
-            continue
-        }
-        // id自增
-        tg.id = telegramChannels.length + 1
-        telegramChannels.push(tg)
-    }
-
-    // 负载均衡
-    const tgLoadBalance = settingsKV.telegram?.loadBalance || {
-        enabled: false,
-        channels: [],
-    }
-    telegram.loadBalance = tgLoadBalance
-
-
-
-    // =====================读取r2渠道配置=====================
-    const cfr2 = {}
-    const cfr2Channels = []
-    cfr2.channels = cfr2Channels
-    if (env.img_r2) {
-        cfr2Channels.push({
-            id: 1,
-            name: 'R2_env',
-            type: 'cfr2',
-            savePath: 'environment variable',
-            publicUrl: env.R2PublicUrl,
-            enabled: true,
-            fixed: true,
-        })
-    }
-    for (const r2 of settingsKV.cfr2?.channels || []) {
-        // 如果savePath是environment variable，修改可变参数
-        if (r2.savePath === 'environment variable') {
-            // 如果环境变量未删除，进行覆盖操作
-            if (cfr2Channels[0]) {
-                cfr2Channels[0].publicUrl = r2.publicUrl
-                cfr2Channels[0].enabled = r2.enabled
-                cfr2Channels[0].quota = r2.quota  // 保留容量限制配置
-            }
-
-            continue
-        }
-        // id自增
-        r2.id = cfr2Channels.length + 1
-        cfr2Channels.push(r2)
-    }
-
-    // 负载均衡
-    const r2LoadBalance = settingsKV.cfr2?.loadBalance || {
-        enabled: false,
-        channels: [],
-    }
-    cfr2.loadBalance = r2LoadBalance
-
-
-    // =====================读取 Discord 渠道配置=====================
-    const discord = {}
-    const discordChannels = []
-    discord.channels = discordChannels
-
-    // 从环境变量读取 Discord 配置
-    if (env.DISCORD_BOT_TOKEN) {
-        discordChannels.push({
-            id: 1,
-            name: 'Discord_env',
-            type: 'discord',
-            savePath: 'environment variable',
-            botToken: env.DISCORD_BOT_TOKEN,
-            channelId: env.DISCORD_CHANNEL_ID,
-            proxyUrl: env.DISCORD_PROXY_URL || '',  // 可选的代理 URL
-            enabled: true,
-            fixed: true,
-        })
-    }
-
-    for (const dc of settingsKV.discord?.channels || []) {
-        // 如果 savePath 是 environment variable，修改可变参数
-        if (dc.savePath === 'environment variable') {
-            // 如果环境变量未删除，进行覆盖操作
-            if (discordChannels[0]) {
-                discordChannels[0].enabled = dc.enabled
-                discordChannels[0].proxyUrl = dc.proxyUrl
-            }
-            continue
-        }
-        // id 自增
-        dc.id = discordChannels.length + 1
-        discordChannels.push(dc)
-    }
-
-    // 负载均衡
-    const discordLoadBalance = settingsKV.discord?.loadBalance || {
-        enabled: false,
-        channels: [],
-    }
-    discord.loadBalance = discordLoadBalance
-
-
-    // =====================读取 HuggingFace 渠道配置=====================
-    const huggingface = {}
-    const huggingfaceChannels = []
-    huggingface.channels = huggingfaceChannels
-
-    // 从环境变量读取 HuggingFace 配置
-    if (env.HF_TOKEN) {
-        huggingfaceChannels.push({
-            id: 1,
-            name: 'HuggingFace_env',
-            type: 'huggingface',
-            savePath: 'environment variable',
-            token: env.HF_TOKEN,
-            repo: env.HF_REPO,
-            isPrivate: env.HF_PRIVATE === 'true',
-            enabled: true,
-            fixed: true,
-        })
-    }
-
-    for (const hf of settingsKV.huggingface?.channels || []) {
-        // 如果 savePath 是 environment variable，修改可变参数
-        if (hf.savePath === 'environment variable') {
-            // 如果环境变量未删除，进行覆盖操作
-            if (huggingfaceChannels[0]) {
-                huggingfaceChannels[0].enabled = hf.enabled
-                huggingfaceChannels[0].isPrivate = hf.isPrivate
-            }
-            continue
-        }
-        // id 自增
-        hf.id = huggingfaceChannels.length + 1
-        huggingfaceChannels.push(hf)
-    }
-
-    // 负载均衡
-    const huggingfaceLoadBalance = settingsKV.huggingface?.loadBalance || {
-        enabled: false,
-        channels: [],
-    }
-    huggingface.loadBalance = huggingfaceLoadBalance
-
-
-    settings.telegram = telegram
-    settings.cfr2 = cfr2
-    settings.discord = discord
-    settings.huggingface = huggingface
-
-    // The bundled settings UI still reads these keys; no credentials or channels are exposed.
-    settings.s3 = { channels: [], loadBalance: { enabled: false, channels: [] } }
-    settings.webdav = { channels: [], loadBalance: { enabled: false, channels: [] } }
-
-    return settings;
+async function readUploadConfig(db) {
+    const settingsStr = await db.get('manage@sysConfig@upload');
+    return settingsStr ? JSON.parse(settingsStr) : {};
 }

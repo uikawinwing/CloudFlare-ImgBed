@@ -162,6 +162,7 @@ CREATE INDEX IF NOT EXISTS idx_files_owner_name ON files(owner_id, LOWER(COALESC
 CREATE INDEX IF NOT EXISTS idx_files_moderation_status ON files(moderation_status);
 CREATE INDEX IF NOT EXISTS idx_files_public_catalog ON files(visibility, moderation_status, timestamp DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_files_featured_catalog ON files(visibility, moderation_status, featured_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_files_management_order ON files(COALESCE(timestamp, CAST(json_extract(metadata, '$.TimeStamp') AS INTEGER), 0) DESC, id DESC, NULLIF(COALESCE(NULLIF(directory, ''), json_extract(metadata, '$.Directory')), ''));
 CREATE INDEX IF NOT EXISTS idx_users_public_handle ON users(public_handle);
 CREATE INDEX IF NOT EXISTS idx_album_items_album_order ON album_items(album_id, position);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);

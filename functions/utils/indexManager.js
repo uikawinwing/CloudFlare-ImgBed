@@ -38,6 +38,7 @@
  */
 
 import { getDatabase, checkDatabaseConfig } from './databaseAdapter.js';
+import { readD1FileIndex } from './files/d1FileIndex.js';
 
 const INDEX_KEY = 'manage@index';
 const INDEX_META_KEY = 'manage@index@meta'; // 索引元数据键
@@ -515,6 +516,25 @@ export async function readIndex(context, options = {}) {
         const labelArr = Array.isArray(label) ? label : (label ? [label] : []);
         const fileTypeArr = Array.isArray(fileType) ? fileType : (fileType ? [fileType] : []);
         const channelNameArr = Array.isArray(channelName) ? channelName : (channelName ? [channelName] : []);
+
+        // Keep Unicode case-insensitive search/tag matching in the existing JS path.
+        // SQLite LOWER only folds ASCII, so SQL filtering would change these results.
+        // Bulk operations already need every metadata row; avoid an extra statistics pass.
+        if (context.env.img_d1 && (countOnly || count !== -1) && !search && !includeTags.length && !excludeTags.length) {
+            return await readD1FileIndex(context.env.img_d1, {
+                directory,
+                start,
+                count,
+                channel: channelArr,
+                listType: listTypeArr,
+                accessStatus: accessStatusArr,
+                label: labelArr,
+                fileType: fileTypeArr,
+                channelName: channelNameArr,
+                countOnly,
+                includeSubdirFiles
+            });
+        }
 
         // 处理目录满足无头有尾的格式，根目录为空
         const dirPrefix = directory === '' || directory.endsWith('/') ? directory : directory + '/';

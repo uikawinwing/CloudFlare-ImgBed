@@ -16,22 +16,22 @@ describe('phase 1 storage retirement', () => {
         }
     });
 
-    it('exposes empty legacy UI slots without returning retired credentials', async () => {
+    it('omits retired storage UI slots without returning their credentials', async () => {
         const config = await getUploadConfig({ get: async () => JSON.stringify({ s3: { channels: [{ secretAccessKey: 'retired' }] }, webdav: { channels: [{ password: 'retired' }] } }) }, { img_r2: {} });
-        assert.deepEqual(config.s3.channels, []);
-        assert.deepEqual(config.webdav.channels, []);
+        assert.equal(config.s3, undefined);
+        assert.equal(config.webdav, undefined);
         assert.ok(!JSON.stringify(config).includes('retired'));
         assert.equal(config.cfr2.channels.length, 1);
     });
 
-    it('drops retired backend settings when the old UI saves its payload', async () => {
+    it('drops retired backend settings when an old payload is saved', async () => {
         let saved;
         const response = await saveUploadConfig({
             env: { img_url: { get: async () => null, put: async (key, value) => { saved = JSON.parse(value); } } },
-            request: new Request('https://example.test/api/manage/sysConfig/upload', { method: 'POST', body: JSON.stringify({ telegram: { channels: [] }, s3: { channels: ['retired'] }, webdav: { channels: ['retired'] } }) }),
+            request: new Request('https://example.test/api/manage/sysConfig/upload', { method: 'POST', body: JSON.stringify({ telegram: { channels: [], loadBalance: { enabled: false, channels: [] } }, s3: { channels: ['retired'] }, webdav: { channels: ['retired'] } }) }),
         });
         assert.equal(response.status, 200);
-        assert.deepEqual(saved, { telegram: { channels: [] } });
+        assert.deepEqual(saved, { telegram: { channels: [], loadBalance: { enabled: false, channels: [] } }, cfr2: { channels: [], loadBalance: { enabled: false, channels: [] } }, discord: { channels: [], loadBalance: { enabled: false, channels: [] } }, huggingface: { channels: [], loadBalance: { enabled: false, channels: [] } } });
     });
 
     it('keeps retired file records when their physical storage cannot be deleted', async () => {
@@ -45,14 +45,14 @@ describe('phase 1 storage retirement', () => {
         }
     });
 
-    it('revokes the old DAV token on settings save without exposing it in GET', async () => {
+    it('revokes the old DAV token on settings save without exposing WebDAV in GET', async () => {
         const values = new Map([
             ['manage@sysConfig@others', JSON.stringify({ webDAV: { enabled: true, internalToken: 'retired-secret', internalTokenId: 'dav-token', password: 'retired-secret' } })],
             ['manage@sysConfig@security', JSON.stringify({ apiTokens: { tokens: { 'dav-token': { token: 'retired-secret' }, keep: { token: 'keep' } } } })],
         ]);
         const kv = { get: async key => values.get(key) || null, put: async (key, value) => values.set(key, value) };
         const settings = await getOthersConfig(kv, {});
-        assert.equal(settings.webDAV.enabled, false);
+        assert.equal(settings.webDAV, undefined);
         assert.ok(!JSON.stringify(settings).includes('retired-secret'));
         const response = await saveOthersConfig({ env: { img_url: kv }, request: new Request('https://example.test/api/manage/sysConfig/others', { method: 'POST', body: JSON.stringify(settings) }) });
         assert.equal(response.status, 200);

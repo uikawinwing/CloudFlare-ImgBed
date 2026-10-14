@@ -1,6 +1,7 @@
 const TOOL_ROUTES = {
   access: { key: 'access', frameKey: 'access', path: '/customerConfig', hash: '', title: '上传访问' },
-  'system-upload': { key: 'system-upload', frameKey: 'system-upload', path: '/systemConfig', hash: '#upload', title: '存储渠道' },
+  'system-upload': { key: 'system-upload', native: 'storage-settings', path: '/systemConfig', hash: '#upload', title: '存储渠道' },
+  'system-others': { key: 'system-others', native: 'storage-settings', path: '/systemConfig', hash: '#others', title: '其他设置', navKey: 'system-upload' },
   'system-page': { key: 'system-page', frameKey: 'system-page', path: '/systemConfig', hash: '#page', title: '网站设置' },
   'system-security': { key: 'system-security', frameKey: 'system-security', path: '/systemConfig', hash: '#security', title: '安全与自动化' },
   'system-status': { key: 'system-status', frameKey: 'system-status', path: '/systemConfig', hash: '#status', title: '维护工具' },
@@ -11,6 +12,7 @@ const main = document.querySelector('#mainContent');
 const appShell = document.querySelector('.app-shell');
 const frames = new Map();
 let host = null;
+let nativeHost = null;
 let activeTool = TOOL_ROUTES[new URL(location.href).searchParams.get('tool')] || null;
 let prewarmScheduled = false;
 let prewarmStarted = false;
@@ -19,6 +21,9 @@ function toolFromHref(value) {
   let url;
   try { url = new URL(value, location.href); } catch { return null; }
   if (url.origin !== location.origin) return null;
+  if (/^\/account\/?$/.test(url.pathname)) {
+    return TOOL_ROUTES[url.searchParams.get('tool')] || null;
+  }
   if (url.pathname === '/customerConfig') return TOOL_ROUTES.access;
   if (url.pathname !== '/systemConfig') return null;
   const hash = url.hash || '#status';
@@ -42,6 +47,17 @@ function ensureHost() {
   return host;
 }
 
+function ensureNativeHost() {
+  if (nativeHost) return nativeHost;
+  nativeHost = document.createElement('section');
+  nativeHost.className = 'native-tool-host';
+  nativeHost.id = 'nativeToolHost';
+  nativeHost.hidden = true;
+  nativeHost.setAttribute('aria-label', '管理工具');
+  appShell?.append(nativeHost);
+  return nativeHost;
+}
+
 function iframeSource(tool) {
   const url = new URL(tool.path, location.origin);
   url.searchParams.set('embedded', '1');
@@ -57,6 +73,7 @@ function syncThemeIntoFrame(iframe) {
 }
 
 function ensureFrame(tool) {
+  if (tool.native) return null;
   if (frames.has(tool.frameKey)) return frames.get(tool.frameKey);
 
   const wrapper = document.createElement('div');
@@ -73,6 +90,15 @@ function ensureFrame(tool) {
   iframe.addEventListener('load', () => {
     wrapper.classList.add('is-loaded');
     syncThemeIntoFrame(iframe);
+    try {
+      iframe.contentDocument?.addEventListener('click', event => {
+        const link = event.target.closest?.('a[href]');
+        const destination = link && toolFromHref(link.href);
+        if (!destination?.native) return;
+        event.preventDefault();
+        showTool(destination);
+      }, true);
+    } catch {}
   });
 
   wrapper.append(iframe);
@@ -131,7 +157,7 @@ function accountTitleFromUrl(url = new URL(location.href)) {
 }
 
 function applyToolChrome(tool) {
-  setActiveNav(tool.key);
+  setActiveNav(tool.navKey || tool.key);
   document.title = `${tool.title} · CloudFlare ImgBed`;
 }
 
@@ -155,12 +181,33 @@ function buildParentToolUrl(tool) {
 
 function showTool(tool, { historyMode = 'push' } = {}) {
   if (!tool) return;
+  if (tool.native && activeTool?.key === tool.key && nativeHost && !nativeHost.hidden) return;
+  const requestLeave = window.ImgBedStorageSettings?.requestLeave;
+  if (activeTool?.native && activeTool.key !== tool.key && requestLeave) {
+    const destination = historyMode === 'none' ? new URL(location.href) : null;
+    if (!requestLeave(() => {
+      if (destination) nativeReplace(history.state, '', destination);
+      showTool(tool, { historyMode });
+    })) {
+      if (destination) nativeReplace(history.state, '', buildParentToolUrl(activeTool));
+      return;
+    }
+  }
   activeTool = tool;
-  const currentHost = ensureHost();
-  const entry = ensureFrame(tool);
-  frames.forEach(frame => { frame.wrapper.hidden = frame !== entry; });
   if (main) main.hidden = true;
-  currentHost.hidden = false;
+  if (tool.native) {
+    if (host) host.hidden = true;
+    frames.forEach(frame => { frame.wrapper.hidden = true; });
+    const currentNativeHost = ensureNativeHost();
+    currentNativeHost.hidden = false;
+    window.dispatchEvent(new CustomEvent('imgbed:native-tool-show', { detail: { tool, host: currentNativeHost } }));
+  } else {
+    if (nativeHost) nativeHost.hidden = true;
+    const currentHost = ensureHost();
+    const entry = ensureFrame(tool);
+    frames.forEach(frame => { frame.wrapper.hidden = frame !== entry; });
+    currentHost.hidden = false;
+  }
   applyToolChrome(tool);
   const url = buildParentToolUrl(tool);
   if (historyMode === 'push') nativePush(history.state, '', url);
@@ -168,9 +215,19 @@ function showTool(tool, { historyMode = 'push' } = {}) {
 }
 
 function hideTool(url = new URL(location.href)) {
+  const requestLeave = window.ImgBedStorageSettings?.requestLeave;
+  if (activeTool?.native && requestLeave && !requestLeave(() => {
+    nativeReplace(history.state, '', url);
+    hideTool(url);
+  })) {
+    nativeReplace(history.state, '', buildParentToolUrl(activeTool));
+    return;
+  }
   activeTool = null;
   if (host) host.hidden = true;
+  if (nativeHost) nativeHost.hidden = true;
   if (main) main.hidden = false;
+  window.dispatchEvent(new CustomEvent('imgbed:native-tool-hide'));
   restoreAccountChrome(url);
 }
 

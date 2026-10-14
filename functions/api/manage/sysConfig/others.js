@@ -1,5 +1,6 @@
 import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { deleteApiToken } from '../apiTokens.js';
+import { rejectCrossSiteMutation } from '../../../utils/auth/mutationSecurity.js';
 
 export async function onRequest(context) {
     // 其他设置相关，GET方法读取设置，POST方法保存设置
@@ -27,6 +28,8 @@ export async function onRequest(context) {
 
     // POST保存设置
     if (request.method === 'POST') {
+        const rejected = rejectCrossSiteMutation(request);
+        if (rejected) return rejected;
         const body = await request.json()
         const settings = { ...body };
         const oldSettings = JSON.parse(await db.get('manage@sysConfig@others') || '{}');
@@ -84,13 +87,6 @@ export async function getOthersConfig(db, env) {
         allowedDir: kvPublicBrowse.allowedDir || '',
         fixed: false,
     }
-
-    // The bundled settings page reads this shape; the retired service stays disabled.
-    settings.webDAV = {
-        enabled: false, username: '', password: '', uploadChannel: '', channelName: '',
-        internalToken: '', internalTokenId: '', fixed: true,
-    };
-
 
     return settings;
 }
