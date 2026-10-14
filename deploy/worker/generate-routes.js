@@ -34,7 +34,9 @@ const routes = [];       // { urlPath, importPath, varName, isCatchAll, dir, mid
 function hasOnRequestExport(filePath) {
     const content = readFileSync(filePath, 'utf8');
     return /export\s+(async\s+)?function\s+onRequest/m.test(content)
-        || /export\s+const\s+onRequest\b/m.test(content);
+        || /export\s+const\s+onRequest\b/m.test(content)
+        || [...content.matchAll(/export\s*\{([^}]+)\}/g)].some(([, names]) => names.split(',').some(name =>
+            /^onRequest(?:Get|Head|Post|Put|Patch|Delete|Options)?$/.test(name.trim().split(/\s+as\s+/).at(-1))));
 }
 
 /**

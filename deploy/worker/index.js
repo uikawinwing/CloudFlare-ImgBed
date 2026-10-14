@@ -62,6 +62,7 @@ import * as apiPublicList from '../../functions/api/public/list.js';
 import * as apiUserAlbums_index from '../../functions/api/user/albums/index.js';
 import * as apiUserFiles_index from '../../functions/api/user/files/index.js';
 import * as apiUserHandle from '../../functions/api/user/handle.js';
+import * as apiUserMe from '../../functions/api/user/me.js';
 import * as galleryParamOwnerSlugParamAlbumSlug from '../../functions/gallery/[ownerSlug]/[albumSlug].js';
 import * as uploadHuggingfaceCommitUpload from '../../functions/upload/huggingface/commitUpload.js';
 import * as uploadHuggingfaceCompleteMultipart from '../../functions/upload/huggingface/completeMultipart.js';
@@ -75,6 +76,7 @@ import * as myAlbums from '../../functions/my-albums.js';
 import * as myFiles from '../../functions/my-files.js';
 import * as random_index from '../../functions/random/index.js';
 import * as upload_index from '../../functions/upload/index.js';
+import * as apiPublicGalleryCatchAllOwnerSlugCatchAllAlbumSlug from '../../functions/api/public/gallery/[[ownerSlug]]/[[albumSlug]].js';
 import * as apiAdminUsersCatchAllDiscordId from '../../functions/api/admin/users/[[discordId]].js';
 import * as apiManageBlockCatchAllPath from '../../functions/api/manage/block/[[path]].js';
 import * as apiManageDeleteCatchAllPath from '../../functions/api/manage/delete/[[path]].js';
@@ -87,6 +89,7 @@ import * as apiModerationDeleteCatchAllPath from '../../functions/api/moderation
 import * as apiModerationQuarantineCatchAllPath from '../../functions/api/moderation/quarantine/[[path]].js';
 import * as apiModerationRestoreCatchAllPath from '../../functions/api/moderation/restore/[[path]].js';
 import * as apiUserFilesCatchAllPath from '../../functions/api/user/files/[[path]].js';
+import * as galleryCatchAllOwnerSlugCatchAllAlbumSlug from '../../functions/gallery/[[ownerSlug]]/[[albumSlug]].js';
 import * as davCatchAllPath from '../../functions/dav/[[path]].js';
 import * as fileCatchAllPath from '../../functions/file/[[path]].js';
 import * as thumbCatchAllPath from '../../functions/thumb/[[path]].js';
@@ -139,6 +142,7 @@ const routes = [
     { path: '/api/user/albums', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"albums"}], module: apiUserAlbums_index, middlewares: [mw_api, mw_api_user] },
     { path: '/api/user/files', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"files"}], module: apiUserFiles_index, middlewares: [mw_api, mw_api_user] },
     { path: '/api/user/handle', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"handle"}], module: apiUserHandle, middlewares: [mw_api, mw_api_user] },
+    { path: '/api/user/me', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"me"}], module: apiUserMe, middlewares: [mw_api, mw_api_user] },
     { path: '/gallery/:ownerSlug/:albumSlug', segments: [{"type":"static","value":"gallery"},{"type":"dynamic","name":"ownerSlug","array":false},{"type":"dynamic","name":"albumSlug","array":false}], module: galleryParamOwnerSlugParamAlbumSlug, middlewares: [] },
     { path: '/upload/huggingface/commitUpload', segments: [{"type":"static","value":"upload"},{"type":"static","value":"huggingface"},{"type":"static","value":"commitUpload"}], module: uploadHuggingfaceCommitUpload, middlewares: [mw_upload] },
     { path: '/upload/huggingface/completeMultipart', segments: [{"type":"static","value":"upload"},{"type":"static","value":"huggingface"},{"type":"static","value":"completeMultipart"}], module: uploadHuggingfaceCompleteMultipart, middlewares: [mw_upload] },
@@ -152,6 +156,7 @@ const routes = [
     { path: '/my-files', segments: [{"type":"static","value":"my-files"}], module: myFiles, middlewares: [] },
     { path: '/random', segments: [{"type":"static","value":"random"}], module: random_index, middlewares: [mw_random] },
     { path: '/upload', segments: [{"type":"static","value":"upload"}], module: upload_index, middlewares: [mw_upload] },
+    { path: '/api/public/gallery/:ownerSlug/*albumSlug', segments: [{"type":"static","value":"api"},{"type":"static","value":"public"},{"type":"static","value":"gallery"},{"type":"dynamic","name":"ownerSlug","array":true},{"type":"catchAll","name":"albumSlug","array":true}], module: apiPublicGalleryCatchAllOwnerSlugCatchAllAlbumSlug, middlewares: [mw_api], catchAll: true },
     { path: '/api/admin/users/*discordId', segments: [{"type":"static","value":"api"},{"type":"static","value":"admin"},{"type":"static","value":"users"},{"type":"catchAll","name":"discordId","array":true}], module: apiAdminUsersCatchAllDiscordId, middlewares: [mw_api, mw_api_admin], catchAll: true },
     { path: '/api/manage/block/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"block"},{"type":"catchAll","name":"path","array":true}], module: apiManageBlockCatchAllPath, middlewares: [mw_api, mw_api_manage], catchAll: true },
     { path: '/api/manage/delete/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"delete"},{"type":"catchAll","name":"path","array":true}], module: apiManageDeleteCatchAllPath, middlewares: [mw_api, mw_api_manage], catchAll: true },
@@ -164,6 +169,7 @@ const routes = [
     { path: '/api/moderation/quarantine/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"moderation"},{"type":"static","value":"quarantine"},{"type":"catchAll","name":"path","array":true}], module: apiModerationQuarantineCatchAllPath, middlewares: [mw_api, mw_api_moderation], catchAll: true },
     { path: '/api/moderation/restore/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"moderation"},{"type":"static","value":"restore"},{"type":"catchAll","name":"path","array":true}], module: apiModerationRestoreCatchAllPath, middlewares: [mw_api, mw_api_moderation], catchAll: true },
     { path: '/api/user/files/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"files"},{"type":"catchAll","name":"path","array":true}], module: apiUserFilesCatchAllPath, middlewares: [mw_api, mw_api_user], catchAll: true },
+    { path: '/gallery/:ownerSlug/*albumSlug', segments: [{"type":"static","value":"gallery"},{"type":"dynamic","name":"ownerSlug","array":true},{"type":"catchAll","name":"albumSlug","array":true}], module: galleryCatchAllOwnerSlugCatchAllAlbumSlug, middlewares: [], catchAll: true },
     { path: '/dav/*path', segments: [{"type":"static","value":"dav"},{"type":"catchAll","name":"path","array":true}], module: davCatchAllPath, middlewares: [], catchAll: true },
     { path: '/file/*path', segments: [{"type":"static","value":"file"},{"type":"catchAll","name":"path","array":true}], module: fileCatchAllPath, middlewares: [mw_file], catchAll: true },
     { path: '/thumb/*path', segments: [{"type":"static","value":"thumb"},{"type":"catchAll","name":"path","array":true}], module: thumbCatchAllPath, middlewares: [], catchAll: true },

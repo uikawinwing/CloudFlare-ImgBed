@@ -13,6 +13,7 @@ describe('Worker route adapter', () => {
     before(async function () {
         this.timeout(30000);
         const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+        execFileSync(process.execPath, [join(repositoryRoot, 'deploy', 'worker', 'generate-routes.js')], { cwd: repositoryRoot, stdio: 'pipe' });
         bundleDirectory = mkdtempSync(join(tmpdir(), 'imgbed-worker-test-'));
         execFileSync(process.execPath, [
             join(repositoryRoot, 'node_modules', 'wrangler', 'bin', 'wrangler.js'),
@@ -68,6 +69,26 @@ describe('Worker route adapter', () => {
                 else assert.ok([401, 403].includes(response.status), `${role} ${method} ${section}: ${response.status}`);
             }
             assert.strictEqual(writes, ['owner', 'admin'].includes(role) ? 2 : 0, `${role} settings writes`);
+        }
+    });
+
+    it('serves the re-exported identity route as JSON instead of frontend HTML', async () => {
+        globalThis.caches = emptyCache();
+        const identity = { id: 'test-user', username: 'Test', role: 'owner' };
+        const env = {
+            DISCORD_CLIENT_ID: 'test-client', DISCORD_CLIENT_SECRET: 'test-secret',
+            img_url: { get: async key => key === 'manage@session@test-session' ? JSON.stringify({ authType: 'user', expiresAt: Date.now() + 60000, identity }) : null },
+            ASSETS: { fetch: async () => new Response('<html>Asset fallback</html>', { headers: { 'Content-Type': 'text/html' } }) },
+        };
+        for (const authenticated of [false, true]) {
+            const response = await worker.fetch(new Request('https://staging.example.test/api/user/me', {
+                headers: authenticated ? { Cookie: 'user_session=test-session' } : {},
+            }), env, executionContext());
+            assert.strictEqual(response.status, authenticated ? 200 : 401);
+            assert.match(response.headers.get('content-type'), /application\/json/);
+            const body = await response.json();
+            assert.strictEqual(body.authenticated, authenticated);
+            if (authenticated) assert.deepStrictEqual(body.user, { ...identity, publicHandle: null });
         }
     });
 
