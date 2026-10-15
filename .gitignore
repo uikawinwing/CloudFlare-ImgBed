@@ -13,3 +13,4 @@ node_modules
 .claude/
 .agents/
 .codegraph/
+/frontend-dist/account/vendor/

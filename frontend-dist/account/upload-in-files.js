@@ -7,6 +7,9 @@ const uploadState = {
   queue: [],
   recent: readRecentUploads(),
   dragDepth: 0,
+  compressVideos: false,
+  compressionController: null,
+  videoDecision: null,
 };
 
 function isFilesView() {
@@ -98,9 +101,28 @@ function queueMarkup() {
   const finished = uploadState.queue.filter(item => item.status === 'done').length;
   const failed = uploadState.queue.filter(item => item.status === 'error').length;
   return `<section class="integrated-upload-status" aria-live="polite">
-    <div class="integrated-upload-status-head"><div><strong>${uploadState.busy ? '正在上传' : '上传结果'}</strong><small>${finished} 完成${failed ? ` · ${failed} 失败` : ''} · 共 ${uploadState.queue.length} 个</small></div>${uploadState.busy ? '' : '<button type="button" data-upload-clear>收起</button>'}</div>
-    <div class="integrated-upload-list">${uploadState.queue.map(item => `<div class="integrated-upload-row ${item.status}"><div class="integrated-upload-copy"><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong><small>${item.status === 'waiting' ? '等待上传' : item.status === 'uploading' ? `上传中 ${Math.round(item.progress || 0)}%` : item.status === 'done' ? escapeHtml(item.notice || '已上传到我的文件') : escapeHtml(item.error || '上传失败')}</small></div><div class="integrated-upload-progress" aria-hidden="true"><span style="width:${item.status === 'done' ? 100 : Math.max(2, Number(item.progress) || 0)}%"></span></div>${item.url ? `<button type="button" data-copy-upload-url="${escapeHtml(item.url)}">复制链接</button>` : ''}</div>`).join('')}</div>
+    <div class="integrated-upload-status-head"><div><strong>${uploadState.busy ? '正在处理文件' : '上传结果'}</strong><small>${finished} 完成${failed ? ` · ${failed} 失败` : ''} · 共 ${uploadState.queue.length} 个</small></div>${uploadState.busy ? '' : '<button type="button" data-upload-clear>收起</button>'}</div>
+    <div class="integrated-upload-list">${uploadState.queue.map(item => `<div class="integrated-upload-row ${item.status}" data-upload-id="${item.id}"><div class="integrated-upload-copy"><strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong><small data-upload-status>${escapeHtml(uploadStatus(item))}</small></div><div class="integrated-upload-progress" role="progressbar" aria-label="${escapeHtml(item.name)} 的处理进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(item.progress || 0)}" ${['review', 'skipped'].includes(item.status) ? 'hidden' : ''}><span style="width:${item.status === 'done' ? 100 : Math.max(2, Number(item.progress) || 0)}%"></span></div>${item.status === 'compressing' ? '<button type="button" data-cancel-compression>取消压缩</button>' : item.url ? `<button type="button" data-copy-upload-url="${escapeHtml(item.url)}">复制链接</button>` : ''}${item.status === 'review' ? `<div class="integrated-upload-review">${item.previewUrl ? `<video src="${escapeHtml(item.previewUrl)}" controls playsinline preload="metadata" aria-label="${escapeHtml(item.name)} 的压缩预览"></video>` : ''}<div><p>${escapeHtml(item.compressionNotice)}</p><p class="integrated-upload-review-hint">只保存你选择上传的版本，本机原文件不变。</p><div class="integrated-upload-review-actions">${item.previewUrl ? '<button type="button" class="upload-compressed" data-video-choice="compressed">上传压缩版</button>' : ''}<button type="button" data-video-choice="original">上传原片</button><button type="button" data-video-choice="skip">跳过</button></div></div></div>` : ''}</div>`).join('')}</div>
   </section>`;
+}
+
+function uploadStatus(item) {
+  if (item.status === 'waiting') return '等待处理';
+  if (item.status === 'compressing') return `本机压缩中 ${Math.round(item.progress || 0)}% · 请保持页面打开`;
+  if (item.status === 'review') return '尚未上传，请选择上传版本';
+  if (item.status === 'skipped') return '已跳过，未上传';
+  if (item.status === 'uploading') return `上传中 ${Math.round(item.progress || 0)}%`;
+  if (item.status === 'done') return item.notice || '已上传到我的文件';
+  return item.error || '上传失败';
+}
+
+function updateUploadProgress(item) {
+  const row = document.querySelector(`[data-upload-id="${item.id}"]`);
+  if (!row) return;
+  row.querySelector('[data-upload-status]').textContent = uploadStatus(item);
+  const progress = row.querySelector('[role="progressbar"]');
+  progress.setAttribute('aria-valuenow', String(Math.round(item.progress || 0)));
+  progress.querySelector('span').style.width = `${Math.max(2, item.progress || 0)}%`;
 }
 
 function recentMarkup() {
@@ -121,14 +143,26 @@ function patchFilesView() {
   const trigger = section.querySelector('[data-integrated-upload-trigger]');
   if (trigger) trigger.disabled = uploadState.busy;
 
-  section.querySelectorAll('.integrated-upload-status-slot').forEach(node => node.remove());
   const anchor = section.querySelector('.file-toolbar') || section.querySelector('.page-head');
+  if (!anchor) return;
+  let options = section.querySelector('.integrated-upload-options');
+  if (!options) {
+    options = document.createElement('div');
+    options.className = 'integrated-upload-options';
+    options.innerHTML = '<label><input type="checkbox" id="compressVideos" aria-describedby="compressVideosHint">上传前压缩视频</label><small id="compressVideosHint">可用时在本机压缩，预览后上传。图片不受影响。</small>';
+    anchor.insertAdjacentElement('afterend', options);
+  }
+  const compressOption = options.querySelector('input');
+  compressOption.checked = uploadState.compressVideos;
+  compressOption.disabled = uploadState.busy;
+
+  section.querySelectorAll('.integrated-upload-status-slot').forEach(node => node.remove());
   const markup = queueMarkup() || recentMarkup();
   if (anchor && markup) {
     const status = document.createElement('div');
     status.className = 'integrated-upload-status-slot';
     status.innerHTML = markup;
-    anchor.insertAdjacentElement('afterend', status);
+    options.insertAdjacentElement('afterend', status);
   }
 }
 
@@ -180,7 +214,7 @@ function uploadOne(file, item) {
     xhr.upload.addEventListener('progress', event => {
       if (!event.lengthComputable) return;
       item.progress = Math.min(99, event.loaded / event.total * 100);
-      renderUploadUi();
+      updateUploadProgress(item);
     });
     xhr.addEventListener('load', () => {
       try { resolve(parseUploadResponse(xhr, file.name)); }
@@ -205,11 +239,25 @@ async function uploadFiles(files) {
   renderUploadUi();
 
   for (const item of uploadState.queue) {
-    item.status = 'uploading';
-    item.progress = 1;
-    renderUploadUi();
     try {
-      Object.assign(item, await uploadOne(item.file, item));
+      let file = item.file;
+      if (uploadState.compressVideos && (file.type.startsWith('video/') || /\.(?:mp4|webm)$/i.test(file.name))) {
+        file = await prepareVideoUpload(item);
+        if (!file) {
+          item.status = 'skipped';
+          delete item.file;
+          renderUploadUi();
+          continue;
+        }
+        item.name = file.name;
+        item.size = file.size;
+      }
+      item.status = 'uploading';
+      item.progress = 1;
+      renderUploadUi();
+      const result = await uploadOne(file, item);
+      Object.assign(item, result);
+      item.notice = [item.uploadNotice, result.notice].filter(Boolean).join('；');
       item.progress = 100;
       item.status = 'done';
     } catch (error) {
@@ -221,7 +269,7 @@ async function uploadFiles(files) {
   }
 
   uploadState.busy = false;
-  const results = uploadState.queue.map(({ name, size, url, error, notice }) => ({ name, size, url, error, notice }));
+  const results = uploadState.queue.filter(item => item.status !== 'skipped').map(({ name, size, url, error, notice }) => ({ name, size, url, error, notice }));
   const succeeded = results.filter(item => item.url).length;
   if (succeeded) {
     uploadState.recent = results;
@@ -232,8 +280,64 @@ async function uploadFiles(files) {
     window.dispatchEvent(new CustomEvent('imgbed:files-changed', { detail: { results } }));
   } else {
     renderUploadUi();
-    notify('这批文件没有上传成功，请查看错误信息。', 'error');
+    if (results.some(item => item.error)) notify('这批文件没有上传成功，请查看错误信息。', 'error');
   }
+}
+
+function formatVideoSize(bytes) {
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+async function prepareVideoUpload(item) {
+  const controller = new AbortController();
+  uploadState.compressionController = controller;
+  item.status = 'compressing';
+  item.progress = 0;
+  renderUploadUi();
+  let compressed = null;
+  try {
+    const { compressVideo } = await import('./video-compression.js');
+    compressed = await compressVideo(item.file, {
+      signal: controller.signal,
+      onProgress(progress) {
+        item.progress = Math.min(99, Math.max(0, progress * 100));
+        updateUploadProgress(item);
+      },
+    });
+    if (compressed.size >= item.file.size) {
+      compressed = null;
+      item.compressionNotice = '压缩结果没有比原片更小，建议上传原片。';
+    } else {
+      const saved = Math.round((1 - compressed.size / item.file.size) * 100);
+      item.compressionNotice = `${formatVideoSize(item.file.size)} → ${formatVideoSize(compressed.size)}，减少 ${saved}%。播放预览后选择上传版本。`;
+      item.previewUrl = URL.createObjectURL(compressed);
+    }
+  } catch (error) {
+    item.compressionNotice = error.code === 'aborted' || error.name === 'AbortError'
+      ? '已取消压缩。可以上传原片或跳过。'
+      : error.code === 'unsupported'
+        ? '当前浏览器或设备不支持压缩这个视频。可以上传原片。'
+        : error.code === 'too_large'
+          ? '当前设备无法处理这个大小的视频。可以上传原片。'
+          : '压缩未完成。可以上传原片，或跳过这段视频。';
+  } finally {
+    uploadState.compressionController = null;
+  }
+  item.status = 'review';
+  item.progress = 0;
+  const choice = await new Promise(resolve => {
+    uploadState.videoDecision = { id: item.id, resolve };
+    renderUploadUi();
+    document.querySelector(`[data-upload-id="${item.id}"] [data-video-choice]`)?.focus({ preventScroll: true });
+  });
+  uploadState.videoDecision = null;
+  if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+  delete item.previewUrl;
+  if (choice === 'compressed' && compressed) {
+    item.uploadNotice = `已上传压缩版（${formatVideoSize(item.file.size)} → ${formatVideoSize(compressed.size)}）`;
+    return compressed;
+  }
+  return choice === 'original' ? item.file : null;
 }
 
 function hasFileTransfer(event) {
@@ -245,6 +349,15 @@ function isEditableTarget(target) {
 }
 
 document.addEventListener('click', event => {
+  if (event.target.closest('[data-cancel-compression]')) {
+    uploadState.compressionController?.abort();
+    return;
+  }
+  const choice = event.target.closest('[data-video-choice]');
+  if (choice && choice.closest('[data-upload-id]')?.dataset.uploadId === uploadState.videoDecision?.id) {
+    uploadState.videoDecision.resolve(choice.dataset.videoChoice);
+    return;
+  }
   const trigger = event.target.closest('[data-integrated-upload-trigger]');
   if (trigger) {
     event.preventDefault();
@@ -268,6 +381,16 @@ document.addEventListener('click', event => {
     uploadState.recent = [];
     renderUploadUi();
   }
+});
+
+document.addEventListener('change', event => {
+  if (event.target.id === 'compressVideos' && !uploadState.busy) uploadState.compressVideos = event.target.checked;
+});
+
+window.addEventListener('beforeunload', event => {
+  if (!uploadState.compressionController && !uploadState.videoDecision) return;
+  event.preventDefault();
+  event.returnValue = '';
 });
 
 document.addEventListener('dragenter', event => {
