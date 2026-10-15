@@ -19,7 +19,7 @@ export async function onRequestGet({ request, env, params }) {
     if (!albumId) return json({ error: 'Gallery not found' }, 404);
 
     const album = await env.img_d1.prepare(
-        "SELECT a.id, a.name, a.description, a.char_info_character_name, a.updated_at, u.discord_id, u.username, u.public_handle FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE a.id = ? AND u.status = 'active'",
+        "SELECT a.id, a.slug, a.name, a.description, a.char_info_character_name, a.updated_at, u.discord_id, u.username, u.public_handle FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE a.id = ? AND u.status = 'active'",
     ).bind(albumId).first();
     if (!album) return json({ error: 'Gallery not found' }, 404);
 
@@ -69,6 +69,7 @@ function makeEtag(album, files, storedVisualConfig) {
     const signature = [
         album.id || '',
         album.public_handle || '',
+        album.slug || '',
         album.char_info_character_name || '',
         album.name || '',
         album.description || '',

@@ -25,6 +25,7 @@ describe('stable CharInfo visual URL', () => {
     it('keeps one album UUID URL while visual settings and gallery contents update', async () => {
         const album = {
             id: 'album-id',
+            slug: 'summer-gallery',
             name: 'Summer Gallery',
             description: '',
             char_info_character_name: '维奥莱塔·马克西姆·奥古斯塔',
@@ -100,6 +101,7 @@ describe('stable CharInfo visual URL', () => {
         assert.strictEqual(firstPack.format, 'char-info-visual-pack');
         assert.strictEqual(firstPack.version, 1);
         assert.strictEqual(firstPack.profileId, 'album-id');
+        assert.strictEqual(firstPack.galleryUrl, 'https://example.test/api/public/gallery/master/summer-gallery');
         assert.strictEqual(firstPack.visual.entranceQuote, 'Hello');
         assert.strictEqual(firstPack.visual.avatarUrl, 'https://example.test/file/first.png?v=1');
         assert.strictEqual(firstPack.visual.coverUrl, 'https://example.test/file/first.png?v=1', 'an unavailable cover selection falls back to the first album image');
@@ -147,6 +149,16 @@ describe('stable CharInfo visual URL', () => {
             params: { albumId: 'album-id' },
         });
         assert.strictEqual(unchangedResponse.status, 304);
+
+        album.slug = 'renamed-gallery';
+        const renamedResponse = await stableCharInfoGet({
+            request: new Request(url, { headers: { 'If-None-Match': privateEtag } }),
+            env,
+            params: { albumId: 'album-id' },
+        });
+        assert.strictEqual(renamedResponse.status, 200, 'changing the gallery URL must invalidate the ETag');
+        const renamedPack = await renamedResponse.json();
+        assert.strictEqual(renamedPack.galleryUrl, 'https://example.test/api/public/gallery/master/renamed-gallery');
 
         visualConfig = '{broken';
         const brokenResponse = await stableCharInfoGet({ request: new Request(url), env, params: { albumId: 'album-id' } });

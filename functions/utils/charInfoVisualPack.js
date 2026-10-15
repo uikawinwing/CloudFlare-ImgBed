@@ -30,6 +30,9 @@ export function createCharInfoVisualPack({ album, files, storedVisualConfig, req
         packId: identity.packId,
         profileId: identity.profileId,
         characterName: identity.characterName,
+        galleryUrl: album.slug
+            ? new URL(`/api/public/gallery/${encodeURIComponent(identity.packId)}/${encodeURIComponent(album.slug)}`, requestUrl).href
+            : null,
         visual: visualConfig ? buildVisualPayload(visualConfig, fileById, requestUrl) : null,
         gallery: orderedFiles.map(file => buildGalleryItem(file, visualConfig, requestUrl)),
     };
