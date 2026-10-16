@@ -346,7 +346,7 @@ function albumRow(album) {
       <details class="album-actions-menu">
         <summary>管理图库</summary>
         <div class="album-actions">
-          <p class="album-visibility">${album.visibility === 'public' ? '会显示在发现页' : '不会显示在发现页'}${state.user.publicHandle ? ` · 可通过分享链接访问${album.charInfoCharacterName ? ` · CharInfo：${escapeHtml(album.charInfoCharacterName)}` : ' · CharInfo 未配置角色全名'}` : ' · 设置公开名称后可复制分享链接'}</p>
+          <p class="album-visibility">${state.user.publicHandle ? `会显示在发现页 · 可通过分享链接访问${album.charInfoCharacterName ? ` · CharInfo：${escapeHtml(album.charInfoCharacterName)}` : ' · CharInfo 未配置角色全名'}` : '设置公开名称后，图库会显示在发现页并可分享'}</p>
           ${canShare ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : ''}
           ${canShareCharInfo ? `<button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制 CharInfo 链接</button>` : ''}
           ${album.charInfoCharacterName ? `<a class="button primary" href="/charinfo/?album=${encodeURIComponent(album.id)}">打开 Creator</a>` : '<button class="button primary" type="button" data-edit-album>配置 CharInfo</button>'}
@@ -566,11 +566,9 @@ async function ensurePublicHandle() {
 function openFileViewer(file) {
   if (!file) return;
   const isVideo = isVideoFile(file);
-  const visibility = file.visibility === 'public' ? 'public' : 'private';
   openDialog(`<div class="media-viewer-head"><div><h2>${escapeHtml(file.file_name || file.id)}</h2><p>${formatBytes(file.file_size_bytes)}${formatDate(file.timestamp) ? ` · ${formatDate(file.timestamp)}` : ''}</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
     <div class="file-preview-media" data-media-viewer-stage>${isVideo ? `<video src="${fileUrl(file)}" autoplay muted loop playsinline controls></video>` : `<img src="${fileUrl(file)}" alt="${escapeHtml(file.file_name || '')}">`}</div>
-    <div class="media-viewer-details"><label>发现页展示<select class="file-visibility" id="viewerVisibility" aria-label="是否显示在发现页"><option value="private" ${visibility === 'private' ? 'selected' : ''}>不显示</option><option value="public" ${visibility === 'public' ? 'selected' : ''}>显示在发现页</option></select></label><div class="media-viewer-actions"><button class="button" type="button" id="copyViewerFile">${icons.link}复制链接</button><a class="button" href="${escapeHtml(fileUrl(file))}" target="_blank" rel="noopener">${icons.external}打开原始尺寸</a></div></div>`, { className: 'media-viewer-dialog', label: `查看 ${file.file_name || file.id}` });
-  dialogRoot.querySelector('#viewerVisibility')?.addEventListener('change', event => updateFileVisibility(file.id, event.currentTarget.value));
+    <div class="media-viewer-details"><p>加入人物图库后，可通过图库在发现页浏览。</p><div class="media-viewer-actions"><button class="button" type="button" id="copyViewerFile">${icons.link}复制链接</button><a class="button" href="${escapeHtml(fileUrl(file))}" target="_blank" rel="noopener">${icons.external}打开原始尺寸</a></div></div>`, { className: 'media-viewer-dialog', label: `查看 ${file.file_name || file.id}` });
   dialogRoot.querySelector('#copyViewerFile')?.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(new URL(fileUrl(file), location.origin).href);
@@ -631,43 +629,6 @@ function bindFileEvents() {
       openFileViewer(state.files.find(file => file.id === id));
     });
   });
-}
-
-async function updateFileVisibility(fileId, visibility) {
-  const file = state.files.find(item => item.id === fileId);
-  if (!file) return;
-  const previous = {
-    visibility: file.visibility || 'private',
-    thumbnailUrl: file.thumbnail_url || null,
-    thumbnailReady: Boolean(file.thumbnail_ready),
-  };
-  file.visibility = visibility;
-  file.discover_eligible = visibility === 'public';
-  renderFiles();
-  try {
-    const result = await api(`/api/user/files/${encodeFilePath(fileId)}`, { method: 'PATCH', body: JSON.stringify({ visibility }) });
-    file.visibility = result.visibility || visibility;
-    file.discover_eligible = file.visibility === 'public';
-    file.thumbnail_url = result.thumbnailUrl || null;
-    file.thumbnail_ready = Boolean(result.thumbnailReady);
-    markViewFresh('files');
-    markViewDirty('albums');
-    renderFiles();
-    if (file.visibility === 'private') {
-      toast('已从发现页隐藏；分享链接仍可访问。');
-    } else if (result.thumbnailReady) {
-      toast(result.thumbnailCreated ? '已显示在发现页，并已生成可复用缩略图。' : '已显示在发现页；现有缩略图会继续复用。');
-    } else {
-      toast('已显示在发现页；缩略图暂时使用动态预览，原图不受影响。');
-    }
-  } catch (error) {
-    file.visibility = previous.visibility;
-    file.thumbnail_url = previous.thumbnailUrl;
-    file.thumbnail_ready = previous.thumbnailReady;
-    file.discover_eligible = previous.visibility === 'public';
-    renderFiles();
-    toast(error.message || '无法更新可见性。', 'error');
-  }
 }
 
 async function addSelectedToAlbum() {
@@ -745,10 +706,7 @@ function albumDialog(album = null, { onCreated = null } = {}) {
       <div class="field"><label for="albumSlug">分享链接名称</label><input id="albumSlug" name="slug" maxlength="80" value="${escapeHtml(album?.slug || '')}" pattern="[a-z0-9][a-z0-9\\-]*"><small>用于分享链接，只能使用小写英文字母、数字和短横线；留空会根据图库名称生成。</small></div>
       <div class="field"><label for="albumDescription">说明</label><textarea id="albumDescription" name="description" maxlength="200">${escapeHtml(album?.description || '')}</textarea></div>
       <div class="field"><label for="albumCharInfoCharacterName">CharInfo 角色全名（可选）</label><input id="albumCharInfoCharacterName" name="charInfoCharacterName" maxlength="80" value="${escapeHtml(album?.charInfoCharacterName || '')}"><small>需要生成 CharInfo 链接时填写角色完整姓名；不要填写 Discord 用户名或角色简称。</small></div>
-      <fieldset class="field" style="border:0;padding:0"><legend>可见性</legend>
-        <label class="radio-option"><input type="radio" name="visibility" value="public" ${album?.visibility !== 'unlisted' ? 'checked' : ''}><span class="radio-copy"><strong>显示在发现页</strong><small>会展示在发现页；分享链接始终由公开名称和图库链接名称决定。</small></span></label>
-        <label class="radio-option"><input type="radio" name="visibility" value="unlisted" ${album?.visibility === 'unlisted' ? 'checked' : ''}><span class="radio-copy"><strong>不显示在发现页</strong><small>不会出现在发现页，但仍可通过分享链接访问。</small></span></label>
-      </fieldset>
+      <p>设置公开名称后，图库会显示在发现页；每个图库只展示一张封面。</p>
       <small class="field-error" id="albumError"></small>
     </div>
     <div class="dialog-actions"><button class="button" type="button" data-close-dialog>取消</button><button class="button primary" type="submit">${editing ? '保存更改' : '创建图库'}</button></div>
@@ -757,7 +715,7 @@ function albumDialog(album = null, { onCreated = null } = {}) {
   dialogRoot.querySelector('#albumForm').addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.currentTarget;
-    const payload = { name: form.name.value.trim(), slug: form.slug.value.trim() || undefined, description: form.description.value.trim(), charInfoCharacterName: form.charInfoCharacterName.value.trim(), visibility: form.visibility.value };
+    const payload = { name: form.name.value.trim(), slug: form.slug.value.trim() || undefined, description: form.description.value.trim(), charInfoCharacterName: form.charInfoCharacterName.value.trim() };
     form.querySelector('button[type="submit"]').disabled = true;
     try {
       const savedAlbum = editing

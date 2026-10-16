@@ -23,7 +23,14 @@
 .legacy-shell-active .account-entry { display: none; }
 .discord-auth-pending #app { visibility: hidden; }
 .discord-login-only .account-entry { display: none; }
-.discord-login-only .login-container {
+html.discord-login-only .login {
+  background: var(--app-bg) !important;
+}
+html.discord-login-only body::before { background-image: none !important; }
+.discord-login-only #bg1, .discord-login-only #bg2 {
+  display: none !important;
+}
+html.discord-login-only .login-container {
   display: flex;
   min-height: 250px;
   flex-direction: column;
@@ -32,20 +39,24 @@
   gap: 16px;
   padding: 40px;
   text-align: center;
+  background: var(--app-surface) !important;
+  border-color: var(--app-border-strong);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .discord-login-only .login-container h1 {
   margin: 0;
-  color: #fff;
+  color: var(--app-text);
   font: 700 30px/1.25 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
 }
 .discord-login-only .login-container p {
   max-width: 380px;
   margin: 0;
-  color: rgba(255, 255, 255, .72);
+  color: var(--app-muted-strong);
   font: 15px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
 }
 .discord-login-only .login-container small {
-  color: rgba(255, 255, 255, .52);
+  color: var(--app-muted);
   font: 13px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
 }
 .discord-login-button {
@@ -66,7 +77,7 @@
 .discord-login-button:focus-visible { outline: 3px solid rgba(154, 160, 255, .85); outline-offset: 4px; }
 @media (max-width: 620px) {
   .account-entry { top: auto; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); }
-  .discord-login-only .login-container { min-height: 230px; padding: 30px 22px; }
+  html.discord-login-only .login-container { min-height: 230px; padding: 30px 22px; }
   .discord-login-only .login-container h1 { font-size: 25px; }
   .discord-login-button { width: 100%; min-width: 0; }
 }

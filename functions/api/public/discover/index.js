@@ -1,11 +1,11 @@
-import { CatalogRequestError, listDiscover, listDiscoverAlbums, parseDiscoverQuery } from '../../../utils/publicCatalog.js';
+import { CatalogRequestError, listFeaturedFiles, listDiscoverAlbums, parseDiscoverQuery } from '../../../utils/publicCatalog.js';
 
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
 };
 
-const FEATURED_CACHE_CONTROL = 'public, max-age=60, s-maxage=300';
+const CATALOG_CACHE_CONTROL = 'public, max-age=60, s-maxage=300';
 
 export async function onRequestOptions() {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -15,30 +15,29 @@ export async function onRequestGet({ request, env, waitUntil }) {
     if (!env.img_d1?.prepare) return json({ error: 'D1 is required' }, 503);
     try {
         const query = parseDiscoverQuery(new URL(request.url));
-        const cacheableFeatured = query.sort === 'featured' && !query.cursor;
-        const cache = cacheableFeatured && typeof caches !== 'undefined' ? caches.default : null;
-        const cacheKey = cache ? new Request(request.url, { method: 'GET' }) : null;
+        const cache = typeof caches !== 'undefined' ? caches.default : null;
+        const cacheUrl = new URL(request.url);
+        cacheUrl.searchParams.set('catalog', query.sort === 'featured' ? 'featured-v1' : 'albums-v1');
+        const cacheKey = cache ? new Request(cacheUrl, { method: 'GET' }) : null;
 
         if (cache && cacheKey) {
             const cached = await cache.match(cacheKey);
             if (cached) return cached;
         }
 
-        const includeAlbums = query.type === 'all' && query.sort === 'recent' && !query.cursor;
-        const [page, albums] = await Promise.all([
-            listDiscover(env, query, request.url),
-            includeAlbums ? listDiscoverAlbums(env, request.url) : Promise.resolve([]),
-        ]);
+        const page = query.sort === 'featured'
+            ? { ...await listFeaturedFiles(env, query, request.url), albums: [], type: 'all', sort: 'featured' }
+            : await listDiscoverAlbums(env, query, request.url);
 
         const response = json(
-            { ...page, albums, type: query.type, sort: query.sort },
+            page,
             200,
-            cacheableFeatured ? FEATURED_CACHE_CONTROL : 'no-store',
+            CATALOG_CACHE_CONTROL,
         );
 
         if (cache && cacheKey) {
             const cacheWrite = cache.put(cacheKey, response.clone()).catch((error) => {
-                console.warn('Featured discover cache write failed', error?.message || error);
+                console.warn('Discover cache write failed', error?.message || error);
             });
             if (typeof waitUntil === 'function') waitUntil(cacheWrite);
             else await cacheWrite;

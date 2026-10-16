@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { onRequest } from '../functions/api/user/albums/[id].js';
 import { onRequestDelete as removeAlbumItem } from '../functions/api/user/albums/[[id]]/items.js';
-import { listDiscoverAlbums } from '../functions/utils/publicCatalog.js';
+import { decodeCursor, listDiscoverAlbums } from '../functions/utils/publicCatalog.js';
+import { onRequest as albumIndex } from '../functions/api/user/albums/index.js';
 
 class TestD1 {
     constructor() {
@@ -88,12 +89,30 @@ function patchRequest(body) {
 }
 
 describe('album covers', () => {
+    it('creates public albums and drops the removed visibility option from responses', async () => {
+        const { env, statements } = sessionEnv();
+        const response = await albumIndex({ env, request: new Request('https://example.test/api/user/albums', {
+            method: 'POST', headers: { Cookie: 'user_session=token', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Iris', visibility: 'unlisted' }),
+        }) });
+        assert.strictEqual(response.status, 201);
+        assert.strictEqual((await response.json()).visibility, undefined);
+        const insert = statements.find(statement => statement.sql?.startsWith('INSERT INTO albums'));
+        assert.strictEqual(insert.values[6], 'public');
+
+        const patch = await onRequest({ env, request: patchRequest({ visibility: 'unlisted' }), params: { id: 'album-id' } });
+        assert.strictEqual(patch.status, 200);
+        assert.strictEqual((await patch.json()).visibility, undefined);
+        const update = statements.find(statement => statement.sql?.startsWith('UPDATE albums'));
+        assert.strictEqual(update.values[4], 'public');
+    });
+
     it('persists an active image from the same album with a bounded focal point', async () => {
         const { env, queries, statements } = sessionEnv();
         const response = await onRequest({ env, request: patchRequest({ coverFileId: 'art.png', coverPositionX: 20, coverPositionY: 80 }), params: { id: 'album-id' } });
         assert.strictEqual(response.status, 200);
         assert.deepStrictEqual(await response.json(), {
-            id: 'album-id', slug: 'album', name: 'Album', description: null, charInfoCharacterName: null, visibility: 'public',
+            id: 'album-id', slug: 'album', name: 'Album', description: null, charInfoCharacterName: null,
             coverFileId: 'art.png', coverPositionX: 20, coverPositionY: 80,
         });
         assert.ok(queries.some(sql => sql.includes("f.file_type LIKE 'image/%' AND f.moderation_status = 'active'")));
@@ -147,7 +166,95 @@ describe('album covers', () => {
 });
 
 describe('album cover D1 integration', () => {
-    it('keeps order stable, hides a selected private cover from Discover, and cascades membership cleanup', async () => {
+    it('looks up memberships and files only for the selected page, even with many unrelated albums', async () => {
+        const db = new TestD1();
+        try {
+            db.exec(readFileSync(new URL('../database/init.sql', import.meta.url), 'utf8'));
+            db.exec(`
+                INSERT INTO users (discord_id, username, public_handle, role, status, used_bytes, created_at, updated_at)
+                    VALUES ('owner', 'Owner', 'owner', 'member', 'active', 0, 1, 1);
+                WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers WHERE n < 300)
+                INSERT INTO albums (id, owner_id, slug, name, created_at, updated_at)
+                    SELECT printf('album-%04d', n), 'owner', printf('album-%04d', n), 'Album', 1, n FROM numbers;
+                WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers WHERE n < 3000)
+                INSERT INTO files (id, metadata, file_name, file_type, file_size_bytes, timestamp, owner_id, visibility, moderation_status)
+                    SELECT printf('file-%04d.png', n), '{}', 'Image', 'image/png', 1, n, 'owner', 'public', 'active' FROM numbers;
+                INSERT INTO album_items (album_id, file_id, position, created_at)
+                    SELECT printf('album-%04d', ((timestamp - 1) / 10) + 1), id, (timestamp - 1) % 10, timestamp FROM files;
+            `);
+            let sql;
+            let bindings;
+            const env = { img_d1: { prepare(query) {
+                sql = query;
+                return { bind(...values) {
+                    bindings = values;
+                    return { all: async () => ({ results: db.db.prepare(query).all(...values) }) };
+                } };
+            } } };
+            let cursor = null;
+            for (const expectedId of ['album-0300', 'album-0299']) {
+                const page = await listDiscoverAlbums(env, { limit: 1, cursor }, 'https://example.test/api/public/discover');
+                assert.deepStrictEqual(page.albums.map(album => album.id), [expectedId]);
+                assert.strictEqual(page.albums[0].itemCount, 10);
+                const plan = db.db.prepare('EXPLAIN QUERY PLAN ' + sql).all(...bindings).map(row => row.detail);
+                const selectedAlbumPlan = plan.slice(0, plan.indexOf('MATERIALIZE explicit_covers'));
+                assert.ok(!selectedAlbumPlan.some(detail => /USE TEMP B-TREE FOR ORDER BY/.test(detail)), plan.join('\n'));
+                assert.ok(selectedAlbumPlan.some(detail => cursor
+                    ? /^SEARCH a USING INDEX idx_albums_discover_order \(\(updated_at,id\)<\(\?,\?\)\)$/.test(detail)
+                    : /^SCAN a USING INDEX idx_albums_discover_order$/.test(detail)), plan.join('\n'));
+                assert.ok(!plan.some(detail => /^SCAN (ai|f)\b/.test(detail)), plan.join('\n'));
+                assert.ok(!plan.some(detail => /^SEARCH f .*\(moderation_status=/.test(detail)), plan.join('\n'));
+                assert.strictEqual(plan.filter(detail => /^SEARCH ai .*\(album_id=\?\)$/.test(detail)).length, 2, plan.join('\n'));
+                cursor = decodeCursor(page.nextCursor);
+            }
+        } finally {
+            db.db.close();
+        }
+    });
+
+    it('paginates one card per album, includes former unlisted albums, and chooses image covers without video downloads', async () => {
+        const db = new TestD1();
+        try {
+            db.exec(readFileSync(new URL('../database/init.sql', import.meta.url), 'utf8'));
+            db.exec(`
+                INSERT INTO users (discord_id, username, public_handle, role, status, used_bytes, created_at, updated_at)
+                    VALUES ('owner', 'Owner', 'owner', 'member', 'active', 0, 1, 1),
+                           ('suspended', 'Suspended', 'suspended', 'member', 'suspended', 0, 1, 1);
+                INSERT INTO albums (id, owner_id, slug, name, visibility, char_info_character_name, created_at, updated_at)
+                    VALUES ('iris', 'owner', 'iris', 'Iris album', 'unlisted', 'Iris', 1, 10),
+                           ('video', 'owner', 'video', 'Video', 'public', NULL, 1, 10),
+                           ('empty', 'owner', 'empty', 'Empty', 'public', NULL, 1, 5),
+                           ('hidden-owner', 'suspended', 'hidden', 'Hidden', 'public', NULL, 1, 20);
+                INSERT INTO files (id, metadata, file_name, file_type, file_size_bytes, timestamp, owner_id, visibility, moderation_status)
+                    VALUES ('clip.mp4', '{}', 'Clip', 'video/mp4', 1, 1, 'owner', 'public', 'active'),
+                           ('hidden.png', '{}', 'Hidden', 'image/png', 1, 2, 'owner', 'private', 'active'),
+                           ('blocked.png', '{}', 'Blocked', 'image/png', 1, 3, 'owner', 'public', 'blocked');
+                INSERT INTO album_items (album_id, file_id, position, created_at)
+                    VALUES ('iris', 'clip.mp4', 0, 1), ('iris', 'hidden.png', 1, 2), ('iris', 'blocked.png', 2, 3),
+                           ('video', 'clip.mp4', 0, 1);
+            `);
+            const env = { img_d1: db };
+            const url = 'https://example.test/api/public/discover';
+            const first = await listDiscoverAlbums(env, { limit: 1, cursor: null }, url);
+            assert.deepStrictEqual(first.albums.map(album => album.id), ['video']);
+            assert.strictEqual(first.albums[0].coverThumbnailUrl, null);
+            assert.strictEqual(first.albums[0].coverUrl, null);
+            assert.strictEqual(first.albums[0].itemCount, 1);
+            const second = await listDiscoverAlbums(env, { limit: 1, cursor: decodeCursor(first.nextCursor) }, url);
+            assert.deepStrictEqual(second.albums.map(album => album.id), ['iris']);
+            assert.strictEqual(second.albums[0].characterName, 'Iris');
+            assert.strictEqual(second.albums[0].itemCount, 2);
+            assert.strictEqual(second.albums[0].coverThumbnailUrl, 'https://example.test/thumb/hidden.png?v=2');
+            assert.strictEqual(second.albums[0].url, 'https://example.test/gallery/owner/iris');
+            const last = await listDiscoverAlbums(env, { limit: 1, cursor: decodeCursor(second.nextCursor) }, url);
+            assert.deepStrictEqual(last.albums.map(album => album.id), ['empty']);
+            assert.strictEqual(last.nextCursor, null);
+        } finally {
+            db.db.close();
+        }
+    });
+
+    it('keeps order stable, uses a selected unlisted image in the shared album, and cascades membership cleanup', async () => {
         const db = new TestD1();
         try {
             db.exec(readFileSync(new URL('../database/init.sql', import.meta.url), 'utf8'));
@@ -183,9 +290,12 @@ describe('album cover D1 integration', () => {
             const orderAfter = db.db.prepare('SELECT file_id FROM album_items WHERE album_id = ? ORDER BY position, created_at').all('album-id').map(row => row.file_id);
             assert.deepStrictEqual(orderAfter, orderBefore, 'choosing a cover must not reorder Gallery Pack items');
 
-            const discover = await listDiscoverAlbums(env, 'https://example.test/api/public/discover');
-            assert.strictEqual(discover[0].coverUrl, 'https://example.test/file/clip.webm?v=1');
-            assert.strictEqual(discover[0].coverType, 'video/webm');
+            const discover = await listDiscoverAlbums(env, { limit: 24, cursor: null }, 'https://example.test/api/public/discover');
+            assert.strictEqual(discover.albums.length, 1);
+            assert.strictEqual(discover.albums[0].coverUrl, 'https://example.test/file/private.png?v=3');
+            assert.strictEqual(discover.albums[0].coverType, 'image/png');
+            assert.strictEqual(discover.albums[0].itemCount, 3);
+            assert.strictEqual(discover.albums[0].coverPositionX, 20);
 
             const otherResponse = await onRequest({ env, request: new Request('https://example.test/api/user/albums/album-id', {
                 method: 'PATCH', headers: { Cookie: 'user_session=other-token', 'Content-Type': 'application/json' },

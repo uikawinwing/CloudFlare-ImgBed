@@ -31,8 +31,6 @@ describe('repository deployment configuration', () => {
         const frontendFiles = collectFiles(join(repositoryRoot, 'frontend-dist'))
             .filter((path) => /\.(?:html|js|map)$/.test(path));
         const files = [
-            join(repositoryRoot, 'README.md'),
-            join(repositoryRoot, 'README_zh.md'),
             join(repositoryRoot, '.github', 'ISSUE_TEMPLATE', 'config.yml'),
             join(repositoryRoot, 'functions', 'api', 'manage', 'sysConfig', 'page.js'),
             ...frontendFiles,

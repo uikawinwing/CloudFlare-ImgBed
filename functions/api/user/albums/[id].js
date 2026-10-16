@@ -28,12 +28,11 @@ export async function onRequest(context) {
     const name = payload.name === undefined ? album.name : String(payload.name).trim();
     const description = payload.description === undefined ? album.description : String(payload.description).trim();
     const slug = payload.slug === undefined ? album.slug : normalizeSlug(payload.slug);
-    const visibility = payload.visibility === undefined ? album.visibility : payload.visibility;
     const charInfoCharacterName = payload.charInfoCharacterName === undefined
         ? normalizeCharInfoCharacterName(album.char_info_character_name)
         : normalizeCharInfoCharacterName(payload.charInfoCharacterName);
     const charInfoCharacterNameError = validateCharInfoCharacterName(charInfoCharacterName);
-    if (!name || (description !== null && description.length > 1000) || !slug || !['public', 'unlisted'].includes(visibility)) return json({ error: 'Invalid album data' }, 400);
+    if (!name || (description !== null && description.length > 1000) || !slug) return json({ error: 'Invalid album data' }, 400);
     if (charInfoCharacterNameError) return json({ error: charInfoCharacterNameError }, 400);
     const coverUpdateRequested = payload.coverFileId !== undefined || payload.coverPositionX !== undefined || payload.coverPositionY !== undefined;
     let coverFileId = album.cover_file_id || null;
@@ -57,7 +56,7 @@ export async function onRequest(context) {
     }
     try {
         const now = Date.now();
-        const statements = [context.env.img_d1.prepare('UPDATE albums SET slug = ?, name = ?, description = ?, char_info_character_name = ?, visibility = ?, updated_at = ? WHERE id = ?').bind(slug, name, description, charInfoCharacterName, visibility, now, id)];
+        const statements = [context.env.img_d1.prepare('UPDATE albums SET slug = ?, name = ?, description = ?, char_info_character_name = ?, visibility = ?, updated_at = ? WHERE id = ?').bind(slug, name, description, charInfoCharacterName, 'public', now, id)];
         if (coverUpdateRequested) {
             statements.push(coverFileId
                 ? context.env.img_d1.prepare(`INSERT INTO album_covers (album_id, file_id, position_x, position_y, updated_at) VALUES (?, ?, ?, ?, ?)
@@ -72,12 +71,13 @@ export async function onRequest(context) {
         console.error('Album update failed', error);
         return json({ error: 'Unable to update album' }, 500);
     }
-    return json({ id, slug, name, description, charInfoCharacterName, visibility, coverFileId, coverPositionX, coverPositionY });
+    return json({ id, slug, name, description, charInfoCharacterName, coverFileId, coverPositionX, coverPositionY });
 }
 
 function presentAlbum(album) {
+    const { visibility, ...details } = album;
     return {
-        ...album,
+        ...details,
         charInfoCharacterName: normalizeCharInfoCharacterName(album.char_info_character_name),
         coverFileId: album.cover_file_id || null,
         coverPositionX: normalizeCoverPosition(album.cover_position_x, 50),

@@ -6,7 +6,7 @@ export async function onRequest(context) {
     if (!identity) return json({ error: 'Discord sign-in is required' }, 401);
     if (!context.env.img_d1?.prepare) return json({ error: 'D1 is required' }, 503);
     if (context.request.method === 'GET') {
-        const rows = await context.env.img_d1.prepare('SELECT id, slug, name, description, char_info_character_name AS charInfoCharacterName, visibility, created_at, updated_at FROM albums WHERE owner_id = ? ORDER BY updated_at DESC').bind(identity.id).all();
+        const rows = await context.env.img_d1.prepare('SELECT id, slug, name, description, char_info_character_name AS charInfoCharacterName, created_at, updated_at FROM albums WHERE owner_id = ? ORDER BY updated_at DESC').bind(identity.id).all();
         return json({ albums: rows.results || [] });
     }
     if (context.request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -14,19 +14,18 @@ export async function onRequest(context) {
     const name = String(payload.name || '').trim();
     const description = payload.description === undefined ? null : String(payload.description).trim();
     const slug = normalizeSlug(payload.slug || name);
-    const visibility = payload.visibility || 'public';
     const charInfoCharacterName = normalizeCharInfoCharacterName(payload.charInfoCharacterName);
     const charInfoCharacterNameError = validateCharInfoCharacterName(charInfoCharacterName);
-    if (!name || !slug || (description !== null && description.length > 1000) || !['public', 'unlisted'].includes(visibility)) return json({ error: 'A valid album name, description, slug and visibility are required' }, 400);
+    if (!name || !slug || (description !== null && description.length > 1000)) return json({ error: 'A valid album name, description and slug are required' }, 400);
     if (charInfoCharacterNameError) return json({ error: charInfoCharacterNameError }, 400);
     const id = crypto.randomUUID();
     const now = Date.now();
     try {
-        await context.env.img_d1.prepare('INSERT INTO albums (id, owner_id, slug, name, description, char_info_character_name, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, identity.id, slug, name, description, charInfoCharacterName, visibility, now, now).run();
+        await context.env.img_d1.prepare('INSERT INTO albums (id, owner_id, slug, name, description, char_info_character_name, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, identity.id, slug, name, description, charInfoCharacterName, 'public', now, now).run();
     } catch {
         return json({ error: 'Album slug is already in use' }, 409);
     }
-    return json({ id, slug, name, description, charInfoCharacterName, visibility }, 201);
+    return json({ id, slug, name, description, charInfoCharacterName }, 201);
 }
 
 export function normalizeSlug(value) {

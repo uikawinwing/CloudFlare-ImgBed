@@ -65,14 +65,10 @@ describe('account media and album UI', () => {
     assert.doesNotMatch(styles, /^\.play/m);
   });
 
-  it('sizes video pins from their real frame and auto-previews them in Discover', () => {
+  it('sizes account video pins from their real frame and keeps Discover to album covers', () => {
     assert.match(source, /loadedmetadata[\s\S]*videoWidth[\s\S]*videoHeight[\s\S]*aspectRatio/);
-    assert.match(discoverSource, /<video[^>]*autoplay[^>]*muted[^>]*loop[^>]*playsinline/);
-    assert.match(discoverSource, /loadedmetadata[\s\S]*videoWidth[\s\S]*videoHeight[\s\S]*pinMedia\.style\.aspectRatio/);
-    assert.match(discoverSource, /IntersectionObserver[\s\S]*\.play\(\)/);
-    assert.match(discoverSource, /\.album-cover video/);
-    assert.doesNotMatch(discoverSource, /discover-play|play-overlay|▶/);
-    assert.doesNotMatch(discoverSource, /video-placeholder|play-symbol/);
+    assert.doesNotMatch(discoverSource, /<video|\.play\(\)|originalUrl\(/);
+    assert.match(discoverSource, /album\.coverThumbnailUrl/);
   });
 
   it('does not let the late preview stylesheet collapse real-ratio video pins', () => {
@@ -87,11 +83,12 @@ describe('account media and album UI', () => {
     assert.match(source, /\/api\/public\/charinfo\/\$\{encodeURIComponent\(album\.id\)\}/);
   });
 
-  it('renders public albums returned by Discover', () => {
+  it('renders paginated albums returned by Discover', () => {
     assert.match(discoverRoutePage, /id="albumGrid"/);
-    assert.match(discoverSource, /const firstPage = reset \|\| !state\.items\.length/);
-    assert.match(discoverSource, /if \(firstPage\) state\.albums = Array\.isArray\(body\.albums\)/);
-    assert.match(discoverSource, /album\.coverThumbnailUrl \|\| album\.coverUrl/);
+    assert.match(discoverSource, /Array\.isArray\(body\.albums\)/);
+    assert.match(discoverSource, /state\.albums\.push\(album\)/);
+    assert.match(discoverSource, /state\.cursor = body\.nextCursor/);
+    assert.doesNotMatch(discoverSource, /album\.coverUrl|body\.files|sort=featured/);
   });
 
   it('keeps the root welcome page bounded and the full feed in Discover', () => {

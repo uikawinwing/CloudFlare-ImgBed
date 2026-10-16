@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS albums (
     name TEXT NOT NULL,
     char_info_character_name TEXT,
     description TEXT,
-    visibility TEXT NOT NULL DEFAULT 'unlisted',
+    visibility TEXT NOT NULL DEFAULT 'public',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     UNIQUE(owner_id, slug),
@@ -164,6 +164,7 @@ CREATE INDEX IF NOT EXISTS idx_files_public_catalog ON files(visibility, moderat
 CREATE INDEX IF NOT EXISTS idx_files_featured_catalog ON files(visibility, moderation_status, featured_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_files_management_order ON files(COALESCE(timestamp, CAST(json_extract(metadata, '$.TimeStamp') AS INTEGER), 0) DESC, id DESC, NULLIF(COALESCE(NULLIF(directory, ''), json_extract(metadata, '$.Directory')), ''));
 CREATE INDEX IF NOT EXISTS idx_users_public_handle ON users(public_handle);
+CREATE INDEX IF NOT EXISTS idx_albums_discover_order ON albums(updated_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_album_items_album_order ON album_items(album_id, position);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
 

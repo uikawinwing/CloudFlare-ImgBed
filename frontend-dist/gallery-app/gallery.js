@@ -7,7 +7,7 @@ const description = document.body.dataset.description || '';
 
 const brand = `<a class="brand" href="/" aria-label="返回 CloudFlare ImgBed 首页"><span class="brand-mark" aria-hidden="true">I</span><span>ImgBed <small>Community</small></span></a>`;
 const themeButton = `<button class="theme-button" type="button" data-theme-toggle aria-label="切换主题"><svg class="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><g class="theme-sun"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"/></g><g class="theme-moon"><path d="M20 15.2A8.3 8.3 0 0 1 8.8 4 8.4 8.4 0 1 0 20 15.2Z"/></g></svg></button>`;
-const topbar = `${brand}<div class="top-actions"><a href="/">发现</a><span class="top-label">分享图库</span>${themeButton}</div>`;
+const topbar = `${brand}<div class="top-actions"><a href="/discover/">发现</a><span class="top-label">分享图库</span>${themeButton}</div>`;
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
