@@ -44,3 +44,17 @@
 .site-settings-fields small { color: var(--muted); font-weight: 400; line-height: 1.55; white-space: pre-line; }
 .site-settings-fields .native-check { flex-wrap: wrap; align-content: start; }
 .site-settings-fields .native-check small { flex-basis: 100%; }
+.native-ip-params { margin-top: 20px; }
+.native-ip-params h3 { margin: 0; font-size: 14px; }
+.native-ip-param { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px; margin: 14px 0; }
+.native-token-editor { display: grid; gap: 14px; }
+.native-token-editor > .button { justify-self: start; }
+.native-token-permissions { display: flex; flex-wrap: wrap; gap: 16px; margin: 0; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.native-token-permissions legend { color: var(--muted-strong); font-size: 13px; }
+.native-token-create { margin-top: 20px; }
+.native-settings-section details > summary { width: fit-content; margin-top: 14px; padding: 8px 0; cursor: pointer; color: var(--muted-strong); font-size: 13px; }
+.native-settings-section details > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.native-settings-section code { display: block; overflow-wrap: anywhere; margin-top: 12px; color: var(--muted); }
+.native-token-result { display: grid; gap: 12px; margin-top: 20px; }
+.native-token-result > .button { justify-self: start; }
+@media (max-width: 720px) { .native-ip-param { grid-template-columns: minmax(0, 1fr); }.native-token-permissions { flex-direction: column; }.native-settings-tabs a { min-width: 112px; } }

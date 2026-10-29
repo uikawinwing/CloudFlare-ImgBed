@@ -38,7 +38,9 @@ async function checkAdmin({ env, request, adminConfigured }) {
         return AUTHORIZED('admin');
     }
 
-    if (!adminConfigured && !isDiscordAuthConfigured(env)) {
+    if (isDiscordAuthConfigured(env)) return null;
+
+    if (!adminConfigured) {
         return AUTHORIZED('admin'); // 未配置管理员认证，视为管理员身份放行
     }
 
@@ -58,6 +60,9 @@ async function checkAdmin({ env, request, adminConfigured }) {
  *          认证通过/失败返回结果，无法判定返回 null
  */
 async function checkUser({ env, request, url, authCodeConfigured, userAuthCode }) {
+    if (isDiscordAuthConfigured(env)) {
+        return await getDiscordIdentity(env, request) ? AUTHORIZED('user') : UNAUTHORIZED;
+    }
     // admin session（管理员身份也可访问用户资源）
     const adminSession = await validateSession(env, request, 'admin');
     if (adminSession.valid) {

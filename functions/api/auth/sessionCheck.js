@@ -42,8 +42,8 @@ export async function onRequestGet(context) {
         });
     }
 
-    // 检查会话
-    const sessionResult = await validateAnySession(env, request);
+    // Discord 模式只接受带有 Discord 身份的会话。
+    const sessionResult = discordAuthConfigured ? { valid: false } : await validateAnySession(env, request);
     if (sessionResult.valid) {
         return new Response(JSON.stringify({
             valid: true,

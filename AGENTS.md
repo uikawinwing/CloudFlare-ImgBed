@@ -38,6 +38,7 @@
 - `/account/?view=albums&album=...` 是有效的图库详情深链，必须保留。进出管理工具、浏览器前进／后退后，详情参数和“我的文件”侧栏高亮都要正确。
 - 管理工具入口由 `account/shell.js` 与 `account/legacy-tools.js` 协作；原生设置由 `account/storage-settings.js` 承载。调整导航时一起检查这些路径。
 - 新版“网站设置”也是原生设置页，只展示已接入新版的品牌、公开链接、上传渠道及工作区壁纸参数。不得重新展示没有新版消费者的旧配置或重复的欢迎页壁纸 JSON 输入；保留存量配置不等于必须保留旧控件。
+- “安全与自动化”使用同一原生设置页，保留图像审查、IP 地点记录、文件访问和管理 API Token。旧上传密码、管理账号密码及不影响 Discord 的旧会话选项不在新版展示。安全配置使用 `GET /api/manage/sysConfig/security?view=modern` 与限定字段的 PATCH 增量保存，不覆盖存量认证、令牌及未修改配置。
 - 共享站点配置由 `frontend-dist/site-config.js` 读取并应用，`site.js` 启动；动态页面标题和公开文件复制链接使用共享接口，不能重新写死品牌或忽略 URL 前缀。保存后刷新共享缓存与当前页面显示，失败时保留已保存事实并提示刷新。
 - 欢迎页是访客入口，已登录用户进入文件工作区。壁纸配置请求不能阻塞认证跳转。
 - 欢迎页壁纸使用独立的 `welcomeWallpaper` 配置；旧上传页／管理页壁纸不是同一队列。入口为 `/account/?tool=system-wallpaper`。
@@ -53,6 +54,7 @@
 - 文件存储、私有缩略图存储和 Images 绑定有不同职责。不要把私有文件或缩略图桶改成公开来绕过访问问题。
 - 管理接口权限沿用 `functions/api/manage/_middleware.js` 与共享认证逻辑；写接口同时遵循现有跨站请求校验。
 - Discord 登录需要运行时同时存在 `DISCORD_CLIENT_ID` 和 `DISCORD_CLIENT_SECRET`，并使用正确的 `DISCORD_CALLBACK_URL`。缺少前两者会返回 `Discord OAuth is not configured`。
+- Discord 已配置时，旧 `login`／`adminLogin` 不再签发会话，认证与 `sessionCheck` 都不得接受没有 Discord 身份的旧会话。API Token 仍按权限用于管理接口，不能替代新版上传所需的 Discord 身份；不要重新引入空账号密码直接获取管理员会话的行为。
 - 不输出、提交或写入页面任何密钥、会话 Cookie、令牌或数据库内容。排查配置时只检查名称、类型和是否存在。
 
 ## 开始工作与实现流程

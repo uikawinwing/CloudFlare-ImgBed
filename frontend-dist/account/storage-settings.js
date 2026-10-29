@@ -6,6 +6,7 @@ const panels = {
   'system-others': { title: '其他设置', description: '管理站点功能与缓存清理。' },
   'system-wallpaper': { title: '欢迎页壁纸', description: '设置欢迎页的壁纸、播放顺序和裁切位置。' },
   'system-page': { title: '网站设置', description: '管理站点品牌、公开链接和工作区壁纸。' },
+  'system-security': { title: '安全与自动化', description: '管理内容审查、文件访问与管理接口令牌。' },
 };
 const channelTypes = {
   telegram: { label: 'Telegram', fields: [['name', '渠道名称', 'text'], ['botToken', 'Bot Token', 'secret'], ['chatId', '聊天 ID', 'text'], ['proxyUrl', '代理域名（可选）', 'text']] },
@@ -14,7 +15,139 @@ const channelTypes = {
   huggingface: { label: 'Hugging Face', fields: [['name', '渠道名称', 'text'], ['token', 'Access Token', 'secret'], ['repo', '仓库名称', 'text']] },
 };
 
-const state = { host: null, user: null, upload: null, others: null, wallpaper: null, page: null, pageChanges: {}, dirty: false, saving: false, activeKey: null, loadId: 0 };
+const state = { host: null, user: null, upload: null, others: null, wallpaper: null, page: null, pageChanges: {}, security: null, securityChanges: {}, tokens: [], tokenDrafts: {}, createdToken: '', dirty: false, saving: false, activeKey: null, loadId: 0 };
+
+const securityGroups = [
+  { title: '图像审查', description: '上传时调用所选服务。审查结果会影响文件的公开访问；Discord 渠道审查失败时会隔离文件。', fields: [
+    ['upload.moderate.enabled', '启用图像审查', 'boolean'],
+    ['upload.moderate.channel', '审查服务', 'select', [['moderatecontent.com', 'ModerateContent'], ['nsfwjs', '自建 NSFW 服务']]],
+    ['upload.moderate.moderateContentApiKey', 'ModerateContent API Key', 'secret'],
+    ['upload.moderate.nsfwApiPath', '自建审查服务地址', 'url'],
+  ] },
+  { title: '上传地点记录', description: '通过自定义服务查询上传 IP 的地点；启用后会将上传 IP 发送给所配置的服务。', fields: [
+    ['upload.ipQuery.enabled', '记录上传地点', 'boolean'],
+    ['upload.ipQuery.customApi.url', '查询服务地址', 'url'],
+    ['upload.ipQuery.customApi.responseFields', '地点字段', 'lines', '每行填写一个响应字段路径，例如 country 或 data.city。'],
+  ] },
+  { title: '文件访问', description: '设置文件防盗链、白名单和动态图片尺寸。', fields: [
+    ['access.allowedDomains', '允许引用文件的域名', 'text', '多个域名用逗号分隔；留空不限制。'],
+    ['access.whiteListMode', '公开访问仅限白名单文件（影响全部文件）', 'boolean'],
+    ['access.imageTransformEnabled', '启用动态图片变换', 'boolean'],
+    ['access.imageTransformAllowedSizes', '允许变换的尺寸', 'text', '用逗号分隔，例如 800x600,autox400；留空不限制尺寸组合。'],
+  ] },
+];
+const tokenPermissions = [['list', '列出文件'], ['delete', '删除文件'], ['manage', '管理设置']];
+
+function securityValue(path) {
+  return Object.hasOwn(state.securityChanges, path) ? state.securityChanges[path] : path.split('.').reduce((value, key) => value?.[key], state.security);
+}
+
+function securityFieldMarkup([path, label, kind, help]) {
+  const value = securityValue(path), id = `security-${path.replaceAll('.', '-')}`;
+  const common = `id="${id}" data-security-field="${path}" aria-describedby="securitySettingsStatus ${id}-help"`;
+  if (kind === 'boolean') return `<label class="native-check"><input ${common} type="checkbox"${value ? ' checked' : ''}> ${label}<small id="${id}-help"></small></label>`;
+  let control;
+  if (kind === 'select') control = `<select ${common}>${help.map(([key, title]) => `<option value="${key}"${value === key ? ' selected' : ''}>${title}</option>`).join('')}</select>`;
+  else if (kind === 'lines') control = `<textarea ${common} rows="3">${escapeHtml((value || []).join('\n'))}</textarea>`;
+  else control = `<span class="native-secret-field"><input ${common} type="${kind === 'secret' ? 'password' : kind}" value="${escapeHtml(value || '')}"${kind === 'secret' ? ' autocomplete="off"' : ''}>${kind === 'secret' ? '<button type="button" class="native-secret-toggle" data-secret-toggle aria-pressed="false" aria-label="显示审查服务密钥">显示</button>' : ''}</span>`;
+  return `<label class="native-settings-field" for="${id}"><span>${label}</span>${control}<small id="${id}-help">${escapeHtml(typeof help === 'string' ? help : '')}</small></label>`;
+}
+
+function tokenEditorMarkup(token = {}) {
+  const id = token.id || 'new', draft = state.tokenDrafts[id] || token;
+  return `<form class="native-token-editor" data-token-editor="${escapeHtml(id)}"><div class="native-settings-fields site-settings-fields">${id === 'new' ? `<label class="native-settings-field"><span>令牌名称</span><input name="name" required maxlength="80" value="${escapeHtml(draft.name || '')}" autocomplete="off"></label>` : ''}<label class="native-settings-field"><span>到期时间（可选）</span><input name="expiresAt" type="datetime-local" value="${escapeHtml(draft.localExpiry ?? localExpiry(token.expiresAt))}"><small>留空表示长期有效。</small></label></div><fieldset class="native-token-permissions"><legend>管理接口权限</legend>${tokenPermissions.map(([permission, label]) => `<label class="native-check"><input type="checkbox" name="permission" value="${permission}"${draft.permissions?.includes(permission) ? ' checked' : ''}> ${label}</label>`).join('')}</fieldset><p>令牌用于管理接口，不能代替成员的 Discord 登录上传。</p><button class="button" type="submit">${id === 'new' ? '创建令牌' : '保存令牌权限'}</button></form>`;
+}
+
+function localExpiry(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+function securityMarkup() {
+  const params = securityValue('upload.ipQuery.customApi.params') || [];
+  return `<main class="native-settings-main"><section class="page-section native-settings-page"><header class="page-head"><div class="page-title"><h1>安全与自动化</h1><p>成员通过 Discord 登录；管理员权限在成员管理中分配。</p></div><button type="button" class="button primary" data-save-settings${state.dirty ? '' : ' disabled'}>保存更改</button></header>${renderTabNav()}<div id="securitySettingsStatus" class="native-settings-status" aria-live="polite"></div>${securityGroups.map(group => `<section class="native-settings-section"><h2>${group.title}</h2><p>${group.description}</p><div class="native-settings-fields site-settings-fields">${group.fields.filter(([path]) => !path.includes('moderateContentApiKey') || securityValue('upload.moderate.channel') === 'moderatecontent.com').filter(([path]) => !path.includes('nsfwApiPath') || securityValue('upload.moderate.channel') === 'nsfwjs').map(securityFieldMarkup).join('')}</div>${group.title === '上传地点记录' ? `<div class="native-ip-params"><h3>查询参数</h3><p>参数值中可用 {ip} 代入上传 IP；服务地址也支持 {ip}。</p>${params.map((param, index) => `<div class="native-ip-param" data-ip-param="${index}"><label class="native-settings-field"><span>参数名称</span><input data-ip-param-key value="${escapeHtml(param.key)}"></label><label class="native-settings-field"><span>参数值</span><input data-ip-param-value value="${escapeHtml(param.value)}"></label><button type="button" class="button" data-remove-ip-param="${index}" aria-label="移除查询参数 ${index + 1}">移除</button></div>`).join('')}<button type="button" class="button" data-add-ip-param>添加参数</button></div>` : ''}</section>`).join('')}<section class="native-settings-section"><h2>管理 API Token</h2><p>供脚本或外部工具调用管理接口。只授予需要的权限；完整令牌仅在创建后显示一次。</p><div class="native-channel-list">${state.tokens.length ? state.tokens.map(token => `<article class="native-channel-card"><header><div><h3>${escapeHtml(token.name)}</h3><p>${token.expiresAt && new Date(token.expiresAt).getTime() <= Date.now() ? '已到期' : '有效'} · ${token.expiresAt ? escapeHtml(new Date(token.expiresAt).toLocaleString()) : '长期有效'}</p></div><button type="button" class="button danger" data-revoke-token="${escapeHtml(token.id)}">撤销令牌</button></header><code>${escapeHtml(token.token)}</code><details><summary>调整权限与到期时间</summary>${tokenEditorMarkup(token)}</details></article>`).join('') : '<div class="native-empty">尚未创建管理令牌。使用 Discord 网页功能无需创建令牌。</div>'}</div><details class="native-token-create"${state.tokenDrafts.new ? ' open' : ''}><summary>创建管理令牌</summary>${tokenEditorMarkup()}</details>${state.createdToken ? `<div class="native-token-result"><label class="native-settings-field"><span>新令牌，请立即复制并妥善保存</span><input data-created-token type="password" readonly autocomplete="off" value="${escapeHtml(state.createdToken)}"></label><button type="button" class="button" data-copy-created-token>复制令牌</button></div>` : ''}</section></section></main>`;
+}
+
+function validateSecuritySettings() {
+  for (const path of ['upload.moderate.nsfwApiPath', 'upload.ipQuery.customApi.url']) {
+    const value = securityValue(path);
+    const active = path.includes('nsfwApiPath') ? securityValue('upload.moderate.enabled') && securityValue('upload.moderate.channel') === 'nsfwjs' : securityValue('upload.ipQuery.enabled');
+    if (!active && !Object.hasOwn(state.securityChanges, path)) continue;
+    if (value && !/^https?:\/\//i.test(value)) return { id: path, message: '服务地址须以 http:// 或 https:// 开头。' };
+    if (value) { try { const url = new URL(value); if (url.username || url.password) throw new Error(); } catch { return { id: path, message: '服务地址格式不正确。' }; } }
+  }
+  if (securityValue('upload.moderate.enabled')) {
+    const path = securityValue('upload.moderate.channel') === 'nsfwjs' ? 'upload.moderate.nsfwApiPath' : 'upload.moderate.moderateContentApiKey';
+    if (!String(securityValue(path) || '').trim()) return { id: path, message: '启用审查前，请填写所选服务的地址或密钥。' };
+  }
+  if (securityValue('upload.ipQuery.enabled') && (!securityValue('upload.ipQuery.customApi.url') || !securityValue('upload.ipQuery.customApi.responseFields')?.length)) return { id: 'upload.ipQuery.customApi.url', message: '启用地点记录前，请填写查询服务地址与地点字段。' };
+  return null;
+}
+
+function securityFieldError(error) {
+  const input = state.host.querySelector(`[data-security-field="${error.id}"]`);
+  input?.setAttribute('aria-invalid', 'true');
+  input?.focus();
+  setStatus(error.message, 'error');
+}
+
+async function changeToken(options) {
+  if (state.saving) return;
+  state.saving = true;
+  saveButton(true);
+  const loadId = state.loadId;
+  try {
+    const result = await api('/api/manage/apiTokens' + (options.id ? `?id=${encodeURIComponent(options.id)}` : ''), { method: options.method, ...(options.body ? { body: JSON.stringify(options.body) } : {}) });
+    if (result.error) throw new Error(result.error);
+    if (loadId !== state.loadId) return;
+    if (options.method === 'POST') {
+      state.createdToken = result.token;
+      state.tokens.push({ ...result, token: result.token.slice(0, 15) + '...' });
+    } else if (options.method === 'DELETE') {
+      state.createdToken = '';
+      state.tokens = state.tokens.filter(token => token.id !== options.id);
+    } else {
+      Object.assign(state.tokens.find(token => token.id === options.id), options.body);
+    }
+    delete state.tokenDrafts[options.id || 'new'];
+    render();
+    setStatus('令牌已更新。', 'success');
+  } catch (error) {
+    if (loadId === state.loadId) setStatus(error.message || '令牌操作失败，请重试。', 'error');
+  } finally { state.saving = false; saveButton(false); }
+}
+
+function bindSecurityEvents() {
+  state.host.querySelectorAll('[data-security-field]').forEach(input => input.addEventListener(input.tagName === 'SELECT' || input.type === 'checkbox' ? 'change' : 'input', () => {
+    const path = input.dataset.securityField;
+    state.securityChanges[path] = input.type === 'checkbox' ? input.checked : input.tagName === 'TEXTAREA' ? input.value.split('\n').map(line => line.trim()).filter(Boolean) : input.value;
+    if (path.startsWith('upload.ipQuery.')) state.securityChanges['upload.ipQuery.channel'] = 'customApi';
+    input.removeAttribute('aria-invalid');
+    markDirty();
+    if (path === 'upload.moderate.channel') { render(); state.host.querySelector(`[data-security-field="${path}"]`)?.focus(); }
+  }));
+  const changeParams = change => { const params = structuredClone(securityValue('upload.ipQuery.customApi.params') || []); change(params); state.securityChanges['upload.ipQuery.customApi.params'] = params; state.securityChanges['upload.ipQuery.channel'] = 'customApi'; markDirty(); };
+  state.host.querySelectorAll('[data-ip-param]').forEach(row => row.querySelectorAll('input').forEach(input => input.addEventListener('input', () => changeParams(params => { params[Number(row.dataset.ipParam)] = { key: row.querySelector('[data-ip-param-key]').value, value: row.querySelector('[data-ip-param-value]').value }; }))));
+  state.host.querySelector('[data-add-ip-param]')?.addEventListener('click', () => { changeParams(params => params.push({ key: '', value: '' })); render(); state.host.querySelectorAll('[data-ip-param-key]')[securityValue('upload.ipQuery.customApi.params').length - 1]?.focus(); });
+  state.host.querySelectorAll('[data-remove-ip-param]').forEach(button => button.addEventListener('click', () => { changeParams(params => params.splice(Number(button.dataset.removeIpParam), 1)); render(); state.host.querySelector('[data-add-ip-param]')?.focus(); }));
+  state.host.querySelectorAll('[data-token-editor]').forEach(form => {
+    const draft = () => ({ name: form.elements.namedItem('name')?.value.trim(), permissions: [...form.querySelectorAll('[name="permission"]:checked')].map(input => input.value), localExpiry: form.elements.namedItem('expiresAt').value });
+    form.addEventListener('input', () => { state.tokenDrafts[form.dataset.tokenEditor] = draft(); });
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const value = draft(), id = form.dataset.tokenEditor;
+      const existing = state.tokens.find(token => token.id === id);
+      const permissions = [...value.permissions, ...(existing?.permissions?.includes('upload') ? ['upload'] : [])];
+      if (!permissions.length) { setStatus('请至少选择一项令牌权限。', 'error'); return; }
+      const expiresAt = value.localExpiry ? new Date(value.localExpiry).toISOString() : null;
+      if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) { setStatus('请选择将来的到期时间。', 'error'); return; }
+      changeToken({ method: id === 'new' ? 'POST' : 'PUT', ...(id === 'new' ? {} : { id }), body: { ...(id === 'new' ? { name: value.name, owner: state.user.id || state.user.discord_id } : { tokenId: id }), permissions, expiresAt, autoDelete: existing?.autoDelete || false } });
+    });
+  });
+  state.host.querySelectorAll('[data-revoke-token]').forEach(button => button.addEventListener('click', () => { if (window.confirm('撤销后，使用此令牌的脚本将无法继续访问。确定撤销？')) changeToken({ method: 'DELETE', id: button.dataset.revokeToken }); }));
+  state.host.querySelector('[data-copy-created-token]')?.addEventListener('click', async () => { try { await navigator.clipboard.writeText(state.createdToken); setStatus('令牌已复制。', 'success'); } catch { const input = state.host.querySelector('[data-created-token]'); input.type = 'text'; input.focus(); input.select(); setStatus('无法自动复制，请手动复制上方令牌。', 'error'); } });
+}
 
 const siteGroups = [
   { title: '站点品牌', description: '应用于欢迎页、Discover、文件工作区和 CharInfo。', ids: ['siteTitle', 'ownerName', 'siteIcon', 'logoUrl', 'logoLink'] },
@@ -302,7 +435,7 @@ function setStatus(message, type = '') {
 
 function markDirty() {
   state.dirty = true;
-  if (state.activeKey === 'system-page' && !state.saving) state.host?.querySelector('[data-save-settings]')?.removeAttribute('disabled');
+  if (['system-page', 'system-security'].includes(state.activeKey) && !state.saving) state.host?.querySelector('[data-save-settings]')?.removeAttribute('disabled');
   setStatus('尚有未保存的更改。', 'pending');
 }
 
@@ -369,7 +502,7 @@ function saveButton(busy) {
     }
   });
   state.host?.querySelectorAll('[data-save-settings]').forEach(button => {
-    button.disabled = busy || (state.activeKey === 'system-page' && !state.dirty);
+    button.disabled = busy || (['system-page', 'system-security'].includes(state.activeKey) && !state.dirty);
     button.setAttribute('aria-busy', String(busy));
     button.textContent = busy ? '正在保存…' : '保存更改';
   });
@@ -380,6 +513,12 @@ async function save() {
   const upload = state.activeKey === 'system-upload';
   const wallpaper = state.activeKey === 'system-wallpaper';
   const page = state.activeKey === 'system-page';
+  const security = state.activeKey === 'system-security';
+  if (security) {
+    if (!Object.keys(state.securityChanges).length) return;
+    const error = validateSecuritySettings();
+    if (error) { securityFieldError(error); return; }
+  }
   if (page) {
     if (!Object.keys(state.pageChanges).length) return;
     const error = validateSiteSettings();
@@ -401,11 +540,12 @@ async function save() {
   saveButton(true);
   setStatus('正在保存…', 'pending');
   try {
-    const path = wallpaper || page ? '/api/manage/sysConfig/page' : upload ? '/api/manage/sysConfig/upload' : '/api/manage/sysConfig/others';
-    const result = await api(path, { method: wallpaper || page ? 'PATCH' : 'POST', body: JSON.stringify(page ? { pageValues: state.pageChanges } : wallpaper ? { welcomeWallpaper: state.wallpaper } : upload ? state.upload : state.others) });
+    const path = security ? '/api/manage/sysConfig/security' : wallpaper || page ? '/api/manage/sysConfig/page' : upload ? '/api/manage/sysConfig/upload' : '/api/manage/sysConfig/others';
+    const result = await api(path, { method: security || wallpaper || page ? 'PATCH' : 'POST', body: JSON.stringify(security ? { securityValues: state.securityChanges } : page ? { pageValues: state.pageChanges } : wallpaper ? { welcomeWallpaper: state.wallpaper } : upload ? state.upload : state.others) });
     if (upload) state.upload = result;
     else if (wallpaper) state.wallpaper = readWallpaper(result);
     else if (page) { state.page = result; state.pageChanges = {}; }
+    else if (security) { state.security = result; state.securityChanges = {}; }
     else state.others = result;
     state.dirty = false;
     render();
@@ -416,6 +556,7 @@ async function save() {
       catch { setStatus('设置已保存，但当前页面未能更新显示，请刷新页面。', 'error'); }
     }
   } catch (error) {
+    if (security && error.field?.startsWith('securityValues.')) { securityFieldError({ id: error.field.slice('securityValues.'.length), message: error.message }); return; }
     if (page && error.field?.startsWith('pageValues.')) { siteFieldError({ id: error.field.split('.')[1], message: error.message }); return; }
     if (error.status === 401 || error.status === 403) setStatus('当前账户没有保存系统设置的权限。', 'error');
     else setStatus(error.message || '保存失败，请检查网络后重试。', 'error');
@@ -433,11 +574,12 @@ function setOtherField(path, value) {
 
 function render() {
   if (!state.host || !state.user || !allowedRoles.has(state.user.role)) return;
-  state.host.innerHTML = state.activeKey === 'system-page' ? pageMarkup() : state.activeKey === 'system-wallpaper' ? wallpaperMarkup() : state.activeKey === 'system-others' ? othersMarkup() : uploadMarkup();
+  state.host.innerHTML = state.activeKey === 'system-security' ? securityMarkup() : state.activeKey === 'system-page' ? pageMarkup() : state.activeKey === 'system-wallpaper' ? wallpaperMarkup() : state.activeKey === 'system-others' ? othersMarkup() : uploadMarkup();
   bindPageEvents();
 }
 
 function bindPageEvents() {
+  if (state.activeKey === 'system-security') bindSecurityEvents();
   if (state.activeKey === 'system-page') bindSiteEvents();
   if (state.activeKey === 'system-wallpaper') bindWallpaperEvents();
   state.host.querySelectorAll('[data-channel-field]').forEach(input => input.addEventListener('change', event => {
@@ -527,6 +669,7 @@ function discardDialog(continueAction) {
   backdrop.querySelector('[data-keep-editing]').addEventListener('click', close);
   backdrop.querySelector('[data-discard-settings]').addEventListener('click', () => {
     state.dirty = false;
+    state.tokenDrafts = {};
     close();
     continueAction();
   });
@@ -539,7 +682,7 @@ function requestLeave(continueAction) {
     setStatus('正在保存设置，请稍候。', 'pending');
     return false;
   }
-  if (!state.dirty) return true;
+  if (!state.dirty && !Object.keys(state.tokenDrafts).length) return true;
   discardDialog(continueAction);
   return false;
 }
@@ -559,9 +702,11 @@ async function show(detail) {
       return;
     }
     const path = ['system-wallpaper', 'system-page'].includes(state.activeKey) ? '/api/manage/sysConfig/page' : state.activeKey === 'system-others' ? '/api/manage/sysConfig/others' : '/api/manage/sysConfig/upload';
-    const data = await api(path);
+    const security = state.activeKey === 'system-security';
+    const [data, tokenData] = await Promise.all([api(security ? '/api/manage/sysConfig/security?view=modern' : path), security ? api('/api/manage/apiTokens') : Promise.resolve(null)]);
     if (loadId !== state.loadId) return;
-    if (state.activeKey === 'system-others') state.others = data;
+    if (security) { state.security = data; state.securityChanges = {}; state.tokens = tokenData.tokens || []; state.tokenDrafts = {}; }
+    else if (state.activeKey === 'system-others') state.others = data;
     else if (state.activeKey === 'system-wallpaper') {
       state.wallpaper = readWallpaper(data);
     } else if (state.activeKey === 'system-page') { state.page = data; state.pageChanges = {}; }
@@ -578,7 +723,7 @@ async function show(detail) {
 window.ImgBedStorageSettings = { requestLeave, show };
 window.addEventListener('imgbed:native-tool-show', event => show(event.detail));
 window.addEventListener('beforeunload', event => {
-  if (!state.dirty && !state.saving) return;
+  if (!state.dirty && !state.saving && !Object.keys(state.tokenDrafts).length) return;
   event.preventDefault();
   event.returnValue = '';
 });

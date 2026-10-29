@@ -50,6 +50,8 @@ Welcome-page wallpapers use the existing native settings shell, fields, save fee
 
 Website settings use that same native shell and only expose controls consumed by the current pages. Brand names, titles, icons, logo links, and public file link prefixes are owned by `frontend-dist/site-config.js`; page entry points load `site.js`, while dynamic headings and titles use the shared APIs. Channel selection uses a native select with the operating system's popup behavior. Workspace wallpaper playback shares `frontend-dist/wallpaper-player.js` with the welcome page, retaining separate settings and existing millisecond units for workspace intervals.
 
+Security settings reuse the native shell for active moderation, upload location records, file access, and management API tokens. The interface explains Discord sign-in and excludes legacy password and session controls. Review service credentials stay masked; only the selected service's credential is shown. Token creation is optional, displays the complete token only after successful creation, and keeps creation and revocation separate from saving site policies. Whitelist wording makes clear that it affects public access to all files.
+
 ## Do's and Don'ts
 
 Do explain what an administrator controls in plain Chinese. Do preserve clear loading, error, and empty states. Do not add a second design-token system, store sensitive settings in browser storage, or expose retired storage providers as configurable options.
