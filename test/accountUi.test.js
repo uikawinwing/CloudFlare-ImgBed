@@ -110,7 +110,8 @@ describe('account media and album UI', () => {
     assert.match(styles, /\.album-list\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(260px,\s*320px\)\)[^}]*justify-content:\s*start/);
     assert.match(styles, /\.album-cover\s*\{[^}]*aspect-ratio:\s*4\s*\/\s*3/);
     assert.doesNotMatch(styles, /\.album-row\s*\{[^}]*grid-template-columns:\s*minmax\(210px,\s*280px\)\s+1fr/);
-    assert.match(source, /<details class="album-actions-menu">[\s\S]*<summary[^>]*>管理图库<\/summary>[\s\S]*class="album-actions"/);
+    assert.match(source, /<details class="album-actions-menu">[\s\S]*<summary[^>]*>分享与更多<\/summary>[\s\S]*class="album-actions"/);
+    assert.match(source, /class="album-card-actions"[\s\S]*data-manage-album>打开图库/);
   });
 
   it('lets an owner choose an image cover and drag its focal point without changing album order', () => {
@@ -183,5 +184,43 @@ describe('homepage sign-in routing', () => {
       assert.deepEqual(result.redirects, []);
       assert.deepEqual(result.revealed, ['welcome-checking']);
     }
+  });
+});
+
+describe('unified file workspace navigation', () => {
+  function workspace(url = 'https://imgbed.example/account/?view=albums&album=summer') {
+    return runInNewContext(`${source.replace(/^import .*;\r?\n/, '').replace(/\ninit\(\);\s*$/, '')}\n({ state, workspaceTargetFromUrl, buildWorkspaceUrl, workspaceHeader, albumDetailMarkup })`, {
+      location: new URL(url), URL, URLSearchParams, document: { querySelector: () => ({}) },
+    });
+  }
+
+  it('keeps the album deep link and a single sidebar entry for the workspace', () => {
+    const app = workspace();
+    assert.equal(app.state.albumId, 'summer');
+    assert.equal(app.buildWorkspaceUrl().searchParams.get('album'), 'summer');
+    assert.equal(app.workspaceTargetFromUrl('/account/?view=albums&album=winter').albumId, 'winter');
+    assert.equal(app.workspaceTargetFromUrl('/account/?view=files&album=winter').albumId, null);
+    assert.equal(app.workspaceTargetFromUrl('https://other.example/account/'), null);
+    assert.doesNotMatch(shellSource, /key: 'albums', label:/);
+  });
+
+  it('renders both file and album navigation in the same workspace header', () => {
+    const app = workspace();
+    app.state.user = { role: 'member' };
+    app.state.albums = [{ id: 'summer' }];
+    const header = app.workspaceHeader();
+    assert.match(header, /<h1>我的文件<\/h1>/);
+    assert.match(header, /view=files/);
+    assert.match(header, /view=albums" aria-current="page"/);
+  });
+
+  it('exposes adding and editing inside an empty album and escapes its name', () => {
+    const app = workspace();
+    app.state.user = { role: 'member', publicHandle: 'master' };
+    const detail = app.albumDetailMarkup({ id: 'summer', name: '<Summer>', slug: 'summer', items: [] });
+    assert.match(detail, /&lt;Summer&gt;/);
+    assert.match(detail, /id="addAlbumFiles"[^>]*>[\s\S]*?添加已有文件/);
+    assert.match(detail, /data-edit-album>编辑信息/);
+    assert.doesNotMatch(detail, /请从“我的文件”选择内容加入/);
   });
 });

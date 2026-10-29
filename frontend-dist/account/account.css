@@ -162,6 +162,49 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .album-actions { display: grid; gap: 8px; }
 .album-visibility { margin: 0 0 2px; color: var(--muted); font-size: 12px; line-height: 1.55; }
 .album-actions .button { width: 100%; }
+.workspace-tabs { display: flex; gap: 24px; margin: 0 0 28px; border-bottom: 1px solid var(--border); }
+.workspace-tabs a { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; border-bottom: 2px solid transparent; color: var(--muted); font-size: 14px; font-weight: 650; text-decoration: none; }
+.workspace-tabs a:hover { color: var(--text); }
+.workspace-tabs a[aria-current] { border-bottom-color: var(--accent); color: var(--text); }
+.workspace-tabs svg { width: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.workspace-tabs span { padding: 2px 7px; border-radius: var(--radius-sm); background: var(--surface-hover); font-size: 12px; }
+.workspace-section-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 0 0 22px; }
+.workspace-section-head h2 { margin: 0; overflow-wrap: anywhere; font-size: 24px; }
+.workspace-section-head p { max-width: 660px; margin: 8px 0 0; color: var(--muted); line-height: 1.6; overflow-wrap: anywhere; }
+.album-back { display: inline-flex; align-items: center; min-height: 44px; margin-bottom: 12px; color: var(--muted-strong); font-size: 13px; text-decoration: none; }
+.album-back:hover, .album-body h2 a:hover { color: var(--accent); }
+.album-body h2 a { color: inherit; text-decoration: none; }
+.album-cover:hover { opacity: .88; }
+.album-card-actions { display: flex; gap: 5px; margin-top: 14px; }
+.album-card-actions .button { flex: 1; padding: 0 9px; }
+.album-detail-actions, .album-detail-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.album-detail-actions { flex-shrink: 0; }
+.album-detail-tools { padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.album-detail-tools .album-delete { margin-left: auto; color: var(--danger); }
+.album-content-hint { margin: 18px 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.album-detail .album-item-thumb { padding: 0; border: 0; cursor: pointer; }
+.album-detail .album-item-thumb:hover { opacity: .8; }
+.album-detail .album-item-row { background: var(--surface); }
+.album-detail .album-item-thumb { background: var(--surface-hover); }
+.album-detail .album-item-actions .button { white-space: nowrap; }
+#albumForm textarea { resize: none; }
+.album-file-search { display: flex; gap: 10px; margin-bottom: 18px; }
+.album-file-search .search-control { flex: 1; min-width: 0; padding-right: 2px; }
+.album-file-search .icon-button { flex-shrink: 0; }
+.album-file-results { min-height: 260px; }
+.album-file-results .loading-state { min-height: 260px; }
+.album-file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+.album-file-option { position: relative; min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.album-file-option:hover { border-color: var(--border-strong); }
+.album-file-option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.album-file-option:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.album-file-option.included { opacity: .58; cursor: default; }
+.album-file-option input { position: absolute; z-index: 1; top: 14px; left: 14px; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); cursor: inherit; }
+.album-file-preview { display: block; overflow: hidden; aspect-ratio: 4 / 3; border-radius: 6px; background: var(--surface-hover); }
+.album-file-preview img, .album-file-preview video { width: 100%; height: 100%; object-fit: cover; }
+.album-file-option strong { display: block; overflow: hidden; margin-top: 9px; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.album-file-option small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }
+.album-file-count { align-self: center; margin-right: auto; color: var(--muted); font-size: 13px; }
 .album-item-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: rgba(8, 18, 31, .68); }
 .album-item-row + .album-item-row { margin-top: 9px; }
 .album-item-row.busy { opacity: .54; pointer-events: none; }
@@ -260,6 +303,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 @media (max-width: 1180px) {
   .media-grid { columns: 3 200px; }
+  .album-detail .album-item-row { grid-template-columns: 72px minmax(0, 1fr); }
+  .album-detail .album-item-actions { grid-column: 1 / -1; flex-wrap: wrap; }
   .moderation-head, .moderation-row { grid-template-columns: 70px minmax(180px, 1.4fr) minmax(130px, 1fr) 112px 94px minmax(150px, auto); }
   .moderation-head span:nth-child(4), .moderation-row .type-column { display: none; }
 }
@@ -289,6 +334,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @media (max-width: 720px) {
   :root { --sidebar-width: 0px; }
   .main { margin-left: 0; padding-top: 92px; }
+  .workspace-section-head { align-items: stretch; flex-direction: column; gap: 16px; }
+  .album-detail-actions .button { flex: 1; }
+  .album-detail-tools .album-delete { margin-left: 0; }
 }
 
 @media (max-width: 520px) {
@@ -307,6 +355,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .album-item-thumb { width: 58px; }
   .album-item-actions { grid-column: 1 / -1; }
   .album-item-actions .button { flex: 1; }
+  .album-detail .album-item-row { grid-template-columns: 58px minmax(0, 1fr); }
+  .album-detail .status-chip { flex-basis: 100%; }
+  .dialog:has(.album-file-results) .dialog-actions { flex-wrap: wrap; }
+  .album-file-count { flex-basis: 100%; }
+  .album-file-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dialog-backdrop { align-items: end; padding: 0; }
   .dialog, .dialog.wide { width: 100%; max-height: 92vh; border-radius: 18px 18px 0 0; }
   .dialog-actions .button { flex: 1; }

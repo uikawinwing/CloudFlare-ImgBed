@@ -36,7 +36,7 @@ function activeKey() {
     const params = new URLSearchParams(window.location.search);
     const view = params.get('view') || 'files';
     if (view === 'admin') return params.get('section') === 'users' ? 'users' : params.get('section') === 'audit' ? 'audit' : 'content';
-    return view;
+    return view === 'albums' ? 'files' : view;
   }
   if (path === '/dashboard') return 'content';
   if (path === '/customerConfig') return 'access';
@@ -49,7 +49,6 @@ function buildNavigation(role) {
   const member = [
     { key: 'upload', label: '上传', href: '/studio', icon: 'upload' },
     { key: 'files', label: '我的文件', href: accountHref('files'), icon: 'files' },
-    { key: 'albums', label: '我的图库', href: accountHref('albums'), icon: 'gallery' },
     { key: 'charinfo', label: 'CharInfo Creator', href: '/charinfo/', icon: 'gallery' },
   ];
   const staff = [

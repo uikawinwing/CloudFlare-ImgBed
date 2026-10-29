@@ -147,14 +147,14 @@ function setActiveNav(key) {
 
 function accountKeyFromUrl(url = new URL(location.href)) {
   const view = url.searchParams.get('view') || 'files';
-  if (view !== 'admin') return view === 'albums' ? 'albums' : 'files';
+  if (view !== 'admin') return 'files';
   const section = url.searchParams.get('section') || 'content';
   return section === 'users' ? 'users' : section === 'audit' ? 'audit' : 'content';
 }
 
 function accountTitleFromUrl(url = new URL(location.href)) {
   const key = accountKeyFromUrl(url);
-  return ({ files: '我的文件', albums: '我的图库', content: '内容管理', audit: '操作记录', users: '成员管理' })[key] || '我的文件';
+  return ({ files: '我的文件', content: '内容管理', audit: '操作记录', users: '成员管理' })[key] || '我的文件';
 }
 
 function applyToolChrome(tool) {
@@ -172,6 +172,7 @@ function buildParentToolUrl(tool) {
   const url = new URL('/account/', location.origin);
   const view = ['files', 'albums', 'admin'].includes(current.searchParams.get('view')) ? current.searchParams.get('view') : 'files';
   url.searchParams.set('view', view);
+  if (view === 'albums' && current.searchParams.get('album')) url.searchParams.set('album', current.searchParams.get('album'));
   if (view === 'admin') {
     const section = ['content', 'users', 'audit'].includes(current.searchParams.get('section')) ? current.searchParams.get('section') : 'content';
     url.searchParams.set('section', section);

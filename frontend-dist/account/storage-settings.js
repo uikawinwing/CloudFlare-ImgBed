@@ -45,6 +45,7 @@ function currentToolUrl(key) {
   const current = new URL(location.href);
   const view = ['files', 'albums', 'admin'].includes(current.searchParams.get('view')) ? current.searchParams.get('view') : 'files';
   url.searchParams.set('view', view);
+  if (view === 'albums' && current.searchParams.get('album')) url.searchParams.set('album', current.searchParams.get('album'));
   if (view === 'admin' && current.searchParams.get('section')) url.searchParams.set('section', current.searchParams.get('section'));
   url.searchParams.set('tool', key);
   return url.pathname + url.search;
