@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-site-page-title="发现">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -9,12 +9,12 @@
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('imgbed-theme')||((matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light')}catch{}</script>
   <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/discover/discover.css">
-  <title>发现 · CloudFlare ImgBed</title>
+  <title>发现 · Charatopia</title>
 </head>
 <body>
   <a class="skip-link" href="#explore">跳到人物相册</a>
   <header class="public-nav">
-    <a class="brand" href="/" aria-label="CloudFlare ImgBed 首页"><span class="brand-mark" aria-hidden="true">I</span><span>ImgBed <small>Community</small></span></a>
+    <a class="brand" href="/" data-site-link aria-label="Charatopia 首页"><span class="brand-mark" data-site-logo aria-hidden="true"><span data-site-logo-fallback>C</span></span><span data-site-name>Charatopia</span></a>
     <nav class="public-links" aria-label="公共导航"><a href="/">首页</a><a class="is-active" href="#explore">Discover</a><a href="/charinfo/">CharInfo Creator</a></nav>
     <div class="nav-actions">
       <a class="text-button" data-account-action href="/api/auth/discord?returnTo=/">登录</a>
@@ -36,7 +36,8 @@
     </section>
   </main>
 
-  <footer class="public-footer"><span>CloudFlare ImgBed</span><span>相册内容由各自创作者维护</span></footer>
+  <footer class="public-footer"><span data-site-name>Charatopia</span><span>相册内容由各自创作者维护</span></footer>
+  <script type="module" src="/site.js"></script>
   <script type="module" src="/theme.js"></script>
   <script type="module" src="/discover/discover.js"></script>
 </body>

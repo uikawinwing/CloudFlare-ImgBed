@@ -1,8 +1,11 @@
+import { refreshSiteConfig } from '../site-config.js';
+
 const allowedRoles = new Set(['admin', 'owner']);
 const panels = {
   'system-upload': { title: '存储渠道', description: '管理 Telegram、Discord、R2 与 Hugging Face 的保存渠道。' },
   'system-others': { title: '其他设置', description: '管理站点功能与缓存清理。' },
   'system-wallpaper': { title: '欢迎页壁纸', description: '设置欢迎页的壁纸、播放顺序和裁切位置。' },
+  'system-page': { title: '网站设置', description: '管理站点品牌、公开链接和工作区壁纸。' },
 };
 const channelTypes = {
   telegram: { label: 'Telegram', fields: [['name', '渠道名称', 'text'], ['botToken', 'Bot Token', 'secret'], ['chatId', '聊天 ID', 'text'], ['proxyUrl', '代理域名（可选）', 'text']] },
@@ -11,7 +14,82 @@ const channelTypes = {
   huggingface: { label: 'Hugging Face', fields: [['name', '渠道名称', 'text'], ['token', 'Access Token', 'secret'], ['repo', '仓库名称', 'text']] },
 };
 
-const state = { host: null, user: null, upload: null, others: null, wallpaper: null, dirty: false, saving: false, activeKey: null, loadId: 0 };
+const state = { host: null, user: null, upload: null, others: null, wallpaper: null, page: null, pageChanges: {}, dirty: false, saving: false, activeKey: null, loadId: 0 };
+
+const siteGroups = [
+  { title: '站点品牌', description: '应用于欢迎页、Discover、文件工作区和 CharInfo。', ids: ['siteTitle', 'ownerName', 'siteIcon', 'logoUrl', 'logoLink'] },
+  { title: '上传与公开链接', description: '选择上传渠道，并设置复制文件链接时使用的地址。', ids: ['defaultUploadChannel', 'defaultChannelName', 'urlPrefix'] },
+  { title: '工作区壁纸', description: '用于文件、图库及内容管理。欢迎页壁纸在独立队列中管理。', ids: ['wallpaperEnabled', 'uploadBkImg', 'adminBkImg', 'bkInterval', 'bkOpacity'] },
+];
+
+function siteFieldValue(field) {
+  return Object.hasOwn(state.pageChanges, field.id) ? state.pageChanges[field.id] : field.value ?? field.default ?? '';
+}
+
+function wallpaperLines(value) {
+  if (Array.isArray(value)) return value.join('\n');
+  if (typeof value === 'string') {
+    try { const parsed = JSON.parse(value); if (Array.isArray(parsed)) return parsed.join('\n'); } catch {}
+  }
+  return String(value || '');
+}
+
+function siteFieldMarkup(field) {
+  const value = siteFieldValue(field), id = `site-setting-${field.id}`;
+  const tooltip = String(field.tooltip || '').replace(/<br\s*\/?\s*>/gi, '\n').replace(/<[^>]*>/g, '');
+  const common = `id="${id}" data-site-setting="${field.id}" aria-describedby="${id}-help siteSettingsStatus"`;
+  if (field.type === 'boolean') return `<label class="native-check"><input ${common} type="checkbox"${value === true || value === 'true' ? ' checked' : ''}> ${escapeHtml(field.label)}<small id="${id}-help">${escapeHtml(tooltip)}</small></label>`;
+  let control;
+  if (['uploadBkImg', 'adminBkImg'].includes(field.id)) {
+    control = `<textarea ${common} rows="3" placeholder="每行填写一个公开图片地址">${escapeHtml(wallpaperLines(value))}</textarea>`;
+  } else if (field.type === 'select') {
+    control = `<select ${common}>${(field.options || []).map(option => `<option value="${escapeHtml(option.value)}"${String(value || field.placeholder) === String(option.value) ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select>`;
+  } else {
+    const number = ['bkInterval', 'bkOpacity'].includes(field.id);
+    const type = number ? 'number' : ['siteIcon', 'logoUrl', 'logoLink', 'urlPrefix'].includes(field.id) ? 'url' : 'text';
+    const constraints = field.id === 'bkInterval' ? ' min="1000" max="3600000" step="1000"' : field.id === 'bkOpacity' ? ' min="0" max="1" step="0.05"' : '';
+    control = `<input ${common} type="${type}"${constraints} value="${escapeHtml(value)}" placeholder="${escapeHtml(field.placeholder || '')}">`;
+  }
+  const help = ['uploadBkImg', 'adminBkImg'].includes(field.id) ? '每行一张，按顺序轮播；留空使用默认背景。' : tooltip;
+  return `<label class="native-settings-field" for="${id}"><span>${escapeHtml(field.label)}</span>${control}<small id="${id}-help">${escapeHtml(help)}</small></label>`;
+}
+
+function pageMarkup() {
+  const fields = new Map((state.page.config || []).map(field => [field.id, field]));
+  return `<main class="native-settings-main"><section class="page-section native-settings-page"><header class="page-head"><div class="page-title"><h1>网站设置</h1><p>修改品牌、上传渠道、公开链接及工作区背景。</p></div><button type="button" class="button primary" data-save-settings${state.dirty ? '' : ' disabled'}>保存更改</button></header>${renderTabNav()}<div id="siteSettingsStatus" class="native-settings-status" aria-live="polite"></div>${siteGroups.map(group => `<section class="native-settings-section"><h2>${group.title}</h2><p>${group.description}</p><div class="native-settings-fields site-settings-fields">${group.ids.filter(id => fields.has(id)).map(id => siteFieldMarkup(fields.get(id))).join('')}</div></section>`).join('')}<a class="button" href="${currentToolUrl('system-wallpaper')}">管理欢迎页壁纸</a></section></main>`;
+}
+
+function validateSiteSettings() {
+  for (const [id, value] of Object.entries(state.pageChanges)) {
+    if (value === '') continue;
+    let message = '';
+    if (['siteIcon', 'logoUrl', 'logoLink', 'urlPrefix'].includes(id) && !wallpaperUrl(value)) message = '请填写 http://、https:// 或本站绝对路径。';
+    if (id === 'urlPrefix' && /[?#]/.test(value)) message = '文件链接前缀不能包含查询参数或片段，请填写纯路径前缀。';
+    if (['uploadBkImg', 'adminBkImg'].includes(id) && value.some(url => !wallpaperUrl(url))) message = '壁纸地址无效，请每行填写一个公开图片地址。';
+    if (id === 'bkInterval' && (!Number.isFinite(value) || value < 1000 || value > 3600000)) message = '切换间隔须为 1000–3600000 毫秒。';
+    if (id === 'bkOpacity' && (!Number.isFinite(value) || value < 0 || value > 1)) message = '不透明度须介于 0 和 1 之间。';
+    if (message) return { id, message };
+  }
+  return null;
+}
+
+function siteFieldError(error) {
+  const input = state.host.querySelector(`[data-site-setting="${error.id}"]`);
+  input?.setAttribute('aria-invalid', 'true');
+  input?.focus();
+  setStatus(error.message, 'error');
+}
+
+function bindSiteEvents() {
+  state.host.querySelectorAll('[data-site-setting]').forEach(input => input.addEventListener(input.tagName === 'SELECT' || input.type === 'checkbox' ? 'change' : 'input', () => {
+    let value = input.type === 'checkbox' ? input.checked : input.value;
+    if (['uploadBkImg', 'adminBkImg'].includes(input.dataset.siteSetting)) value = input.value.split('\n').map(line => line.trim()).filter(Boolean);
+    else if (input.type === 'number' && value !== '') value = Number(value);
+    state.pageChanges[input.dataset.siteSetting] = value;
+    input.removeAttribute('aria-invalid');
+    markDirty();
+  }));
+}
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
@@ -25,6 +103,7 @@ async function api(path, options = {}) {
   if (!response.ok) {
     const error = new Error(typeof body === 'object' ? body.error : body);
     error.status = response.status;
+    error.field = typeof body === 'object' ? body.field : null;
     throw error;
   }
   return body;
@@ -223,6 +302,7 @@ function setStatus(message, type = '') {
 
 function markDirty() {
   state.dirty = true;
+  if (state.activeKey === 'system-page' && !state.saving) state.host?.querySelector('[data-save-settings]')?.removeAttribute('disabled');
   setStatus('尚有未保存的更改。', 'pending');
 }
 
@@ -279,7 +359,7 @@ function showFieldError(error) {
 }
 
 function saveButton(busy) {
-  state.host?.querySelectorAll('input, button').forEach(control => {
+  state.host?.querySelectorAll('input, button, select, textarea').forEach(control => {
     if (busy) {
       control.dataset.settingsDisabled = String(control.disabled);
       control.disabled = true;
@@ -289,7 +369,7 @@ function saveButton(busy) {
     }
   });
   state.host?.querySelectorAll('[data-save-settings]').forEach(button => {
-    button.disabled = busy;
+    button.disabled = busy || (state.activeKey === 'system-page' && !state.dirty);
     button.setAttribute('aria-busy', String(busy));
     button.textContent = busy ? '正在保存…' : '保存更改';
   });
@@ -299,6 +379,12 @@ async function save() {
   if (state.saving) return;
   const upload = state.activeKey === 'system-upload';
   const wallpaper = state.activeKey === 'system-wallpaper';
+  const page = state.activeKey === 'system-page';
+  if (page) {
+    if (!Object.keys(state.pageChanges).length) return;
+    const error = validateSiteSettings();
+    if (error) { siteFieldError(error); return; }
+  }
   if (wallpaper) {
     const error = validateWallpaper();
     if (error) {
@@ -315,16 +401,22 @@ async function save() {
   saveButton(true);
   setStatus('正在保存…', 'pending');
   try {
-    const path = wallpaper ? '/api/manage/sysConfig/page' : upload ? '/api/manage/sysConfig/upload' : '/api/manage/sysConfig/others';
-    const result = await api(path, { method: wallpaper ? 'PATCH' : 'POST', body: JSON.stringify(wallpaper ? { welcomeWallpaper: state.wallpaper } : upload ? state.upload : state.others) });
+    const path = wallpaper || page ? '/api/manage/sysConfig/page' : upload ? '/api/manage/sysConfig/upload' : '/api/manage/sysConfig/others';
+    const result = await api(path, { method: wallpaper || page ? 'PATCH' : 'POST', body: JSON.stringify(page ? { pageValues: state.pageChanges } : wallpaper ? { welcomeWallpaper: state.wallpaper } : upload ? state.upload : state.others) });
     if (upload) state.upload = result;
     else if (wallpaper) state.wallpaper = readWallpaper(result);
+    else if (page) { state.page = result; state.pageChanges = {}; }
     else state.others = result;
     state.dirty = false;
     render();
     setStatus('设置已保存。', 'success');
     notify('设置已保存。');
+    if (page) {
+      try { await refreshSiteConfig(); }
+      catch { setStatus('设置已保存，但当前页面未能更新显示，请刷新页面。', 'error'); }
+    }
   } catch (error) {
+    if (page && error.field?.startsWith('pageValues.')) { siteFieldError({ id: error.field.split('.')[1], message: error.message }); return; }
     if (error.status === 401 || error.status === 403) setStatus('当前账户没有保存系统设置的权限。', 'error');
     else setStatus(error.message || '保存失败，请检查网络后重试。', 'error');
   } finally {
@@ -341,11 +433,12 @@ function setOtherField(path, value) {
 
 function render() {
   if (!state.host || !state.user || !allowedRoles.has(state.user.role)) return;
-  state.host.innerHTML = state.activeKey === 'system-wallpaper' ? wallpaperMarkup() : state.activeKey === 'system-others' ? othersMarkup() : uploadMarkup();
+  state.host.innerHTML = state.activeKey === 'system-page' ? pageMarkup() : state.activeKey === 'system-wallpaper' ? wallpaperMarkup() : state.activeKey === 'system-others' ? othersMarkup() : uploadMarkup();
   bindPageEvents();
 }
 
 function bindPageEvents() {
+  if (state.activeKey === 'system-page') bindSiteEvents();
   if (state.activeKey === 'system-wallpaper') bindWallpaperEvents();
   state.host.querySelectorAll('[data-channel-field]').forEach(input => input.addEventListener('change', event => {
     const channel = getChannel(event.target.dataset.channelType, event.target.dataset.channelIndex);
@@ -465,13 +558,14 @@ async function show(detail) {
       state.host.innerHTML = '<main class="native-settings-main"><div class="error-state"><h2>无权访问系统设置</h2><p>只有站点管理员和所有者可以读取或修改这些设置。</p></div></main>';
       return;
     }
-    const path = state.activeKey === 'system-wallpaper' ? '/api/manage/sysConfig/page' : state.activeKey === 'system-others' ? '/api/manage/sysConfig/others' : '/api/manage/sysConfig/upload';
+    const path = ['system-wallpaper', 'system-page'].includes(state.activeKey) ? '/api/manage/sysConfig/page' : state.activeKey === 'system-others' ? '/api/manage/sysConfig/others' : '/api/manage/sysConfig/upload';
     const data = await api(path);
     if (loadId !== state.loadId) return;
     if (state.activeKey === 'system-others') state.others = data;
     else if (state.activeKey === 'system-wallpaper') {
       state.wallpaper = readWallpaper(data);
-    } else state.upload = data;
+    } else if (state.activeKey === 'system-page') { state.page = data; state.pageChanges = {}; }
+    else state.upload = data;
     state.dirty = false;
     render();
   } catch (error) {

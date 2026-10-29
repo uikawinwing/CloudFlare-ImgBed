@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-site-page-title="">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -16,7 +16,7 @@
 <body>
   <a class="skip-link" href="#welcome">跳到欢迎页</a>
   <header class="public-nav">
-    <a class="brand" href="/" aria-label="Charatopia 首页"><span class="brand-mark" aria-hidden="true">C</span><span>Charatopia</span></a>
+    <a class="brand" href="/" data-site-link aria-label="Charatopia 首页"><span class="brand-mark" data-site-logo aria-hidden="true"><span data-site-logo-fallback>C</span></span><span data-site-name>Charatopia</span></a>
     <nav class="public-links" aria-label="公共导航">
       <a class="is-active" href="/">首页</a>
       <a href="/discover/">Discover</a>
@@ -32,7 +32,7 @@
   <main id="welcome" class="welcome-wrap">
     <section class="welcome-hero" aria-labelledby="welcomeTitle">
       <div class="welcome-copy">
-        <h1 id="welcomeTitle">Charatopia</h1>
+        <h1 id="welcomeTitle" data-site-name>Charatopia</h1>
         <h2 class="welcome-greeting">旅行者，欢迎来到万灵之乡</h2>
         <p class="welcome-lead">原本互不相交的命运，在此悄然交织，<br>引领你邂逅一个个独一无二的灵魂。</p>
         <p class="welcome-lead">沉寂的时光因你的到来重新流转，<br>而你与她的故事，正等待写下第一行。</p>
@@ -47,7 +47,8 @@
     </section>
   </main>
 
-  <footer class="public-footer"><span>Charatopia</span><span>公开内容由各自创作者维护</span></footer>
+  <footer class="public-footer"><span data-site-name>Charatopia</span><span>公开内容由各自创作者维护</span></footer>
+  <script type="module" src="/site.js"></script>
   <script type="module" src="/theme.js"></script>
   <script type="module" src="/welcome/welcome.js" onerror="document.documentElement.classList.remove('welcome-checking')"></script>
 </body>

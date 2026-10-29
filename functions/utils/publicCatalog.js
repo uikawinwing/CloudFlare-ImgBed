@@ -67,7 +67,7 @@ export async function listDiscoverAlbums(env, query, requestUrl) {
         FROM selected_albums selected
         CROSS JOIN album_items ai ON ai.album_id = selected.id
         CROSS JOIN files f ON f.id = ai.file_id
-        WHERE f.moderation_status = 'active' AND f.file_type LIKE 'image/%'
+        WHERE f.moderation_status = 'active' AND (f.file_type LIKE 'image/%' OR f.file_type IN ('video/mp4', 'video/webm'))
     ), explicit_covers AS (
         SELECT ac.album_id, f.id AS cover_id, f.file_type AS cover_type, f.timestamp AS cover_timestamp,
             json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS cover_thumbnail_created_at,
@@ -163,9 +163,10 @@ export function presentDiscoverFile(file, requestUrl) {
 }
 
 export function presentDiscoverAlbum(album, requestUrl) {
-    const hasDiscoverableCover = Boolean(album.cover_id) && String(album.cover_type || '').startsWith('image/');
+    const isImageCover = String(album.cover_type || '').startsWith('image/');
+    const hasDiscoverableCover = Boolean(album.cover_id) && (isImageCover || ['video/mp4', 'video/webm'].includes(album.cover_type));
     const coverUrl = hasDiscoverableCover ? absoluteFileUrl(requestUrl, album.cover_id, album.cover_timestamp) : null;
-    const coverThumbnailUrl = hasDiscoverableCover
+    const coverThumbnailUrl = hasDiscoverableCover && isImageCover
         ? absoluteThumbnailUrl(requestUrl, album.cover_id, 'gallery', thumbnailContentVersion({
             timestamp: album.cover_timestamp,
             thumbnail_created_at: album.cover_thumbnail_created_at,

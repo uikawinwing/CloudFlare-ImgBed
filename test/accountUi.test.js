@@ -68,7 +68,9 @@ describe('account media and album UI', () => {
 
   it('sizes account video pins from their real frame and keeps Discover to album covers', () => {
     assert.match(source, /loadedmetadata[\s\S]*videoWidth[\s\S]*videoHeight[\s\S]*aspectRatio/);
-    assert.doesNotMatch(discoverSource, /<video|\.play\(\)|originalUrl\(/);
+    assert.match(discoverSource, /<video[^>]*data-video-src/);
+    assert.match(discoverSource, /IntersectionObserver/);
+    assert.doesNotMatch(discoverSource, /originalUrl\(/);
     assert.match(discoverSource, /album\.coverThumbnailUrl/);
   });
 
@@ -89,7 +91,7 @@ describe('account media and album UI', () => {
     assert.match(discoverSource, /Array\.isArray\(body\.albums\)/);
     assert.match(discoverSource, /state\.albums\.push\(album\)/);
     assert.match(discoverSource, /state\.cursor = body\.nextCursor/);
-    assert.doesNotMatch(discoverSource, /album\.coverUrl|body\.files|sort=featured/);
+    assert.doesNotMatch(discoverSource, /body\.files|sort=featured/);
   });
 
   it('keeps the root welcome page simple and the full feed in Discover', () => {
@@ -137,7 +139,7 @@ describe('homepage sign-in routing', () => {
     let timeout;
     const signal = {};
     let wallpaperInitializations = 0;
-    await runInNewContext(welcomeSource.replace(/^import .*;\r?\n/, ''), {
+    await runInNewContext(welcomeSource.replace(/^import .*;\r?\n/gm, ''), {
       initializeWelcomeWallpaper: () => { wallpaperInitializations += 1; },
       fetch: async (url, options) => {
         requests.push({ url, options });
@@ -189,7 +191,7 @@ describe('homepage sign-in routing', () => {
 
 describe('unified file workspace navigation', () => {
   function workspace(url = 'https://imgbed.example/account/?view=albums&album=summer') {
-    return runInNewContext(`${source.replace(/^import .*;\r?\n/, '').replace(/\ninit\(\);\s*$/, '')}\n({ state, workspaceTargetFromUrl, buildWorkspaceUrl, workspaceHeader, albumDetailMarkup })`, {
+    return runInNewContext(`${source.replace(/^import .*;\r?\n/gm, '').replace(/\ninit\(\);\s*$/, '')}\n({ state, workspaceTargetFromUrl, buildWorkspaceUrl, workspaceHeader, albumDetailMarkup })`, {
       location: new URL(url), URL, URLSearchParams, document: { querySelector: () => ({}) },
     });
   }
@@ -222,5 +224,60 @@ describe('unified file workspace navigation', () => {
     assert.match(detail, /id="addAlbumFiles"[^>]*>[\s\S]*?添加已有文件/);
     assert.match(detail, /data-edit-album>编辑信息/);
     assert.doesNotMatch(detail, /请从“我的文件”选择内容加入/);
+  });
+});
+
+describe('workspace wallpaper scope navigation', () => {
+  function workspace() {
+    const calls = [], stopped = [];
+    const app = runInNewContext(`${source.replace(/^import .*;\r?\n/gm, '').replace(/\ninit\(\);\s*$/, '')}\nshowView = async () => {}; rememberScroll = () => {}; ({ state, syncWorkspaceWallpaper, navigateWorkspace })`, {
+      location: new URL('https://imgbed.example/account/?view=files'), URL, URLSearchParams,
+      document: { querySelector: () => ({}) }, history: { pushState() {}, replaceState() {} },
+      initializeWorkspaceWallpaper: ({ isAdmin }) => new Promise(resolve => calls.push({ isAdmin, finish: () => resolve(() => stopped.push(isAdmin)) })),
+    });
+    app.state.user = { role: 'owner' };
+    return { ...app, calls, stopped };
+  }
+
+  it('changes players only when navigation crosses the administration boundary', async () => {
+    const app = workspace();
+    const first = app.syncWorkspaceWallpaper();
+    app.calls[0].finish();
+    await first;
+    await app.navigateWorkspace({ view: 'albums', albumId: 'summer' });
+    assert.equal(app.calls.length, 1);
+    await app.navigateWorkspace({ view: 'admin', section: 'content' });
+    assert.equal(app.calls.length, 2);
+    assert.equal(app.calls[1].isAdmin, true);
+    assert.deepEqual(app.stopped, [false]);
+    app.calls[1].finish();
+    await Promise.resolve();
+    await app.navigateWorkspace({ view: 'admin', section: 'users' });
+    assert.equal(app.calls.length, 2);
+    await app.navigateWorkspace({ view: 'files' });
+    assert.equal(app.calls.length, 3);
+    assert.equal(app.calls[2].isAdmin, false);
+    assert.deepEqual(app.stopped, [false, true]);
+    app.calls[2].finish();
+    await Promise.resolve();
+  });
+
+  it('disposes a pending old player before starting the current scope', async () => {
+    const app = workspace();
+    const old = app.syncWorkspaceWallpaper();
+    app.state.view = 'admin';
+    const current = app.syncWorkspaceWallpaper();
+    assert.equal(app.calls.length, 1);
+    app.calls[0].finish();
+    await old;
+    assert.deepEqual(app.stopped, [false]);
+    assert.equal(app.calls.length, 2);
+    app.calls[1].finish();
+    await current;
+    app.state.view = 'files';
+    const next = app.syncWorkspaceWallpaper();
+    assert.deepEqual(app.stopped, [false, true]);
+    app.calls[2].finish();
+    await next;
   });
 });

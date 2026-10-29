@@ -17,7 +17,7 @@ export async function onRequestGet({ request, env, waitUntil }) {
         const query = parseDiscoverQuery(new URL(request.url));
         const cache = typeof caches !== 'undefined' ? caches.default : null;
         const cacheUrl = new URL(request.url);
-        cacheUrl.searchParams.set('catalog', query.sort === 'featured' ? 'featured-v1' : 'albums-v1');
+        cacheUrl.searchParams.set('catalog', query.sort === 'featured' ? 'featured-v1' : 'albums-v2');
         const cacheKey = cache ? new Request(cacheUrl, { method: 'GET' }) : null;
 
         if (cache && cacheKey) {

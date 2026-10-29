@@ -1,6 +1,7 @@
 import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { rejectCrossSiteMutation } from '../../../utils/auth/mutationSecurity.js';
 import { getDefaultWelcomeWallpaper, validateWelcomeWallpaper } from '../../../utils/welcomeWallpaper.js';
+import { normalizePageValue, validatePageValues } from '../../../utils/pageValues.js';
 
 export async function onRequest(context) {
     // 页面设置相关，GET方法读取设置，POST方法保存设置
@@ -29,22 +30,33 @@ export async function onRequest(context) {
     if (request.method === 'PATCH') {
         const rejected = rejectCrossSiteMutation(request);
         if (rejected) return rejected;
-        let value;
+        let body;
         try {
-            const body = await request.json();
-            if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 || !Object.hasOwn(body, 'welcomeWallpaper')) {
-                return new Response(JSON.stringify({ error: '此操作仅用于保存欢迎页壁纸。' }), { status: 400, headers: { 'content-type': 'application/json' } });
+            body = await request.json();
+            if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 || (!Object.hasOwn(body, 'welcomeWallpaper') && !Object.hasOwn(body, 'pageValues'))) {
+                return new Response(JSON.stringify({ error: '请仅提交壁纸配置或需要修改的网站设置。' }), { status: 400, headers: { 'content-type': 'application/json' } });
             }
-            value = validateWelcomeWallpaper(body.welcomeWallpaper);
         } catch (error) {
-            return wallpaperError(error);
+            return settingsError(error);
+        }
+        const previousSettings = await getPageConfig(db, env);
+        let values;
+        try {
+            values = Object.hasOwn(body, 'welcomeWallpaper')
+                ? { welcomeWallpaper: validateWelcomeWallpaper(body.welcomeWallpaper) }
+                : validatePageValues(body.pageValues, previousSettings.config);
+        } catch (error) {
+            return settingsError(error);
         }
         const settings = JSON.parse(await db.get('manage@sysConfig@page') || '{}');
         const config = Array.isArray(settings.config) ? settings.config : [];
-        const item = config.find(item => item?.id === 'welcomeWallpaper');
-        if (item) item.value = value;
-        else config.push({ id: 'welcomeWallpaper', value });
+        for (const [id, value] of Object.entries(values)) {
+            const item = config.find(item => item?.id === id);
+            if (item) item.value = value;
+            else config.push({ id, value });
+        }
         settings.config = config;
+        if (Object.hasOwn(values, 'announcement')) processAnnouncementInfo(settings, previousSettings);
         await db.put('manage@sysConfig@page', JSON.stringify(settings));
         return new Response(JSON.stringify(await getPageConfig(db, env)), { headers: { 'content-type': 'application/json' } });
     }
@@ -57,13 +69,21 @@ export async function onRequest(context) {
         try {
             body = await request.json();
             if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Invalid settings');
-            for (const item of Array.isArray(body?.config) ? body.config : []) {
-                if (item?.id === 'welcomeWallpaper') item.value = validateWelcomeWallpaper(item.value);
-            }
         } catch (error) {
-            return wallpaperError(error);
+            return settingsError(error);
         }
         const previousSettings = await getPageConfig(db, env)
+        try {
+            for (const item of Array.isArray(body?.config) ? body.config : []) {
+                if (item?.id === 'welcomeWallpaper') item.value = validateWelcomeWallpaper(item.value);
+                else if (previousSettings.config.some(setting => setting.id === item?.id)) {
+                    const previous = previousSettings.config.find(setting => setting.id === item.id)?.value;
+                    if (JSON.stringify(item.value) !== JSON.stringify(previous)) item.value = normalizePageValue(item.id, item.value);
+                }
+            }
+        } catch (error) {
+            return settingsError(error);
+        }
         const settings = processAnnouncementInfo(body, previousSettings)
 
         // 写入数据库
@@ -78,7 +98,7 @@ export async function onRequest(context) {
 
 }
 
-function wallpaperError(error) {
+function settingsError(error) {
     return new Response(JSON.stringify({ error: error.field ? error.message : '请提交有效的 JSON 配置。', ...(error.field ? { field: error.field } : {}) }), {
         status: 400,
         headers: { 'content-type': 'application/json' },
@@ -101,9 +121,11 @@ export async function getPageConfig(db, env) {
         // 全局设置
         {
             id: 'siteTitle',
-            label: '网站标题',
+            label: '网页标题',
             label_en: 'Site Title',
-            placeholder: 'Sanyue ImgHub',
+            placeholder: 'Charatopia',
+            tooltip: '用于浏览器标签页的站点标题，留空使用 Charatopia。',
+            tooltip_en: 'Site title shown in browser tabs. Leave empty to use Charatopia.',
             category: '全局设置',
             category_en: 'Global Settings',
         },
@@ -111,62 +133,70 @@ export async function getPageConfig(db, env) {
             id: 'siteIcon',
             label: '网站图标',
             label_en: 'Site Icon',
+            tooltip: '浏览器标签页图标地址，留空使用默认图标。',
+            tooltip_en: 'Browser tab icon URL. Leave empty to use the default icon.',
             category: '全局设置',
             category_en: 'Global Settings',
         },
         {
             id: 'ownerName',
-            label: '图床名称',
+            label: '站点名称',
             label_en: 'Site Name',
-            placeholder: 'Sanyue ImgHub',
+            placeholder: 'Charatopia',
+            tooltip: '欢迎页、Discover 和工作区显示的站点名称。',
+            tooltip_en: 'Site name shown on the welcome page, Discover, and workspace.',
             category: '全局设置',
             category_en: 'Global Settings',
         },
         {
             id: 'logoUrl',
-            label: '图床Logo',
+            label: '站点标志图片',
             label_en: 'Site Logo',
+            tooltip: '页头标志图片地址，留空使用默认文字标志。',
+            tooltip_en: 'Header logo image URL. Leave empty to use the default letter mark.',
             category: '全局设置',
             category_en: 'Global Settings',
         },
         {
             id: 'logoLink',
-            label: 'Logo跳转链接',
+            label: '站点标志跳转链接',
             label_en: 'Logo Link',
-            placeholder: 'https://github.com/uikawinwing/CloudFlare-ImgBed',
-            tooltip: '点击Logo时跳转的链接，留空则使用默认GitHub链接',
-            tooltip_en: 'URL to navigate when clicking the logo. Leave empty for default GitHub link',
+            placeholder: '/',
+            tooltip: '点击页头标志时跳转的地址，留空返回站点首页。',
+            tooltip_en: 'Destination when clicking the header logo. Leave empty to return home.',
             category: '全局设置',
             category_en: 'Global Settings',
         },
         {
             id: 'bkInterval',
-            label: '背景切换间隔',
-            label_en: 'Background Interval',
+            label: '工作区壁纸切换间隔',
+            label_en: 'Workspace Wallpaper Interval',
             placeholder: '3000',
-            tooltip: '单位：毫秒 ms',
-            tooltip_en: 'Unit: milliseconds (ms)',
+            value: 3000,
+            tooltip: '单位为毫秒，范围 1000–3600000，默认 3000；两张及以上壁纸按顺序轮播。',
+            tooltip_en: 'Milliseconds, from 1000 to 3600000. Defaults to 3000; two or more wallpapers rotate in order.',
             category: '全局设置',
             category_en: 'Global Settings',
         },
         {
             id: 'bkOpacity',
-            label: '背景图透明度',
-            label_en: 'Background Opacity',
+            label: '工作区壁纸不透明度',
+            label_en: 'Workspace Wallpaper Opacity',
             placeholder: '1',
-            tooltip: '0-1 之间的小数',
-            tooltip_en: 'Decimal between 0 and 1',
+            value: 1,
+            tooltip: '范围为 0–1，0 为完全透明，1 为完全不透明。',
+            tooltip_en: 'From 0 to 1: 0 is fully transparent and 1 is fully opaque.',
             category: '全局设置',
             category_en: 'Global Settings',
         },
         {
             id: 'wallpaperEnabled',
-            label: '启用壁纸',
-            label_en: 'Enable Wallpaper',
+            label: '启用工作区壁纸',
+            label_en: 'Enable Workspace Wallpaper',
             type: 'boolean',
             default: true,
-            tooltip: '控制所有页面的背景壁纸开关，关闭后将使用纯色背景',
-            tooltip_en: 'Toggle background wallpaper across all pages. When off, a solid color background will be used',
+            tooltip: '控制文件、图库和管理工作区的壁纸；不影响欢迎页独立的壁纸队列。',
+            tooltip_en: 'Controls wallpaper in file, album, and management workspaces, independently of the welcome wallpaper queue.',
             category: '全局设置',
             category_en: 'Global Settings',
         },
@@ -174,8 +204,8 @@ export async function getPageConfig(db, env) {
             id: 'urlPrefix',
             label: '默认URL前缀',
             label_en: 'Default URL Prefix',
-            tooltip: '自定义URL前缀，如：https://img.a.com/file/，留空则使用当前域名 <br/> 设置后将应用于客户端和管理端',
-            tooltip_en: 'Custom URL prefix, e.g. https://img.a.com/file/. Leave empty to use current domain <br/> Applies to both client and admin',
+            tooltip: '文件公开链接的前缀，例如 https://img.example/file/；留空使用当前站点。',
+            tooltip_en: 'Prefix for public file links, for example https://img.example/file/. Leave empty to use the current site.',
             category: '全局设置',
             category_en: 'Global Settings',
         },
@@ -335,10 +365,10 @@ export async function getPageConfig(db, env) {
         },
         {
             id: 'uploadBkImg',
-            label: '上传页背景图',
-            label_en: 'Upload Background',
-            tooltip: '1.填写 bing 使用必应壁纸轮播 <br/> 2.填写 ["url1","url2"] 使用多张图片轮播 <br/> 3.填写 ["url"] 使用单张图片',
-            tooltip_en: '1. Enter "bing" for Bing wallpaper rotation <br/> 2. Enter ["url1","url2"] for multiple images <br/> 3. Enter ["url"] for a single image',
+            label: '文件与图库壁纸',
+            label_en: 'Files and Albums Wallpaper',
+            tooltip: '用于文件和图库工作区。支持一个图片地址或 JSON 地址数组；多张图片按顺序轮播。留空使用默认背景。',
+            tooltip_en: 'Wallpaper for files and albums. Enter one image URL or a JSON array of URLs; multiple images rotate in order. Leave empty for the default background.',
             category: '客户端设置',
             category_en: 'Client Settings',
         },
@@ -370,10 +400,10 @@ export async function getPageConfig(db, env) {
         },
         {
             id: 'adminBkImg',
-            label: '管理页背景图',
-            label_en: 'Admin Background',
-            tooltip: '1.填写 bing 使用必应壁纸轮播 <br/> 2.填写 ["url1","url2"] 使用多张图片轮播 <br/> 3.填写 ["url"] 使用单张图片',
-            tooltip_en: '1. Enter "bing" for Bing wallpaper rotation <br/> 2. Enter ["url1","url2"] for multiple images <br/> 3. Enter ["url"] for a single image',
+            label: '管理工作区壁纸',
+            label_en: 'Management Workspace Wallpaper',
+            tooltip: '用于内容管理等管理工作区。支持一个图片地址或 JSON 地址数组；留空沿用文件与图库壁纸。',
+            tooltip_en: 'Wallpaper for management workspaces. Enter one image URL or a JSON array of URLs. Leave empty to use the files and albums wallpaper.',
             category: '管理端设置',
             category_en: 'Admin Settings',
         },

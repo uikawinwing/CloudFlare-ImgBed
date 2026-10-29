@@ -32,9 +32,10 @@ body::before {
   position: fixed;
   z-index: -3;
   inset: 0;
-  background-image: var(--account-wallpaper, radial-gradient(circle at 68% 8%, #172744 0, #07111e 46%, #050c16 100%));
-  background-position: center;
+  background-image: var(--account-wallpaper-image, radial-gradient(circle at 68% 8%, #172744 0, #07111e 46%, #050c16 100%));
+  background-position: var(--account-wallpaper-x, 50%) var(--account-wallpaper-y, 50%);
   background-size: cover;
+  opacity: var(--account-wallpaper-opacity, 1);
 }
 body::after {
   content: "";
@@ -42,7 +43,7 @@ body::after {
   z-index: -2;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(90deg, rgba(5, 12, 22, .66), rgba(5, 12, 22, .42) 42%, rgba(5, 12, 22, .72));
+  background: var(--account-wallpaper-overlay, linear-gradient(90deg, rgba(5, 12, 22, .66), rgba(5, 12, 22, .42) 42%, rgba(5, 12, 22, .72)));
 }
 button, input, textarea, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }

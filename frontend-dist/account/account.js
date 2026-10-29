@@ -1,4 +1,6 @@
 import { mountLegacyShell } from './shell.js';
+import { getSiteConfig, publicFileUrl, setSitePageTitle } from '../site-config.js';
+import { initializeWorkspaceWallpaper } from '../wallpaper-player.js';
 
 const MEMBER_QUOTA_BYTES = 200 * 1024 * 1024;
 const VIEW_CACHE_TTL = 30000;
@@ -35,6 +37,10 @@ const scrollPositions = new Map();
 const main = document.querySelector('#mainContent');
 const dialogRoot = document.querySelector('#dialogRoot');
 let activeDialogClose = null;
+let wallpaperAdminScope = null;
+let stopWorkspaceWallpaper = null;
+let pendingWorkspaceWallpaper = null;
+let wallpaperInitialization = 0;
 
 const icons = {
   upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>',
@@ -210,22 +216,11 @@ function syncNavigation() {
   });
   history.replaceState(null, '', buildWorkspaceUrl());
   const titles = { files: '我的文件', albums: '我的文件', admin: state.adminSection === 'users' ? '成员管理' : state.adminSection === 'audit' ? '操作记录' : '内容管理' };
-  document.title = `${titles[state.view] || titles.files} · CloudFlare ImgBed`;
+  setSitePageTitle(titles[state.view] || titles.files);
 }
 
 function showLogin() {
   location.replace(`/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`);
-}
-
-async function applyConfiguredWallpaper() {
-  try {
-    const config = await api('/api/userConfig');
-    if (config.wallpaperEnabled === false) return;
-    const configured = state.view === 'admin' ? (config.adminBkImg || config.uploadBkImg) : config.uploadBkImg;
-    const candidate = Array.isArray(configured) ? configured[0] : configured;
-    if (typeof candidate !== 'string' || candidate === 'bing' || !candidate.trim()) return;
-    document.body.style.setProperty('--account-wallpaper', `url(${JSON.stringify(candidate.trim())})`);
-  } catch {}
 }
 
 async function loadFiles({ reset = true } = {}) {
@@ -589,7 +584,7 @@ function openFileViewer(file) {
     <div class="media-viewer-details"><p>加入人物图库后，可通过图库在发现页浏览。</p><div class="media-viewer-actions"><button class="button" type="button" id="copyViewerFile">${icons.link}复制链接</button><a class="button" href="${escapeHtml(fileUrl(file))}" target="_blank" rel="noopener">${icons.external}打开原始尺寸</a></div></div>`, { className: 'media-viewer-dialog', label: `查看 ${file.file_name || file.id}` });
   dialogRoot.querySelector('#copyViewerFile')?.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(new URL(fileUrl(file), location.origin).href);
+      await navigator.clipboard.writeText(publicFileUrl(file.id, await getSiteConfig()));
       toast('资源链接已复制。');
     } catch {
       toast('复制失败，请直接打开原文件后复制地址。', 'error');
@@ -1131,6 +1126,26 @@ async function showView({ initial = false, force = false } = {}) {
   }
 }
 
+async function syncWorkspaceWallpaper() {
+  const isAdmin = state.view === 'admin';
+  if (wallpaperAdminScope === isAdmin) return;
+  wallpaperAdminScope = isAdmin;
+  const initialization = ++wallpaperInitialization;
+  stopWorkspaceWallpaper?.();
+  stopWorkspaceWallpaper = null;
+  if (pendingWorkspaceWallpaper) await pendingWorkspaceWallpaper;
+  if (initialization !== wallpaperInitialization) return;
+  const pending = initializeWorkspaceWallpaper({ isAdmin });
+  pendingWorkspaceWallpaper = pending;
+  const stop = await pending;
+  if (pendingWorkspaceWallpaper === pending) pendingWorkspaceWallpaper = null;
+  if (initialization !== wallpaperInitialization) {
+    stop();
+    return;
+  }
+  stopWorkspaceWallpaper = stop;
+}
+
 async function navigateWorkspace(target, { historyMode = 'push' } = {}) {
   if (!target) return;
   let { view, section, albumId = null } = target;
@@ -1142,6 +1157,7 @@ async function navigateWorkspace(target, { historyMode = 'push' } = {}) {
   state.view = view;
   state.albumId = view === 'albums' ? albumId : null;
   if (view === 'admin') state.adminSection = section;
+  syncWorkspaceWallpaper();
   activeDialogClose?.();
   const url = buildWorkspaceUrl(view, section);
   if (historyMode === 'push') history.pushState(null, '', url);
@@ -1177,7 +1193,7 @@ async function init() {
     bindWorkspaceNavigation();
     if (!['manager', 'admin', 'owner'].includes(state.user.role) && state.view === 'admin') state.view = 'files';
     if (state.view === 'admin' && state.adminSection === 'users' && state.user.role !== 'owner') state.adminSection = 'content';
-    applyConfiguredWallpaper();
+    syncWorkspaceWallpaper();
     await showView({ initial: true });
   } catch (error) {
     if (error.status === 401) showLogin();

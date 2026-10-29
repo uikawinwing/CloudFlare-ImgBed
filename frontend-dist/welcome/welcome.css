@@ -17,7 +17,7 @@ body::after {
   z-index: -1;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--app-bg) 94%, transparent), color-mix(in srgb, var(--app-bg) 80%, transparent) 34%, color-mix(in srgb, var(--app-bg) 12%, transparent) 72%);
+  background: var(--welcome-wallpaper-overlay, linear-gradient(90deg, color-mix(in srgb, var(--app-bg) 94%, transparent), color-mix(in srgb, var(--app-bg) 80%, transparent) 34%, color-mix(in srgb, var(--app-bg) 12%, transparent) 72%));
 }
 .public-footer { background: color-mix(in srgb, var(--app-bg) 88%, transparent); backdrop-filter: blur(18px); }
 
@@ -65,7 +65,7 @@ body::after {
   body::before {
     background-position: var(--welcome-wallpaper-mobile-x, 60%) var(--welcome-wallpaper-mobile-y, 0%);
   }
-  body::after { background: linear-gradient(180deg, color-mix(in srgb, var(--app-bg) 8%, transparent) 12%, color-mix(in srgb, var(--app-bg) 42%, transparent) 38%, color-mix(in srgb, var(--app-bg) 96%, transparent) 70%); }
+  body::after { background: var(--welcome-wallpaper-overlay, linear-gradient(180deg, color-mix(in srgb, var(--app-bg) 8%, transparent) 12%, color-mix(in srgb, var(--app-bg) 42%, transparent) 38%, color-mix(in srgb, var(--app-bg) 96%, transparent) 70%)); }
   .welcome-wrap { width: calc(100% - 28px); align-items: end; padding: 240px 0 36px; }
   .welcome-hero { text-align: center; }
   .welcome-copy { width: 100%; max-width: 580px; margin: 0 auto; }

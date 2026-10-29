@@ -149,7 +149,7 @@ function patchFilesView() {
   if (!options) {
     options = document.createElement('div');
     options.className = 'integrated-upload-options';
-    options.innerHTML = '<label><input type="checkbox" id="compressVideos" aria-describedby="compressVideosHint">上传前压缩视频</label><small id="compressVideosHint">可用时在本机压缩，预览后上传。图片不受影响。</small>';
+    options.innerHTML = '<label><input type="checkbox" id="compressVideos" aria-describedby="compressVideosHint">上传前压缩视频</label><small id="compressVideosHint">在本机压缩并移除音轨，预览后上传。图片不受影响。</small>';
     anchor.insertAdjacentElement('afterend', options);
   }
   const compressOption = options.querySelector('input');
@@ -197,7 +197,7 @@ function parseUploadResponse(xhr, fileName) {
     throw new Error(String(message).replace(/^Error:\s*/i, '').trim());
   }
   const result = Array.isArray(body) ? body[0] : body;
-  const src = result?.src || result?.publicUrl;
+  const src = result?.publicUrl || result?.src;
   if (!src) throw new Error(`${fileName} 已上传，但服务器没有返回资源链接。`);
   const notices = [];
   if (result.moderationStatus && result.moderationStatus !== 'active') notices.push('原图已保存，正在等待审核');
@@ -309,7 +309,7 @@ async function prepareVideoUpload(item) {
       item.compressionNotice = '压缩结果没有比原片更小，建议上传原片。';
     } else {
       const saved = Math.round((1 - compressed.size / item.file.size) * 100);
-      item.compressionNotice = `${formatVideoSize(item.file.size)} → ${formatVideoSize(compressed.size)}，减少 ${saved}%。播放预览后选择上传版本。`;
+      item.compressionNotice = `${formatVideoSize(item.file.size)} → ${formatVideoSize(compressed.size)}，减少 ${saved}%，已移除音轨。播放预览后选择上传版本。`;
       item.previewUrl = URL.createObjectURL(compressed);
     }
   } catch (error) {

@@ -1,3 +1,5 @@
+import { normalizePageUrl } from './pageValues.js';
+
 export function getDefaultWelcomeWallpaper() {
     return {
         enabled: true,
@@ -26,24 +28,6 @@ function numberInRange(value, field, label, min, max, integer = false) {
     return value;
 }
 
-function imageUrl(value, field) {
-    if (typeof value !== 'string' || !value.trim() || /[\\\u0000-\u001f\u007f]/.test(value)) {
-        invalid(field, '请填写有效的图片地址。');
-    }
-    const trimmed = value.trim();
-    const relative = trimmed.startsWith('/') && !trimmed.startsWith('//');
-    if (!relative && !/^https?:\/\//i.test(trimmed)) {
-        invalid(field, '图片地址须以 http://、https:// 或单个 / 开头。');
-    }
-    try {
-        const parsed = new URL(trimmed, 'https://wallpaper.invalid');
-        if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error('Invalid URL');
-        return relative ? `${parsed.pathname}${parsed.search}${parsed.hash}` : parsed.href;
-    } catch {
-        invalid(field, '请填写有效的图片地址。');
-    }
-}
-
 export function validateWelcomeWallpaper(value) {
     if (typeof value === 'string') {
         try { value = JSON.parse(value); }
@@ -61,7 +45,7 @@ export function validateWelcomeWallpaper(value) {
     const items = value.items.map((item, index) => {
         const field = `items.${index}`;
         if (!item || typeof item !== 'object' || Array.isArray(item)) invalid(field, '队列中的每一项都必须为图片配置。');
-        const normalized = { url: imageUrl(item.url, `${field}.url`) };
+        const normalized = { url: normalizePageUrl(item.url, `welcomeWallpaper.${field}.url`) };
         for (const key of ['positionX', 'positionY', 'mobilePositionX', 'mobilePositionY']) {
             normalized[key] = numberInRange(item[key] === undefined ? defaults[key] : item[key], `${field}.${key}`, '壁纸裁切位置', 0, 100);
         }

@@ -29,10 +29,10 @@ self.onmessage = async ({ data: { file, maxBytes } }) => {
             input,
             output,
             video: { codec: 'avc', quality: new Quality(0.55), forceTranscode: true },
-            audio: { codec: 'aac' },
+            audio: { discard: true },
         });
-        if (!conversion.isValid || conversion.discardedTracks.length) {
-            throw compressionError('unsupported', 'This browser cannot preserve every media track in MP4.');
+        if (!conversion.isValid || conversion.discardedTracks.some(({ track, reason }) => track.type !== 'audio' || reason !== 'discarded_by_user')) {
+            throw compressionError('unsupported', 'This browser cannot preserve every video track in MP4.');
         }
         let lastProgress = -1;
         conversion.onProgress = (value) => {

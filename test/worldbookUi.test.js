@@ -6,7 +6,8 @@ const redirects = readFileSync(new URL('../frontend-dist/_redirects', import.met
 
 describe('CharInfo Worldbook frontend integration', () => {
   it('makes the root CharInfo route the complete Creator Editor', () => {
-    assert.match(creatorSource, /<title>CharInfo Creator · CloudFlare ImgBed<\/title>/);
+    assert.match(creatorSource, /<title>CharInfo Creator · Charatopia<\/title>/);
+    assert.match(creatorSource, /data-site-page-title="CharInfo Creator"/);
     ['importWorldbookFile', 'renderEntryPicker', 'checkoutWorldbook', 'openCart', 'buildManagedBlock', 'restoreWorkspace', 'previewBtn', 'addStoryBtn', 'galleryList'].forEach(marker => assert.match(creatorSource, new RegExp(marker)));
   });
 

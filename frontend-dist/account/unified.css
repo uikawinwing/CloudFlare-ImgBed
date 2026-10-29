@@ -29,9 +29,9 @@
 }
 
 html, body { background: var(--app-bg) !important; color: var(--app-text); }
-body::before { background-image: var(--account-wallpaper, radial-gradient(circle at 70% 8%, var(--app-surface-soft) 0, var(--app-bg) 48%, var(--app-bg-deep) 100%)) !important; }
-:root[data-theme="light"] body::after { background: linear-gradient(90deg, rgba(246,244,239,.84), rgba(246,244,239,.72) 44%, rgba(246,244,239,.88)) !important; }
-:root[data-theme="dark"] body::after { background: linear-gradient(90deg, rgba(5,12,22,.66), rgba(5,12,22,.42) 42%, rgba(5,12,22,.72)) !important; }
+body::before { background-image: var(--account-wallpaper-image, radial-gradient(circle at 70% 8%, var(--app-surface-soft) 0, var(--app-bg) 48%, var(--app-bg-deep) 100%)) !important; }
+:root[data-theme="light"] body::after { background: var(--account-wallpaper-overlay, linear-gradient(90deg, rgba(246,244,239,.84), rgba(246,244,239,.72) 44%, rgba(246,244,239,.88))) !important; }
+:root[data-theme="dark"] body::after { background: var(--account-wallpaper-overlay, linear-gradient(90deg, rgba(5,12,22,.66), rgba(5,12,22,.42) 42%, rgba(5,12,22,.72))) !important; }
 
 .main { color: var(--app-text); }
 .page-title h1, .album-body h2, .dialog-head h2, .empty-state h2, .error-state h2 { color: var(--app-text-strong); }

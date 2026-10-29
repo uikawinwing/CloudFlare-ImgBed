@@ -110,7 +110,7 @@ describe('public catalog policy', () => {
             const response = await getPublicDiscover({ request, env });
             assert.deepStrictEqual(await response.json(), { albums: [], nextCursor: null });
             assert.strictEqual(response.headers.get('Cache-Control'), 'public, max-age=60, s-maxage=300');
-            assert.ok(entries.has(request.url + '&catalog=albums-v1'));
+            assert.ok(entries.has(request.url + '&catalog=albums-v2'));
             const cached = await getPublicDiscover({ request, env });
             assert.deepStrictEqual(await cached.json(), { albums: [], nextCursor: null });
             assert.strictEqual(queries, 1);
@@ -202,7 +202,7 @@ describe('public catalog policy', () => {
         assert.match(queries[0], /JOIN album_covers ac/);
         assert.match(queries[0], /ai\.file_id = ac\.file_id/);
         assert.match(queries[0], /f\.file_type LIKE 'image\/%'/);
-        assert.match(queries[0].split('), explicit_covers AS')[0], /file_type LIKE 'image\/%'/);
+        assert.match(queries[0].split('), explicit_covers AS')[0], /f\.file_type IN \('video\/mp4', 'video\/webm'\)/);
         assert.match(queries[0], /f\.moderation_status = 'active'/);
         assert.strictEqual(albums[0].url, 'https://example.test/gallery/master/summer');
         assert.strictEqual(albums[0].coverUrl, 'https://example.test/file/cover.png?v=1');
@@ -221,11 +221,22 @@ describe('public catalog policy', () => {
         assert.strictEqual(album.coverPositionY, 76);
     });
 
-    it('never uses an original video as a Discover cover', () => {
+    it('returns a video cover without inventing an image thumbnail', () => {
         const album = catalog.presentDiscoverAlbum({
             id: 'album-id', slug: 'summer', name: 'Summer', updated_at: 1,
             creator_name: 'Master', creator_handle: 'master', cover_id: 'clip.webm',
             cover_type: 'video/webm', cover_visibility: 'public', cover_timestamp: 1,
+        }, 'https://example.test/api/public/discover');
+        assert.strictEqual(album.coverUrl, 'https://example.test/file/clip.webm?v=1');
+        assert.strictEqual(album.coverThumbnailUrl, null);
+        assert.strictEqual(album.coverType, 'video/webm');
+    });
+
+    it('does not publish unsupported media as an album cover', () => {
+        const album = catalog.presentDiscoverAlbum({
+            id: 'album-id', slug: 'legacy', name: 'Legacy', updated_at: 1,
+            creator_name: 'Master', creator_handle: 'master', cover_id: 'legacy.mov',
+            cover_type: 'video/quicktime', cover_timestamp: 1,
         }, 'https://example.test/api/public/discover');
         assert.strictEqual(album.coverUrl, null);
         assert.strictEqual(album.coverThumbnailUrl, null);

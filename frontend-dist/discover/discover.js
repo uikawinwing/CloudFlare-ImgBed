@@ -5,6 +5,9 @@ const loadMore = document.querySelector('#loadMore');
 const feedSentinel = document.querySelector('#feedSentinel');
 let discoverReady = false;
 let lastRefreshAt = 0;
+let videoCoverObserver = null;
+const visibleVideoCovers = new Set();
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 const albumCoverPosition = value => {
@@ -34,7 +37,10 @@ async function reflectSignInState() {
 function albumCardMarkup(album) {
   const title = album.characterName || album.name || '未命名相册';
   const objectPosition = `${albumCoverPosition(album.coverPositionX)}% ${albumCoverPosition(album.coverPositionY)}%`;
-  const coverMarkup = album.coverThumbnailUrl
+  const isVideoCover = ['video/mp4', 'video/webm'].includes(album.coverType) && album.coverUrl;
+  const coverMarkup = isVideoCover
+    ? `<video data-video-src="${escapeHtml(album.coverUrl)}" muted loop playsinline preload="none" aria-hidden="true" style="object-position:${objectPosition}"></video><span class="album-cover-video-label">视频</span>`
+    : album.coverThumbnailUrl
     ? `<img src="${escapeHtml(album.coverThumbnailUrl)}" alt="" loading="lazy" decoding="async" style="object-position:${objectPosition}">`
     : '<span class="album-cover-empty">暂无封面</span>';
   return `<a class="album-card" href="${escapeHtml(album.url)}">
@@ -43,19 +49,58 @@ function albumCardMarkup(album) {
   </a>`;
 }
 
+function updateVideoCoverPlayback() {
+  visibleVideoCovers.forEach(video => {
+    if (document.hidden) { video.pause(); return; }
+    if (!video.hasAttribute('src')) {
+      video.preload = 'metadata';
+      video.src = video.dataset.videoSrc;
+      video.load();
+    }
+    if (reducedMotion.matches) video.pause();
+    else video.play().catch(() => {});
+  });
+}
+
+function observeVideoCovers() {
+  const videos = albumGrid.querySelectorAll('video');
+  if (!videos.length || !('IntersectionObserver' in window)) return;
+  videoCoverObserver = new IntersectionObserver(entries => {
+    entries.forEach(({ target: video, isIntersecting }) => {
+      if (isIntersecting) visibleVideoCovers.add(video);
+      else { visibleVideoCovers.delete(video); video.pause(); }
+    });
+    updateVideoCoverPlayback();
+  }, { threshold: .1 });
+  videos.forEach(video => videoCoverObserver.observe(video));
+}
+
 function render() {
   const query = document.querySelector('#searchInput').value.trim().toLocaleLowerCase('zh-CN');
   const visible = state.albums.filter(album => {
     const terms = `${album.characterName || ''} ${album.name || ''} ${album.description || ''} ${album.creator?.name || ''} ${album.creator?.handle || ''}`.toLocaleLowerCase('zh-CN');
     return !query || terms.includes(query);
   });
+  videoCoverObserver?.disconnect();
+  albumGrid.querySelectorAll('video').forEach(video => {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  });
+  visibleVideoCovers.clear();
   albumGrid.innerHTML = visible.map(albumCardMarkup).join('');
-  albumGrid.querySelectorAll('img').forEach(image => image.addEventListener('error', () => {
+  albumGrid.querySelectorAll('img, video').forEach(media => media.addEventListener('error', () => {
     const placeholder = document.createElement('span');
     placeholder.className = 'album-cover-empty';
     placeholder.textContent = '封面暂不可用';
-    image.replaceWith(placeholder);
+    if (media.tagName === 'VIDEO') {
+      visibleVideoCovers.delete(media);
+      videoCoverObserver?.unobserve(media);
+      media.pause();
+    }
+    media.replaceWith(placeholder);
   }, { once: true }));
+  observeVideoCovers();
   if (!state.loading && !state.failed) {
     if (!visible.length && state.albums.length) setStatus('empty', '已加载的相册中没有符合搜索条件的结果。');
     else if (!state.albums.length) setStatus('empty', '还没有人物相册。创建相册并加入作品后，会在这里出现。');
@@ -113,6 +158,8 @@ async function refreshDiscover() {
 document.querySelector('#searchInput').addEventListener('input', render);
 loadMore.addEventListener('click', () => loadFeed({ reset: state.retryReset }));
 window.addEventListener('focus', refreshDiscover);
+document.addEventListener('visibilitychange', updateVideoCoverPlayback);
+reducedMotion.addEventListener('change', updateVideoCoverPlayback);
 
 Promise.all([reflectSignInState(), loadFeed()]).finally(() => {
   discoverReady = true;

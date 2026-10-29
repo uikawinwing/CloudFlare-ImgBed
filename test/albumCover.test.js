@@ -212,7 +212,7 @@ describe('album cover D1 integration', () => {
         }
     });
 
-    it('paginates one card per album, includes former unlisted albums, and chooses image covers without video downloads', async () => {
+    it('paginates one card per album and chooses the first active image or video in album order', async () => {
         const db = new TestD1();
         try {
             db.exec(readFileSync(new URL('../database/init.sql', import.meta.url), 'utf8'));
@@ -233,18 +233,21 @@ describe('album cover D1 integration', () => {
                     VALUES ('iris', 'clip.mp4', 0, 1), ('iris', 'hidden.png', 1, 2), ('iris', 'blocked.png', 2, 3),
                            ('video', 'clip.mp4', 0, 1);
             `);
+            db.exec("UPDATE album_items SET position = -1 WHERE file_id = 'blocked.png'");
             const env = { img_d1: db };
             const url = 'https://example.test/api/public/discover';
             const first = await listDiscoverAlbums(env, { limit: 1, cursor: null }, url);
             assert.deepStrictEqual(first.albums.map(album => album.id), ['video']);
             assert.strictEqual(first.albums[0].coverThumbnailUrl, null);
-            assert.strictEqual(first.albums[0].coverUrl, null);
+            assert.strictEqual(first.albums[0].coverUrl, 'https://example.test/file/clip.mp4?v=1');
+            assert.strictEqual(first.albums[0].coverType, 'video/mp4');
             assert.strictEqual(first.albums[0].itemCount, 1);
             const second = await listDiscoverAlbums(env, { limit: 1, cursor: decodeCursor(first.nextCursor) }, url);
             assert.deepStrictEqual(second.albums.map(album => album.id), ['iris']);
             assert.strictEqual(second.albums[0].characterName, 'Iris');
             assert.strictEqual(second.albums[0].itemCount, 2);
-            assert.strictEqual(second.albums[0].coverThumbnailUrl, 'https://example.test/thumb/hidden.png?v=2');
+            assert.strictEqual(second.albums[0].coverUrl, 'https://example.test/file/clip.mp4?v=1');
+            assert.strictEqual(second.albums[0].coverThumbnailUrl, null);
             assert.strictEqual(second.albums[0].url, 'https://example.test/gallery/owner/iris');
             const last = await listDiscoverAlbums(env, { limit: 1, cursor: decodeCursor(second.nextCursor) }, url);
             assert.deepStrictEqual(last.albums.map(album => album.id), ['empty']);
@@ -308,6 +311,10 @@ describe('album cover D1 integration', () => {
             }), params: { id: 'album-id' } });
             assert.strictEqual(removeResponse.status, 200);
             assert.strictEqual(db.db.prepare('SELECT COUNT(*) AS count FROM album_covers').get().count, 0);
+            const automatic = await listDiscoverAlbums(env, { limit: 24, cursor: null }, 'https://example.test/api/public/discover');
+            assert.strictEqual(automatic.albums[0].coverType, 'video/webm');
+            assert.strictEqual(automatic.albums[0].coverUrl, 'https://example.test/file/clip.webm?v=1');
+            assert.strictEqual(automatic.albums[0].coverThumbnailUrl, null);
             assert.throws(() => db.db.prepare('INSERT INTO album_covers (album_id, file_id, position_x, position_y, updated_at) VALUES (?, ?, 50, 50, 1)').run('album-id', 'outside.png'), /FOREIGN KEY constraint failed/);
         } finally {
             db.db.close();

@@ -1,9 +1,11 @@
+import { setSitePageTitle } from '../site-config.js';
+
 const TOOL_ROUTES = {
   access: { key: 'access', frameKey: 'access', path: '/customerConfig', hash: '', title: '上传访问' },
   'system-upload': { key: 'system-upload', native: 'storage-settings', path: '/systemConfig', hash: '#upload', title: '存储渠道' },
   'system-others': { key: 'system-others', native: 'storage-settings', path: '/systemConfig', hash: '#others', title: '其他设置', navKey: 'system-upload' },
   'system-wallpaper': { key: 'system-wallpaper', native: 'storage-settings', path: '/systemConfig', hash: '#wallpaper', title: '欢迎页壁纸' },
-  'system-page': { key: 'system-page', frameKey: 'system-page', path: '/systemConfig', hash: '#page', title: '网站设置' },
+  'system-page': { key: 'system-page', native: 'storage-settings', path: '/systemConfig', hash: '#page', title: '网站设置' },
   'system-security': { key: 'system-security', frameKey: 'system-security', path: '/systemConfig', hash: '#security', title: '安全与自动化' },
   'system-status': { key: 'system-status', frameKey: 'system-status', path: '/systemConfig', hash: '#status', title: '维护工具' },
 };
@@ -159,12 +161,12 @@ function accountTitleFromUrl(url = new URL(location.href)) {
 
 function applyToolChrome(tool) {
   setActiveNav(tool.navKey || tool.key);
-  document.title = `${tool.title} · CloudFlare ImgBed`;
+  setSitePageTitle(tool.title);
 }
 
 function restoreAccountChrome(url = new URL(location.href)) {
   setActiveNav(accountKeyFromUrl(url));
-  document.title = `${accountTitleFromUrl(url)} · CloudFlare ImgBed`;
+  setSitePageTitle(accountTitleFromUrl(url));
 }
 
 function buildParentToolUrl(tool) {

@@ -1,5 +1,50 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { compressVideo, MAX_COMPRESSION_BYTES } from '../frontend-dist/account/video-compression.js';
+
+const workerSource = readFileSync(new URL('../frontend-dist/account/video-compression-worker.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/, '');
+
+describe('video compression track selection', function () {
+    async function runWorker(discardedTracks) {
+        const messages = [];
+        let conversionOptions;
+        const worker = { postMessage: message => messages.push(message) };
+        const video = { canBeTransparent: async () => false, canDecode: async () => true };
+        vm.runInNewContext(workerSource, {
+            self: worker,
+            VideoEncoder: class {}, VideoDecoder: class {},
+            ALL_FORMATS: [], BlobSource: class {}, Quality: class {}, Mp4OutputFormat: class {},
+            Input: class { async getVideoTracks() { return [video]; } dispose() {} },
+            BufferTarget: class { buffer = new ArrayBuffer(4); on() {} },
+            Output: class { async cancel() {} },
+            Conversion: { async init(options) {
+                conversionOptions = options;
+                return { isValid: true, discardedTracks, async execute() {}, async cancel() {} };
+            } },
+        });
+        await worker.onmessage({ data: { file: new File(['video with audio'], 'example.mp4'), maxBytes: MAX_COMPRESSION_BYTES } });
+        return { messages, conversionOptions };
+    }
+
+    it('discards audio while allowing the video conversion to finish', async function () {
+        const { messages, conversionOptions } = await runWorker([{ track: { type: 'audio' }, reason: 'discarded_by_user' }]);
+        assert.equal(conversionOptions.audio.discard, true);
+        assert.equal(conversionOptions.audio.codec, undefined);
+        assert.equal(messages.at(-1).type, 'done');
+    });
+
+    it('still rejects discarded video and unexpectedly discarded audio', async function () {
+        for (const discarded of [
+            { track: { type: 'video' }, reason: 'no_encodable_target_codec' },
+            { track: { type: 'audio' }, reason: 'undecodable_source_codec' },
+        ]) {
+            const { messages } = await runWorker([discarded]);
+            assert.equal(messages.at(-1).type, 'error');
+            assert.equal(messages.at(-1).code, 'unsupported');
+        }
+    });
+});
 
 describe('browser video compression lifecycle', function () {
     let originalWorker;
