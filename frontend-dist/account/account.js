@@ -581,7 +581,7 @@ function openFileViewer(file) {
   const isVideo = isVideoFile(file);
   openDialog(`<div class="media-viewer-head"><div><h2>${escapeHtml(file.file_name || file.id)}</h2><p>${formatBytes(file.file_size_bytes)}${formatDate(file.timestamp) ? ` · ${formatDate(file.timestamp)}` : ''}</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
     <div class="file-preview-media" data-media-viewer-stage>${isVideo ? `<video src="${fileUrl(file)}" autoplay muted loop playsinline controls></video>` : `<img src="${fileUrl(file)}" alt="${escapeHtml(file.file_name || '')}">`}</div>
-    <div class="media-viewer-details"><p>加入人物图库后，可通过图库在发现页浏览。</p><div class="media-viewer-actions"><button class="button" type="button" id="copyViewerFile">${icons.link}复制链接</button><a class="button" href="${escapeHtml(fileUrl(file))}" target="_blank" rel="noopener">${icons.external}打开原始尺寸</a></div></div>`, { className: 'media-viewer-dialog', label: `查看 ${file.file_name || file.id}` });
+    <div class="media-viewer-details"><p>加入人物图库后，可通过图库在发现页浏览。</p><div class="media-viewer-actions"><button class="button" type="button" id="copyViewerFile">${icons.link}复制链接</button><a class="button" href="${escapeHtml(fileUrl(file))}" target="_blank" rel="noopener">${icons.external}新标签页打开</a></div></div>`, { className: 'media-viewer-dialog', label: `查看 ${file.file_name || file.id}` });
   dialogRoot.querySelector('#copyViewerFile')?.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(publicFileUrl(file.id, await getSiteConfig()));

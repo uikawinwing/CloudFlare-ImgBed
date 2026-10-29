@@ -43,7 +43,7 @@ describe('account media and album UI', () => {
     assert.match(source, /class="media-frame"[\s\S]*data-open-media/);
     assert.match(source, /\[data-open-media\][\s\S]*openFileViewer/);
     assert.match(source, /function openFileViewer\(file\)/);
-    assert.match(styles, /\.media-viewer-dialog\s*\{[^}]*width:\s*100vw[^}]*height:\s*100dvh/);
+    assert.match(styles, /\.media-viewer-dialog\s*\{[^}]*width:\s*100%[^}]*height:\s*100dvh/);
     assert.match(styles, /\.media-viewer-dialog \.file-preview-media img[^}]*object-fit:\s*contain/);
     assert.match(styles, /\.dialog-backdrop:has\(\.media-viewer-dialog\)\s*\{[^}]*padding:\s*0/);
   });
@@ -56,9 +56,20 @@ describe('account media and album UI', () => {
 
   it('uses an uncropped media preview with an original-size link', () => {
     assert.match(source, /class="file-preview-media"/);
-    assert.match(source, /打开原始尺寸/);
+    assert.match(source, /新标签页打开/);
     assert.match(styles, /\.file-preview-media img, \.file-preview-media video[\s\S]*?object-fit: contain/);
     assert.match(source, /event\.key === 'Escape'/);
+  });
+
+  it('loads the original image on the first open and bounds both axes of its preview stage', () => {
+    const app = runInNewContext(`${source.replace(/^import .*;\r?\n/gm, '').replace(/\ninit\(\);\s*$/, '')}\nlet viewerMarkup; openDialog = content => { viewerMarkup = content; }; ({ openFileViewer, markup: () => viewerMarkup })`, {
+      location: new URL('https://example.test/account/?view=files'), URLSearchParams,
+      document: { querySelector: () => ({ querySelector: () => null }) },
+    });
+    app.openFileViewer({ id: 'users/owner/portrait.png', file_name: 'portrait.png', file_type: 'image/png', thumbnail_url: '/thumb/low-resolution.webp' });
+    assert.match(app.markup(), /<img src="\/file\/users\/owner\/portrait\.png"/);
+    assert.doesNotMatch(app.markup(), /\/thumb\//);
+    assert.match(styles, /\.media-viewer-dialog \.file-preview-media\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)[^}]*grid-template-rows:\s*minmax\(0, 1fr\)/);
   });
 
   it('does not show a play overlay on autoplaying video cards', () => {
