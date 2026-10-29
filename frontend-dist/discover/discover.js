@@ -39,7 +39,7 @@ function albumCardMarkup(album) {
   const objectPosition = `${albumCoverPosition(album.coverPositionX)}% ${albumCoverPosition(album.coverPositionY)}%`;
   const isVideoCover = ['video/mp4', 'video/webm'].includes(album.coverType) && album.coverUrl;
   const coverMarkup = isVideoCover
-    ? `<video data-video-src="${escapeHtml(album.coverUrl)}" muted loop playsinline preload="none" aria-hidden="true" style="object-position:${objectPosition}"></video><span class="album-cover-video-label">视频</span>`
+    ? `<video data-video-src="${escapeHtml(album.coverUrl)}" muted loop playsinline disablepictureinpicture preload="none" aria-hidden="true" style="object-position:${objectPosition}"></video><span class="album-cover-video-label">视频</span>`
     : album.coverThumbnailUrl
     ? `<img src="${escapeHtml(album.coverThumbnailUrl)}" alt="" loading="lazy" decoding="async" style="object-position:${objectPosition}">`
     : '<span class="album-cover-empty">暂无封面</span>';
