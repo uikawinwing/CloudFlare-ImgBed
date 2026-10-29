@@ -44,7 +44,7 @@ body::before { background-image: var(--account-wallpaper, radial-gradient(circle
   box-shadow: none;
 }
 .button:hover, .file-action:hover, .icon-button:hover { border-color: var(--app-border-strong) !important; background: var(--app-surface-soft) !important; }
-.button.primary { border-color: var(--app-accent) !important; background: var(--app-accent) !important; color: white !important; box-shadow: 0 10px 28px color-mix(in srgb, var(--app-accent) 20%, transparent); }
+.button.primary { border-color: var(--app-accent) !important; background: var(--app-accent) !important; color: var(--app-on-accent) !important; box-shadow: 0 10px 28px color-mix(in srgb, var(--app-accent) 20%, transparent); }
 .button.primary:hover { background: var(--app-accent-hover) !important; }
 .button.danger { color: var(--app-danger) !important; }
 .segmented button { color: var(--app-muted); }

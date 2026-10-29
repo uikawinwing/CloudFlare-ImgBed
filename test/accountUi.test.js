@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 
 const source = readFileSync(new URL('../frontend-dist/account/account.js', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../frontend-dist/account/account.css', import.meta.url), 'utf8');
@@ -91,14 +92,13 @@ describe('account media and album UI', () => {
     assert.doesNotMatch(discoverSource, /album\.coverUrl|body\.files|sort=featured/);
   });
 
-  it('keeps the root welcome page bounded and the full feed in Discover', () => {
-    assert.match(welcomePage, /id="welcomeFeature"/);
+  it('keeps the root welcome page simple and the full feed in Discover', () => {
     assert.match(welcomePage, /href="\/discover\/"/);
-    assert.doesNotMatch(welcomePage, /id="albumGrid"/);
-    assert.match(welcomeSource, /fetch\('\/api\/public\/discover\?limit=12&sort=featured'/);
-    assert.doesNotMatch(welcomeSource, /loadFeed|cursor/);
-    assert.match(welcomeSource, /<video[^>]*controls[^>]*preload="none"/);
-    assert.doesNotMatch(welcomeSource, /<video[^>]*autoplay|<video[^>]*loop/);
+    assert.match(welcomePage, /href="\/charinfo\/"/);
+    assert.match(welcomePage, /class="primary-button welcome-primary"[^>]*>登录<\/a>/);
+    assert.doesNotMatch(welcomePage, /id="albumGrid"|welcomeFeature|welcome-shortcut|Featured|精选作品/);
+    assert.doesNotMatch(welcomeSource, /loadFeed|featured|localStorage/);
+    assert.match(welcomePage, /returnTo=%2Faccount%2F%3Fview%3Dfiles"/);
   });
 
   it('keeps public section headings free of designer commentary', () => {
@@ -125,5 +125,63 @@ describe('account media and album UI', () => {
     assert.match(discoverSource, /album\.coverPositionX[\s\S]*object-position/);
     assert.match(styles, /\.cover-focus-preview\s*\{[^}]*cursor:\s*grab[^}]*touch-action:\s*none/);
     assert.doesNotMatch(source, /把文件整理成可分享的图库/);
+  });
+});
+
+describe('homepage sign-in routing', () => {
+  async function welcome(response) {
+    const redirects = [];
+    const revealed = [];
+    const requests = [];
+    let timeout;
+    const signal = {};
+    let wallpaperInitializations = 0;
+    await runInNewContext(welcomeSource.replace(/^import .*;\r?\n/, ''), {
+      initializeWelcomeWallpaper: () => { wallpaperInitializations += 1; },
+      fetch: async (url, options) => {
+        requests.push({ url, options });
+        if (response instanceof Error) throw response;
+        return response;
+      },
+      AbortSignal: { timeout: milliseconds => { timeout = milliseconds; return signal; } },
+      location: { replace: url => redirects.push(url) },
+      document: { documentElement: { classList: { remove: value => revealed.push(value) } } },
+    });
+    return { redirects, revealed, requests, timeout, signal, wallpaperInitializations };
+  }
+
+  it('takes signed-in visitors directly to their studio without revealing the welcome page', async () => {
+    const result = await welcome({ ok: true, json: async () => ({ authenticated: true }) });
+    assert.deepEqual(result.redirects, ['/account/?view=files']);
+    assert.deepEqual(result.revealed, []);
+    assert.equal(result.requests.length, 1);
+    assert.equal(result.requests[0].url, '/api/user/me');
+    assert.equal(result.requests[0].options.cache, 'no-store');
+    assert.equal(result.requests[0].options.signal, result.signal);
+    assert.equal(result.timeout, 5000);
+    assert.equal(result.wallpaperInitializations, 0);
+  });
+
+  it('shows the welcome page to guests without requesting Featured media', async () => {
+    const result = await welcome({ ok: true, json: async () => ({ authenticated: false }) });
+    assert.deepEqual(result.redirects, []);
+    assert.deepEqual(result.revealed, ['welcome-checking']);
+    assert.equal(result.requests.length, 1);
+    assert.equal(result.requests[0].url, '/api/user/me');
+    assert.equal(result.wallpaperInitializations, 1);
+  });
+
+  it('keeps welcome and login available when authentication cannot be checked', async () => {
+    for (const response of [
+      { ok: false, status: 401 },
+      { ok: false, status: 500 },
+      { ok: true, json: async () => { throw new SyntaxError('Invalid JSON'); } },
+      new Error('Network unavailable'),
+      Object.assign(new Error('Request timed out'), { name: 'TimeoutError' }),
+    ]) {
+      const result = await welcome(response);
+      assert.deepEqual(result.redirects, []);
+      assert.deepEqual(result.revealed, ['welcome-checking']);
+    }
   });
 });

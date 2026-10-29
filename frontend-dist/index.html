@@ -4,25 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#121212">
-  <meta name="description" content="CloudFlare ImgBed 欢迎页。快速上传文件，或进入 Discover 浏览人物图库。">
+  <meta name="description" content="旅行者，欢迎来到万灵之乡 Charatopia。原本互不相交的命运，在此悄然交织，引领你邂逅一个个独一无二的灵魂。">
   <link rel="icon" href="/static/media/logo.png">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('imgbed-theme')||((matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light')}catch{}</script>
+  <script>document.documentElement.classList.add('welcome-checking')</script>
   <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/discover/discover.css">
   <link rel="stylesheet" href="/welcome/welcome.css">
-  <title>CloudFlare ImgBed</title>
+  <title>Charatopia</title>
 </head>
 <body>
   <a class="skip-link" href="#welcome">跳到欢迎页</a>
   <header class="public-nav">
-    <a class="brand" href="/" aria-label="CloudFlare ImgBed 首页"><span class="brand-mark" aria-hidden="true">I</span><span>ImgBed <small>Community</small></span></a>
+    <a class="brand" href="/" aria-label="Charatopia 首页"><span class="brand-mark" aria-hidden="true">C</span><span>Charatopia</span></a>
     <nav class="public-links" aria-label="公共导航">
       <a class="is-active" href="/">首页</a>
       <a href="/discover/">Discover</a>
       <a href="/charinfo/">CharInfo Creator</a>
     </nav>
     <div class="nav-actions">
-      <a class="text-button" data-account-action href="/api/auth/discord?returnTo=/">登录</a>
+      <a class="text-button" data-account-action href="/api/auth/discord?returnTo=%2Faccount%2F%3Fview%3Dfiles">登录</a>
       <a class="primary-button" data-upload-action href="/api/auth/discord?returnTo=%2Faccount%2F%3Fview%3Dfiles%26upload%3D1">上传</a>
       <button class="theme-button" type="button" data-theme-toggle aria-label="切换主题"><svg class="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><g class="theme-sun"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"/></g><g class="theme-moon"><path d="M20 15.2A8.3 8.3 0 0 1 8.8 4 8.4 8.4 0 1 0 20 15.2Z"/></g></svg></button>
     </div>
@@ -31,44 +32,23 @@
   <main id="welcome" class="welcome-wrap">
     <section class="welcome-hero" aria-labelledby="welcomeTitle">
       <div class="welcome-copy">
-        <p class="welcome-eyebrow">CloudFlare ImgBed</p>
-        <h1 id="welcomeTitle"><span>上传，分享，</span><span>或者随便看看。</span></h1>
-        <p class="welcome-lead">首页只展示站长挑选的 Featured 作品。想上传就直接进入工作室；想浏览社区内容，再进入 Discover。</p>
+        <h1 id="welcomeTitle">Charatopia</h1>
+        <h2 class="welcome-greeting">旅行者，欢迎来到万灵之乡</h2>
+        <p class="welcome-lead">原本互不相交的命运，在此悄然交织，<br>引领你邂逅一个个独一无二的灵魂。</p>
+        <p class="welcome-lead">沉寂的时光因你的到来重新流转，<br>而你与她的故事，正等待写下第一行。</p>
+        <p class="welcome-lead">每一张图片所承载的，不只是一个角色，<br>更是一场尚未启程的冒险。</p>
+        <p class="welcome-lead">在这里，播下一颗缘分的种子，<br>或带走一朵令你倾心的花吧。</p>
         <div class="welcome-actions">
-          <a class="primary-button welcome-primary" data-upload-action href="/api/auth/discord?returnTo=%2Faccount%2F%3Fview%3Dfiles%26upload%3D1">开始上传</a>
-          <a class="text-button welcome-secondary" href="/discover/">进入 Discover</a>
+          <a class="primary-button welcome-primary" data-account-action href="/api/auth/discord?returnTo=%2Faccount%2F%3Fview%3Dfiles">登录</a>
+          <a class="text-button welcome-secondary" href="/discover/">Discover</a>
         </div>
+        <a class="welcome-tool-link" href="/charinfo/">CharInfo Creator</a>
       </div>
-
-      <article class="welcome-feature" id="welcomeFeature" aria-live="polite">
-        <div class="welcome-feature-placeholder" id="featurePlaceholder">
-          <span>Featured</span>
-          <strong>正在读取精选作品…</strong>
-        </div>
-      </article>
-    </section>
-
-    <section class="welcome-shortcuts" aria-label="快速入口">
-      <a class="welcome-shortcut" data-upload-action href="/api/auth/discord?returnTo=%2Faccount%2F%3Fview%3Dfiles%26upload%3D1">
-        <small>UPLOAD</small>
-        <strong>上传文件</strong>
-        <span>直接进入工作室，管理自己的文件和图库。</span>
-      </a>
-      <a class="welcome-shortcut" href="/discover/">
-        <small>DISCOVER</small>
-        <strong>发现作品</strong>
-        <span>每个人物图库展示一张封面，点开即可浏览全部内容。</span>
-      </a>
-      <a class="welcome-shortcut" href="/charinfo/">
-        <small>TOOLS</small>
-        <strong>CharInfo Creator</strong>
-        <span>继续使用角色资料与图库工具。</span>
-      </a>
     </section>
   </main>
 
-  <footer class="public-footer"><span>CloudFlare ImgBed</span><span>公开内容由各自创作者维护</span></footer>
+  <footer class="public-footer"><span>Charatopia</span><span>公开内容由各自创作者维护</span></footer>
   <script type="module" src="/theme.js"></script>
-  <script type="module" src="/welcome/welcome.js"></script>
+  <script type="module" src="/welcome/welcome.js" onerror="document.documentElement.classList.remove('welcome-checking')"></script>
 </body>
 </html>

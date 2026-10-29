@@ -13,7 +13,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 
 .public-nav { position: sticky; z-index: 30; top: 0; height: 66px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 24px; padding: 0 clamp(18px, 4vw, 58px); border-bottom: 1px solid var(--app-border); background: color-mix(in srgb, var(--app-bg) 88%, transparent); backdrop-filter: blur(18px); }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 760; letter-spacing: -.02em; }
-.brand-mark { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 9px; background: var(--app-accent); color: white; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); font-size: 13px; font-weight: 850; }
+.brand-mark { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 9px; background: var(--app-accent); color: var(--app-on-accent); box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); font-size: 13px; font-weight: 850; }
 .brand small { color: var(--app-muted); font-weight: 620; }
 .public-links { display: flex; justify-content: center; gap: 28px; font-size: 13px; font-weight: 650; }
 .public-links a { position: relative; padding: 24px 0 22px; color: var(--app-muted); }
@@ -23,7 +23,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .text-button, .primary-button, .theme-button { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-surface-translucent); color: var(--app-text); font-size: 13px; font-weight: 680; box-shadow: var(--app-shadow-sm); }
 .text-button, .primary-button { padding: 0 14px; }
 .text-button:hover, .theme-button:hover { border-color: var(--app-border-strong); background: var(--app-surface); }
-.primary-button { border-color: var(--app-accent); background: var(--app-accent); color: white; box-shadow: 0 10px 24px color-mix(in srgb, var(--app-accent) 20%, transparent); }
+.primary-button { border-color: var(--app-accent); background: var(--app-accent); color: var(--app-on-accent); box-shadow: 0 10px 24px color-mix(in srgb, var(--app-accent) 20%, transparent); }
 .primary-button:hover { background: var(--app-accent-hover); }
 .theme-button { width: 38px; padding: 0; }
 

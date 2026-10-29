@@ -60,6 +60,7 @@ function buildNavigation(role) {
       { key: 'access', label: '上传访问', href: '/customerConfig', icon: 'activity' },
       { key: 'system-upload', label: '存储渠道', href: '/systemConfig#upload', icon: 'storage' },
       { key: 'system-page', label: '网站设置', href: '/systemConfig#page', icon: 'settings' },
+      { key: 'system-wallpaper', label: '欢迎页壁纸', href: '/account/?tool=system-wallpaper', icon: 'settings' },
       { key: 'system-security', label: '安全与自动化', href: '/systemConfig#security', icon: 'shield' },
       { key: 'system-status', label: '维护工具', href: '/systemConfig#status', icon: 'tools' },
     ] : []),

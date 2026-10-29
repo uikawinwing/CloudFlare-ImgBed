@@ -2,6 +2,7 @@ const allowedRoles = new Set(['admin', 'owner']);
 const panels = {
   'system-upload': { title: '存储渠道', description: '管理 Telegram、Discord、R2 与 Hugging Face 的保存渠道。' },
   'system-others': { title: '其他设置', description: '管理站点功能与缓存清理。' },
+  'system-wallpaper': { title: '欢迎页壁纸', description: '设置欢迎页的壁纸、播放顺序和裁切位置。' },
 };
 const channelTypes = {
   telegram: { label: 'Telegram', fields: [['name', '渠道名称', 'text'], ['botToken', 'Bot Token', 'secret'], ['chatId', '聊天 ID', 'text'], ['proxyUrl', '代理域名（可选）', 'text']] },
@@ -10,7 +11,7 @@ const channelTypes = {
   huggingface: { label: 'Hugging Face', fields: [['name', '渠道名称', 'text'], ['token', 'Access Token', 'secret'], ['repo', '仓库名称', 'text']] },
 };
 
-const state = { host: null, user: null, upload: null, others: null, dirty: false, saving: false, activeKey: null, loadId: 0 };
+const state = { host: null, user: null, upload: null, others: null, wallpaper: null, dirty: false, saving: false, activeKey: null, loadId: 0 };
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
@@ -59,7 +60,99 @@ function renderError(message, retry = true) {
 }
 
 function renderTabNav() {
-  return `<nav class="native-settings-tabs" aria-label="系统设置"><a href="${currentToolUrl('system-upload')}" class="${state.activeKey === 'system-upload' ? 'active' : ''}"${state.activeKey === 'system-upload' ? ' aria-current="page"' : ''}>存储渠道</a><a href="${currentToolUrl('system-others')}" class="${state.activeKey === 'system-others' ? 'active' : ''}"${state.activeKey === 'system-others' ? ' aria-current="page"' : ''}>其他设置</a></nav>`;
+  return `<nav class="native-settings-tabs" aria-label="系统设置">${Object.entries(panels).map(([key, panel]) => `<a href="${currentToolUrl(key)}" class="${state.activeKey === key ? 'active' : ''}"${state.activeKey === key ? ' aria-current="page"' : ''}>${panel.title}</a>`).join('')}</nav>`;
+}
+
+function wallpaperUrl(value) {
+  if (typeof value !== 'string' || !value.trim() || /[\\\u0000-\u001f\u007f]/.test(value)) return '';
+  const url = value.trim();
+  if (!/^https?:\/\//i.test(url) && (!url.startsWith('/') || url.startsWith('//'))) return '';
+  try { return ['http:', 'https:'].includes(new URL(url, location.origin).protocol) ? url : ''; } catch { return ''; }
+}
+
+function readWallpaper(settings) {
+  const value = settings.config?.find(item => item.id === 'welcomeWallpaper')?.value;
+  const wallpaper = typeof value === 'string' ? JSON.parse(value) : value;
+  if (!wallpaper || !Array.isArray(wallpaper.items)) throw new Error('欢迎页壁纸配置不完整，请重新加载。');
+  return wallpaper;
+}
+
+function wallpaperCard(item, index) {
+  const url = wallpaperUrl(item.url);
+  const positions = [['positionX', '桌面水平位置'], ['positionY', '桌面垂直位置'], ['mobilePositionX', '手机水平位置'], ['mobilePositionY', '手机垂直位置']];
+  return `<article class="native-channel-card wallpaper-card" data-wallpaper-card="${index}">
+    <header><h3>壁纸 ${index + 1}</h3><div class="wallpaper-order"><button type="button" class="button" data-wallpaper-move="${index}" data-direction="-1" aria-label="上移壁纸 ${index + 1}"${index === 0 ? ' disabled' : ''}>上移</button><button type="button" class="button" data-wallpaper-move="${index}" data-direction="1" aria-label="下移壁纸 ${index + 1}"${index === state.wallpaper.items.length - 1 ? ' disabled' : ''}>下移</button><button type="button" class="button danger" data-wallpaper-remove="${index}" aria-label="移除壁纸 ${index + 1}">移除</button></div></header>
+    <label class="native-settings-field wallpaper-url"><span>图片地址</span><input type="url" data-wallpaper-url="${index}" aria-describedby="wallpaperStatus" value="${escapeHtml(item.url)}" placeholder="https://example.com/wallpaper.jpg"><small>使用可公开访问的图片地址，或本站图片路径。</small></label>
+    <details class="wallpaper-crop"><summary>预览与调整裁切</summary><div class="wallpaper-previews"><figure><figcaption>桌面</figcaption><div class="wallpaper-preview"><img data-wallpaper-preview="desktop" alt="壁纸 ${index + 1} 的桌面裁切预览"${url ? ` src="${escapeHtml(url)}"` : ' hidden'} loading="lazy" referrerpolicy="no-referrer" style="object-position:${Number(item.positionX)}% ${Number(item.positionY)}%"></div></figure><figure><figcaption>手机</figcaption><div class="wallpaper-preview is-mobile"><img data-wallpaper-preview="mobile" alt="壁纸 ${index + 1} 的手机裁切预览"${url ? ` src="${escapeHtml(url)}"` : ' hidden'} loading="lazy" referrerpolicy="no-referrer" style="object-position:${Number(item.mobilePositionX)}% ${Number(item.mobilePositionY)}%"></div></figure></div><p data-wallpaper-preview-error hidden>图片暂时无法载入，请检查地址与访问权限。</p><div class="native-settings-fields">${positions.map(([key, label]) => `<label class="native-settings-field"><span>${label} <output data-position-value="${key}">${Number(item[key])}%</output></span><input type="range" min="0" max="100" step="1" data-wallpaper-position="${key}" data-wallpaper-index="${index}" value="${Number(item[key])}"></label>`).join('')}</div></details>
+  </article>`;
+}
+
+function wallpaperMarkup() {
+  const value = state.wallpaper;
+  return `<main class="native-settings-main"><section class="page-section native-settings-page"><header class="page-head"><div class="page-title"><h1>欢迎页壁纸</h1><p>按列表顺序循环播放；只有一张时保持静止。这里的设置只影响欢迎页。</p></div><button type="button" class="button primary" data-save-settings>保存更改</button></header>${renderTabNav()}<div id="wallpaperStatus" class="native-settings-status" aria-live="polite"></div>
+    <section class="native-settings-section"><h2>播放设置</h2><div class="native-settings-fields"><label class="native-check"><input type="checkbox" data-wallpaper-enabled${value.enabled ? ' checked' : ''}> 启用欢迎页壁纸</label><label class="native-settings-field"><span>切换间隔（秒）</span><input type="number" min="5" max="3600" step="1" inputmode="numeric" data-wallpaper-interval aria-describedby="wallpaperStatus" value="${escapeHtml(value.intervalSeconds)}"><small>可设置 5–3600 秒。</small></label><label class="native-settings-field"><span>壁纸不透明度 <output data-opacity-value>${Math.round(value.opacity * 100)}%</output></span><input type="range" min="0" max="100" step="1" data-wallpaper-opacity value="${Math.round(value.opacity * 100)}"><small>文字遮罩会保留，避免影响阅读。</small></label></div></section>
+    <section class="native-settings-section"><div class="native-settings-section-head"><div><h2>壁纸队列</h2><p>最多 20 张。使用上移、下移调整顺序；清空队列或关闭壁纸会显示纯色背景。</p></div><button type="button" class="button" data-wallpaper-add${value.items.length >= 20 ? ' disabled' : ''}>添加壁纸</button></div><div class="native-channel-list">${value.items.length ? value.items.map(wallpaperCard).join('') : '<div class="native-empty">队列为空，欢迎页将使用纯色背景。</div>'}</div></section>
+  </section></main>`;
+}
+
+function validateWallpaper() {
+  if (!Number.isInteger(state.wallpaper.intervalSeconds) || state.wallpaper.intervalSeconds < 5 || state.wallpaper.intervalSeconds > 3600) return { selector: '[data-wallpaper-interval]', message: '切换间隔须为 5–3600 秒的整数。' };
+  const index = state.wallpaper.items.findIndex(item => !wallpaperUrl(item.url));
+  if (index !== -1) return { selector: `[data-wallpaper-url="${index}"]`, message: `壁纸 ${index + 1} 的地址无效，请使用 http://、https:// 或本站图片路径。` };
+  return null;
+}
+
+function bindWallpaperEvents() {
+  const focusItem = index => state.host.querySelector(`[data-wallpaper-url="${index}"]`)?.focus();
+  state.host.querySelector('[data-wallpaper-enabled]')?.addEventListener('change', event => { state.wallpaper.enabled = event.target.checked; markDirty(); });
+  state.host.querySelector('[data-wallpaper-interval]')?.addEventListener('input', event => { state.wallpaper.intervalSeconds = event.target.value === '' ? null : Number(event.target.value); event.target.removeAttribute('aria-invalid'); markDirty(); });
+  state.host.querySelector('[data-wallpaper-opacity]')?.addEventListener('input', event => {
+    state.wallpaper.opacity = Number(event.target.value) / 100;
+    state.host.querySelector('[data-opacity-value]').textContent = `${event.target.value}%`;
+    state.host.querySelectorAll('.wallpaper-preview img').forEach(image => { image.style.opacity = String(state.wallpaper.opacity); });
+    markDirty();
+  });
+  state.host.querySelector('[data-wallpaper-add]')?.addEventListener('click', () => {
+    if (state.wallpaper.items.length >= 20) return;
+    state.wallpaper.items.push({ url: '', positionX: 50, positionY: 50, mobilePositionX: 60, mobilePositionY: 0 });
+    markDirty(); render(); focusItem(state.wallpaper.items.length - 1);
+  });
+  state.host.querySelectorAll('[data-wallpaper-remove]').forEach(button => button.addEventListener('click', () => {
+    const index = Number(button.dataset.wallpaperRemove);
+    state.wallpaper.items.splice(index, 1);
+    markDirty(); render();
+    if (state.wallpaper.items.length) focusItem(Math.min(index, state.wallpaper.items.length - 1));
+    else state.host.querySelector('[data-wallpaper-add]')?.focus();
+  }));
+  state.host.querySelectorAll('[data-wallpaper-move]').forEach(button => button.addEventListener('click', () => {
+    const index = Number(button.dataset.wallpaperMove), target = index + Number(button.dataset.direction);
+    if (target < 0 || target >= state.wallpaper.items.length) return;
+    [state.wallpaper.items[index], state.wallpaper.items[target]] = [state.wallpaper.items[target], state.wallpaper.items[index]];
+    markDirty(); render(); focusItem(target);
+  }));
+  state.host.querySelectorAll('[data-wallpaper-url]').forEach(input => input.addEventListener('input', () => {
+    state.wallpaper.items[Number(input.dataset.wallpaperUrl)].url = input.value;
+    input.removeAttribute('aria-invalid'); markDirty();
+  }));
+  state.host.querySelectorAll('[data-wallpaper-url]').forEach(input => input.addEventListener('change', () => {
+    const card = input.closest('[data-wallpaper-card]'), url = wallpaperUrl(input.value);
+    card.querySelector('[data-wallpaper-preview-error]').hidden = true;
+    card.querySelectorAll('img').forEach(image => { image.hidden = !url; if (url) image.src = url; else image.removeAttribute('src'); });
+  }));
+  state.host.querySelectorAll('.wallpaper-preview img').forEach(image => {
+    image.style.opacity = String(state.wallpaper.opacity);
+    image.addEventListener('error', () => { image.closest('[data-wallpaper-card]').querySelector('[data-wallpaper-preview-error]').hidden = false; });
+    image.addEventListener('load', () => { image.closest('[data-wallpaper-card]').querySelector('[data-wallpaper-preview-error]').hidden = true; });
+  });
+  state.host.querySelectorAll('[data-wallpaper-position]').forEach(input => input.addEventListener('input', () => {
+    const item = state.wallpaper.items[Number(input.dataset.wallpaperIndex)], key = input.dataset.wallpaperPosition;
+    item[key] = Number(input.value);
+    const card = input.closest('[data-wallpaper-card]');
+    card.querySelector(`[data-position-value="${key}"]`).textContent = `${item[key]}%`;
+    card.querySelector('[data-wallpaper-preview="desktop"]').style.objectPosition = `${item.positionX}% ${item.positionY}%`;
+    card.querySelector('[data-wallpaper-preview="mobile"]').style.objectPosition = `${item.mobilePositionX}% ${item.mobilePositionY}%`;
+    markDirty();
+  }));
 }
 
 function fixedField(type, field) {
@@ -185,7 +278,15 @@ function showFieldError(error) {
 }
 
 function saveButton(busy) {
-  state.host?.querySelectorAll('input, button').forEach(control => { control.disabled = busy; });
+  state.host?.querySelectorAll('input, button').forEach(control => {
+    if (busy) {
+      control.dataset.settingsDisabled = String(control.disabled);
+      control.disabled = true;
+    } else if (control.dataset.settingsDisabled !== undefined) {
+      control.disabled = control.dataset.settingsDisabled === 'true';
+      delete control.dataset.settingsDisabled;
+    }
+  });
   state.host?.querySelectorAll('[data-save-settings]').forEach(button => {
     button.disabled = busy;
     button.setAttribute('aria-busy', String(busy));
@@ -196,15 +297,27 @@ function saveButton(busy) {
 async function save() {
   if (state.saving) return;
   const upload = state.activeKey === 'system-upload';
+  const wallpaper = state.activeKey === 'system-wallpaper';
+  if (wallpaper) {
+    const error = validateWallpaper();
+    if (error) {
+      const input = state.host.querySelector(error.selector);
+      input?.setAttribute('aria-invalid', 'true');
+      input?.focus();
+      setStatus(error.message, 'error');
+      return;
+    }
+  }
   const validationError = upload && validateUpload();
   if (validationError) { showFieldError(validationError); return; }
   state.saving = true;
   saveButton(true);
   setStatus('正在保存…', 'pending');
   try {
-    const path = upload ? '/api/manage/sysConfig/upload' : '/api/manage/sysConfig/others';
-    const result = await api(path, { method: 'POST', body: JSON.stringify(upload ? state.upload : state.others) });
+    const path = wallpaper ? '/api/manage/sysConfig/page' : upload ? '/api/manage/sysConfig/upload' : '/api/manage/sysConfig/others';
+    const result = await api(path, { method: wallpaper ? 'PATCH' : 'POST', body: JSON.stringify(wallpaper ? { welcomeWallpaper: state.wallpaper } : upload ? state.upload : state.others) });
     if (upload) state.upload = result;
+    else if (wallpaper) state.wallpaper = readWallpaper(result);
     else state.others = result;
     state.dirty = false;
     render();
@@ -227,11 +340,12 @@ function setOtherField(path, value) {
 
 function render() {
   if (!state.host || !state.user || !allowedRoles.has(state.user.role)) return;
-  state.host.innerHTML = state.activeKey === 'system-others' ? othersMarkup() : uploadMarkup();
+  state.host.innerHTML = state.activeKey === 'system-wallpaper' ? wallpaperMarkup() : state.activeKey === 'system-others' ? othersMarkup() : uploadMarkup();
   bindPageEvents();
 }
 
 function bindPageEvents() {
+  if (state.activeKey === 'system-wallpaper') bindWallpaperEvents();
   state.host.querySelectorAll('[data-channel-field]').forEach(input => input.addEventListener('change', event => {
     const channel = getChannel(event.target.dataset.channelType, event.target.dataset.channelIndex);
     if (!channel) return;
@@ -350,11 +464,13 @@ async function show(detail) {
       state.host.innerHTML = '<main class="native-settings-main"><div class="error-state"><h2>无权访问系统设置</h2><p>只有站点管理员和所有者可以读取或修改这些设置。</p></div></main>';
       return;
     }
-    const path = state.activeKey === 'system-others' ? '/api/manage/sysConfig/others' : '/api/manage/sysConfig/upload';
+    const path = state.activeKey === 'system-wallpaper' ? '/api/manage/sysConfig/page' : state.activeKey === 'system-others' ? '/api/manage/sysConfig/others' : '/api/manage/sysConfig/upload';
     const data = await api(path);
     if (loadId !== state.loadId) return;
     if (state.activeKey === 'system-others') state.others = data;
-    else state.upload = data;
+    else if (state.activeKey === 'system-wallpaper') {
+      state.wallpaper = readWallpaper(data);
+    } else state.upload = data;
     state.dirty = false;
     render();
   } catch (error) {

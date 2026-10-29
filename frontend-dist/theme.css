@@ -12,9 +12,10 @@
   --app-muted-strong: #4f4f4f;
   --app-border: rgba(0, 0, 0, .08);
   --app-border-strong: rgba(0, 0, 0, .16);
-  --app-accent: #e60023;
-  --app-accent-hover: #ad081b;
-  --app-accent-soft: rgba(230, 0, 35, .10);
+  --app-accent: #587463;
+  --app-accent-hover: #465e50;
+  --app-accent-soft: rgba(88, 116, 99, .12);
+  --app-on-accent: #ffffff;
   --app-danger: #d92d3d;
   --app-success: #2ca875;
   --app-shadow-sm: 0 2px 10px rgba(0, 0, 0, .04);
@@ -40,9 +41,10 @@
   --app-muted-strong: #c7c7c7;
   --app-border: rgba(255, 255, 255, .08);
   --app-border-strong: rgba(255, 255, 255, .16);
-  --app-accent: #e60023;
-  --app-accent-hover: #ff334b;
-  --app-accent-soft: rgba(230, 0, 35, .14);
+  --app-accent: #a3bfa9;
+  --app-accent-hover: #b9d0be;
+  --app-accent-soft: rgba(163, 191, 169, .16);
+  --app-on-accent: #18271e;
   --app-danger: #ff5f6d;
   --app-success: #48cf98;
   --app-shadow-sm: 0 2px 10px rgba(0, 0, 0, .18);

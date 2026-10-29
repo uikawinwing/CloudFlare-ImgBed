@@ -1,4 +1,6 @@
 import { getDatabase } from '../../../utils/databaseAdapter.js';
+import { rejectCrossSiteMutation } from '../../../utils/auth/mutationSecurity.js';
+import { getDefaultWelcomeWallpaper, validateWelcomeWallpaper } from '../../../utils/welcomeWallpaper.js';
 
 export async function onRequest(context) {
     // 页面设置相关，GET方法读取设置，POST方法保存设置
@@ -24,22 +26,63 @@ export async function onRequest(context) {
         })
     }
 
+    if (request.method === 'PATCH') {
+        const rejected = rejectCrossSiteMutation(request);
+        if (rejected) return rejected;
+        let value;
+        try {
+            const body = await request.json();
+            if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 || !Object.hasOwn(body, 'welcomeWallpaper')) {
+                return new Response(JSON.stringify({ error: '此操作仅用于保存欢迎页壁纸。' }), { status: 400, headers: { 'content-type': 'application/json' } });
+            }
+            value = validateWelcomeWallpaper(body.welcomeWallpaper);
+        } catch (error) {
+            return wallpaperError(error);
+        }
+        const settings = JSON.parse(await db.get('manage@sysConfig@page') || '{}');
+        const config = Array.isArray(settings.config) ? settings.config : [];
+        const item = config.find(item => item?.id === 'welcomeWallpaper');
+        if (item) item.value = value;
+        else config.push({ id: 'welcomeWallpaper', value });
+        settings.config = config;
+        await db.put('manage@sysConfig@page', JSON.stringify(settings));
+        return new Response(JSON.stringify(await getPageConfig(db, env)), { headers: { 'content-type': 'application/json' } });
+    }
+
     // POST保存设置
     if (request.method === 'POST') {
-        const body = await request.json()
+        const rejected = rejectCrossSiteMutation(request);
+        if (rejected) return rejected;
+        let body;
+        try {
+            body = await request.json();
+            if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Invalid settings');
+            for (const item of Array.isArray(body?.config) ? body.config : []) {
+                if (item?.id === 'welcomeWallpaper') item.value = validateWelcomeWallpaper(item.value);
+            }
+        } catch (error) {
+            return wallpaperError(error);
+        }
         const previousSettings = await getPageConfig(db, env)
         const settings = processAnnouncementInfo(body, previousSettings)
 
         // 写入数据库
         await db.put('manage@sysConfig@page', JSON.stringify(settings))
 
-        return new Response(JSON.stringify(settings), {
+        return new Response(JSON.stringify(await getPageConfig(db, env)), {
             headers: {
                 'content-type': 'application/json',
             },
         })
     }
 
+}
+
+function wallpaperError(error) {
+    return new Response(JSON.stringify({ error: error.field ? error.message : '请提交有效的 JSON 配置。', ...(error.field ? { field: error.field } : {}) }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+    });
 }
 
 export async function getPageConfig(db, env) {
@@ -271,6 +314,17 @@ export async function getPageConfig(db, env) {
             category_en: 'Client Settings',
         },
         {
+            id: 'welcomeWallpaper',
+            label: '欢迎页壁纸',
+            label_en: 'Welcome Wallpaper',
+            type: 'textarea',
+            value: getDefaultWelcomeWallpaper(),
+            tooltip: '在“欢迎页壁纸”中管理图片队列、切换间隔、透明度及裁切位置。',
+            tooltip_en: 'Manage the image queue, interval, opacity, and crop positions in Welcome Wallpaper.',
+            category: '客户端设置',
+            category_en: 'Client Settings',
+        },
+        {
             id: 'loginBkImg',
             label: '登录页背景图',
             label_en: 'Login Background',
@@ -351,6 +405,9 @@ export async function getPageConfig(db, env) {
             config[index].value = item.value
         }
     }
+
+    const wallpaper = config.find(item => item.id === 'welcomeWallpaper');
+    if (typeof wallpaper.value !== 'string') wallpaper.value = JSON.stringify(wallpaper.value, null, 2);
 
     return settings
 }
