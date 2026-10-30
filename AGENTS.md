@@ -18,7 +18,7 @@
 | --- | --- |
 | `functions/` | 后端路由。`_middleware.js` 按目录层级执行，`index.js` 对应目录入口，动态文件名对应路径参数。新增路由后重新生成 Worker 入口。 |
 | `functions/utils/` | 数据库适配、认证、设置、公开目录、缩略图等共享逻辑；不作为路由扫描。 |
-| `frontend-dist/index.html`、`frontend-dist/welcome/` | 手工维护的欢迎页、样式和壁纸播放器，可以直接编辑。 |
+| `frontend-dist/index.html`、`frontend-dist/welcome/` | 手工维护的欢迎页、样式和壁纸播放器，可以直接编辑。欢迎页字体按 `DESIGN.md` 记录的来源与字形范围重新生成，保留上游许可证。 |
 | `frontend-dist/account/` | 手工维护的文件／图库工作区、侧栏、原生设置页及旧管理工具桥接。`vendor/` 是生成依赖，不能手改。 |
 | `frontend-dist/discover/` | 公开图库发现页。 |
 | `frontend-dist/theme.css` | 共享明暗主题与主色；账户页通过 `account/unified.css` 使用同一组变量。 |

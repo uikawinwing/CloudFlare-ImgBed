@@ -1,3 +1,13 @@
+/* LXGW WenKai v1.530, web subset. Source: https://github.com/lxgw/LxgwWenKai
+   Copyright and SIL Open Font License: ./fonts/OFL.txt */
+@font-face {
+  font-family: "Welcome WenKai";
+  src: url("./fonts/welcome-wenkai.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 html { min-height: 100%; }
 body { position: relative; isolation: isolate; min-width: 320px; min-height: 100dvh; display: flex; flex-direction: column; }
 body::before {
@@ -78,7 +88,7 @@ body::after {
 .welcome-greeting {
   margin: 16px 0 28px;
   color: var(--app-text-strong);
-  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+  font-family: "Welcome WenKai", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
   font-size: clamp(15px, 1.35vw, 18px);
   font-weight: 400;
   letter-spacing: .18em;
@@ -88,11 +98,11 @@ body::after {
 .welcome-lead {
   margin: 0;
   color: var(--app-muted-strong);
-  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+  font-family: "Welcome WenKai", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
   font-size: 14px;
   font-weight: 400;
   letter-spacing: .06em;
-  line-height: 2.05;
+  line-height: 2.15;
 }
 .welcome-lead + .welcome-lead { margin-top: 14px; }
 .welcome-lead:last-child { color: var(--app-text); }
