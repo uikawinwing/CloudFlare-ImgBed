@@ -53,7 +53,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid color-mix(in srgb, va
 @media (max-width: 880px) {
   .gallery-head { grid-template-columns: 128px 1fr; gap: 20px; }
   .cover { width: 128px; }
-  .copy-button { grid-column: 1 / -1; width: 100%; }
+  .copy-button { grid-column: 1 / -1; justify-self: start; }
   .gallery-grid { columns: 3 180px; }
 }
 @media (max-width: 620px) {

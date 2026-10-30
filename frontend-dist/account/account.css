@@ -342,16 +342,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .moderation-row { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; min-height: 0; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
   .owner-column, .type-column, .moderation-time { display: none; }
   .status-chip { grid-column: 2; }
-  .moderation-actions { grid-column: 1 / -1; justify-content: stretch; }
-  .moderation-actions .button { flex: 1; }
+  .moderation-actions { grid-column: 1 / -1; justify-content: flex-start; }
   .user-row, .audit-row { grid-template-columns: 1fr; }
+  .user-row > .button { justify-self: start; }
 }
 
 @media (max-width: 720px) {
   :root { --sidebar-width: 0px; }
   .main { margin-left: 0; padding-top: 92px; }
   .workspace-section-head { align-items: stretch; flex-direction: column; gap: 16px; }
-  .album-detail-actions .button { flex: 1; }
+  .workspace-section-head > .button { align-self: flex-start; }
+  .album-card-actions .button { flex: 0 1 auto; }
+  .album-actions { display: flex; flex-wrap: wrap; }
+  .album-actions .album-visibility { flex-basis: 100%; }
+  .album-actions .button { width: auto; }
   .album-detail-tools .album-delete { margin-left: 0; }
 }
 
@@ -363,14 +367,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .file-toolbar, .admin-toolbar { flex-direction: column; }
   .select-control { width: 100%; }
   .selection-bar, .notice-panel, .admin-tools { align-items: stretch; flex-direction: column; }
+  .notice-panel > .button, .admin-tools > .button { align-self: flex-start; }
   .selection-actions { width: 100%; }
-  .selection-actions .button { flex: 1; }
   .media-grid { columns: 2 140px; column-gap: 9px; }
   .media-card { margin-bottom: 9px; }
   .album-item-row { grid-template-columns: 58px minmax(0, 1fr); }
   .album-item-thumb { width: 58px; }
   .album-item-actions { grid-column: 1 / -1; }
-  .album-item-actions .button { flex: 1; }
   .album-detail .album-item-row { grid-template-columns: 58px minmax(0, 1fr); }
   .album-detail .status-chip { flex-basis: 100%; }
   .dialog:has(.album-file-results) .dialog-actions { flex-wrap: wrap; }
@@ -381,8 +384,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .dialog-actions .button { flex: 1; }
   .dialog.media-viewer-dialog { width: 100%; height: 100dvh; max-height: none; border-radius: 0; }
   .media-viewer-details { align-items: stretch; flex-direction: column; }
-  .media-viewer-actions { justify-content: stretch; }
-  .media-viewer-actions .button { flex: 1; }
+  .media-viewer-actions { justify-content: flex-start; }
 }
 
 @media (prefers-reduced-motion: reduce) {

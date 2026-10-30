@@ -48,6 +48,8 @@ Reuse `--radius-sm`, `--radius-md`, and `--radius-lg` from `frontend-dist/accoun
 
 Sensitive values are masked by default and use a local reveal control. Save uses server-confirmed feedback; unsaved settings use the existing app dialog treatment before navigation.
 
+On narrow screens, ordinary action buttons keep their content width and wrap as a group instead of expanding to fill spare space. Keep the established touch height. Equal-width navigation segments and paired dialog confirmation actions retain their existing layout.
+
 Welcome-page wallpapers use the existing native settings shell, fields, save feedback, and unsaved-change dialog. Their ordered queue is independent of workspace wallpaper settings. Administrators can adjust desktop and phone crop positions separately; the welcome page retains its theme-aware text overlay and pauses automatic changes when the page is hidden or reduced motion is requested.
 
 Website settings use that same native shell and only expose controls consumed by the current pages. Brand names, titles, icons, logo links, and public file link prefixes are owned by `frontend-dist/site-config.js`; page entry points load `site.js`, while dynamic headings and titles use the shared APIs. Channel selection uses a native select with the operating system's popup behavior. Workspace wallpaper playback shares `frontend-dist/wallpaper-player.js` with the welcome page, retaining separate settings and existing millisecond units for workspace intervals.
