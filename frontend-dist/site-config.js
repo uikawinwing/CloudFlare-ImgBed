@@ -71,12 +71,16 @@ export function setSitePageTitle(label = '', config = siteConfig) {
 export function applySiteBranding(root = document, config = siteConfig) {
   const value = normalizeSiteConfig(config);
   root.querySelectorAll('[data-site-name]').forEach(element => { element.textContent = value.ownerName; });
+  root.querySelectorAll('[data-site-wordmark-heading]').forEach(element => { element.classList.toggle('site-wordmark', value.ownerName === defaultConfig.ownerName); });
+  root.querySelectorAll('[data-site-brand-text]').forEach(element => { element.hidden = value.ownerName === defaultConfig.ownerName && !value.logoUrl; });
   root.querySelectorAll('[data-site-link]').forEach(element => {
     element.setAttribute('href', value.logoLink);
     element.setAttribute('aria-label', `${value.ownerName} 首页`);
   });
   root.querySelectorAll('[data-site-logo]').forEach(element => {
     element.querySelector('[data-site-logo-image]')?.remove();
+    element.hidden = !value.logoUrl && value.ownerName !== defaultConfig.ownerName;
+    element.setAttribute('data-custom-logo', String(Boolean(value.logoUrl)));
     const fallback = element.querySelector('[data-site-logo-fallback]');
     if (fallback) fallback.hidden = Boolean(value.logoUrl);
     if (!value.logoUrl) return;
@@ -85,7 +89,13 @@ export function applySiteBranding(root = document, config = siteConfig) {
     image.src = value.logoUrl;
     image.alt = '';
     image.style.cssText = 'display:block;width:100%;height:100%;object-fit:contain';
-    image.addEventListener('error', () => { image.remove(); if (fallback) fallback.hidden = false; }, { once: true });
+    image.addEventListener('error', () => {
+      image.remove();
+      element.hidden = value.ownerName !== defaultConfig.ownerName;
+      element.setAttribute('data-custom-logo', 'false');
+      if (fallback) fallback.hidden = false;
+      root.querySelectorAll('[data-site-brand-text]').forEach(text => { text.hidden = value.ownerName === defaultConfig.ownerName; });
+    }, { once: true });
     element.append(image);
   });
   if (root === document) {

@@ -55,6 +55,12 @@ html, body { background: var(--app-bg); color: var(--app-text); font-family: var
 button, input, select, textarea { font-family: inherit; }
 ::selection { background: var(--app-accent-soft); color: var(--app-text-strong); }
 
+.site-brand-symbol { display: block; flex: 0 0 auto; width: 170px; color: var(--app-text-strong); }
+.site-brand-symbol[data-custom-logo="true"] { width: 34px; height: 34px; }
+.site-wordmark { display: block; width: 100%; aspect-ratio: 4; overflow: hidden; background: currentColor; -webkit-mask: url("/brand/charatopia-wordmark.png") center / 100% auto no-repeat; mask: url("/brand/charatopia-wordmark.png") center / 100% auto no-repeat; font-size: 0; line-height: 0; }
+.site-brand-symbol[hidden], .site-wordmark[hidden], [data-site-brand-text][hidden] { display: none !important; }
+@media (max-width: 760px) { .site-brand-symbol { width: 140px; } }
+
 [data-theme-toggle] {
   -webkit-tap-highlight-color: transparent;
 }

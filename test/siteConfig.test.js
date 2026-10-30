@@ -7,13 +7,14 @@ const source = readFileSync(new URL('../frontend-dist/site-config.js', import.me
 function fixture(fetch) {
   const element = () => ({
     attributes: {}, style: {}, children: [], events: {}, hidden: false,
+    classList: { values: new Set(), toggle(name, enabled) { if (enabled) this.values.add(name); else this.values.delete(name); } },
     setAttribute(key, value) { this.attributes[key] = value; },
     append(child) { this.children.push(child); child.remove = () => { this.children = this.children.filter(item => item !== child); }; },
     addEventListener(key, callback) { this.events[key] = callback; },
   });
-  const name = element(), link = element(), fallback = element(), logo = element(), icon = element();
+  const name = element(), link = element(), fallback = element(), logo = element(), icon = element(), heading = element(), brandText = element();
   logo.querySelector = selector => selector === '[data-site-logo-fallback]' ? fallback : logo.children[0];
-  const nodes = { '[data-site-name]': [name], '[data-site-link]': [link], '[data-site-logo]': [logo] };
+  const nodes = { '[data-site-name]': [name], '[data-site-link]': [link], '[data-site-logo]': [logo], '[data-site-wordmark-heading]': [heading], '[data-site-brand-text]': [brandText] };
   const document = {
     title: '', documentElement: { dataset: { sitePageTitle: '发现' } }, head: element(),
     querySelectorAll: selector => nodes[selector] || [],
@@ -29,7 +30,7 @@ function fixture(fetch) {
     console: { warn() {} },
   };
   const api = runInNewContext(`${source.replace(/^export /gm, '')}\n({ getSiteConfig, refreshSiteConfig, applySiteBranding, setSitePageTitle, publicFileUrl, normalizeSiteConfig, safeSiteUrl })`, context);
-  return { ...api, document, name, link, logo, fallback, icon, events };
+  return { ...api, document, name, link, logo, fallback, icon, heading, brandText, events };
 }
 
 describe('shared site configuration', () => {
@@ -106,6 +107,27 @@ describe('shared site configuration', () => {
     assert.equal(app.events[0].type, 'charatopia:site-config-change');
     assert.equal(app.events[0].detail, config);
     assert.equal(app.document.title, '发现 · New');
+  });
+
+  it('uses the English wordmark by default and preserves configured brands and custom logos', () => {
+    const app = fixture();
+    app.applySiteBranding(app.document, {});
+    assert.equal(app.logo.hidden, false);
+    assert.equal(app.logo.attributes['data-custom-logo'], 'false');
+    assert.equal(app.brandText.hidden, true);
+    assert.equal(app.heading.classList.values.has('site-wordmark'), true);
+    app.applySiteBranding(app.document, { ownerName: 'Another Brand' });
+    assert.equal(app.logo.hidden, true);
+    assert.equal(app.brandText.hidden, false);
+    assert.equal(app.heading.classList.values.has('site-wordmark'), false);
+    app.applySiteBranding(app.document, { logoUrl: '/my-logo.png' });
+    assert.equal(app.logo.hidden, false);
+    assert.equal(app.logo.attributes['data-custom-logo'], 'true');
+    assert.equal(app.brandText.hidden, false);
+    app.logo.children[0].events.error();
+    assert.equal(app.logo.hidden, false);
+    assert.equal(app.logo.attributes['data-custom-logo'], 'false');
+    assert.equal(app.brandText.hidden, true);
   });
 
   it('falls back to current settings after an initial request failure', async () => {
