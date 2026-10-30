@@ -34,7 +34,7 @@ Use a muted sage accent for primary actions, green for confirmed success, and th
 
 Use the existing system font stack so Simplified Chinese labels stay stable without a remote font dependency. Headings are concise and task-focused.
 
-The Charatopia brand uses the supplied serif English wordmark at `frontend-dist/brand/charatopia-wordmark.png`, with no Chinese subtitle inside the logo. `frontend-dist/theme.css` owns its shared mask treatment: the transparent asset follows the surrounding text color in light and dark themes. Public navigation, the account sidebar, and the welcome heading share this artwork; the heading retains its semantic text, and site names remain available to assistive technology. A 4:1 display area removes transparent padding while preserving the letter descenders. Existing Chinese welcome copy is separate from the logo and remains unchanged.
+The Charatopia brand uses the serif English vector wordmark at `frontend-dist/brand/charatopia-wordmark.svg`, with no Chinese subtitle inside the logo. Its paths follow the supplied artwork; the PNG remains the authoring reference, while the browser renders opaque vector outlines to keep fine strokes clear at navigation and heading sizes. `frontend-dist/theme.css` owns its shared mask treatment: the transparent asset follows the surrounding text color in light and dark themes. Public navigation, the account sidebar, and the welcome heading share this artwork; the heading retains its semantic text, and site names remain available to assistive technology. A 4:1 display area removes transparent padding while preserving the letter descenders. Existing Chinese welcome copy is separate from the logo and remains unchanged.
 
 ## Layout
 

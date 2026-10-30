@@ -40,7 +40,7 @@
 - 新版“网站设置”也是原生设置页，只展示已接入新版的品牌、公开链接、上传渠道及工作区壁纸参数。不得重新展示没有新版消费者的旧配置或重复的欢迎页壁纸 JSON 输入；保留存量配置不等于必须保留旧控件。
 - “安全与自动化”使用同一原生设置页，保留图像审查、IP 地点记录、文件访问和管理 API Token。旧上传密码、管理账号密码及不影响 Discord 的旧会话选项不在新版展示。安全配置使用 `GET /api/manage/sysConfig/security?view=modern` 与限定字段的 PATCH 增量保存，不覆盖存量认证、令牌及未修改配置。
 - 共享站点配置由 `frontend-dist/site-config.js` 读取并应用，`site.js` 启动；动态页面标题和公开文件复制链接使用共享接口，不能重新写死品牌或忽略 URL 前缀。保存后刷新共享缓存与当前页面显示，失败时保留已保存事实并提示刷新。
-- 默认品牌使用 `frontend-dist/brand/charatopia-wordmark.png` 英文字标，不带中文副标。欢迎页、Discover、侧栏及欢迎标题复用 `theme.css` 的主题色遮罩；保留标题语义和无障碍名称。自定义站点名称／Logo 仍通过共享配置生效，不能强制覆盖管理员设置。
+- 默认品牌使用 `frontend-dist/brand/charatopia-wordmark.svg` 矢量英文字标，不带中文副标；PNG 仅保留为字形来源，不用于运行时显示。欢迎页、Discover、侧栏及欢迎标题复用 `theme.css` 的主题色遮罩；保留标题语义和无障碍名称。自定义站点名称／Logo 仍通过共享配置生效，不能强制覆盖管理员设置。
 - 欢迎页是访客入口，已登录用户进入文件工作区。壁纸配置请求不能阻塞认证跳转。
 - 欢迎页壁纸使用独立的 `welcomeWallpaper` 配置；旧上传页／管理页壁纸不是同一队列。入口为 `/account/?tool=system-wallpaper`。
 - 壁纸保存复用 `/api/manage/sysConfig/page` 的 PATCH；公开读取经 `/api/userConfig`。只更新该配置，保留其他设置及公告状态。
