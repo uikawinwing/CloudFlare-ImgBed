@@ -75,6 +75,10 @@ body::after {
 .welcome-checking .welcome-wrap { visibility: hidden; }
 .welcome-hero { width: 100%; text-align: left; }
 .welcome-copy { width: min(460px, 100%); }
+.welcome-heading { filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--app-bg) 85%, transparent)); }
+.welcome-copy h1, .welcome-greeting, .welcome-lead {
+  text-shadow: 0 1px 3px color-mix(in srgb, var(--app-bg) 90%, transparent), 0 0 12px color-mix(in srgb, var(--app-bg) 65%, transparent);
+}
 .welcome-copy h1 {
   margin: 0;
   color: var(--app-text-strong);
