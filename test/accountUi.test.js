@@ -110,7 +110,9 @@ describe('account media and album UI', () => {
   it('keeps the root welcome page simple and the full feed in Discover', () => {
     assert.match(welcomePage, /href="\/discover\/"/);
     assert.match(welcomePage, /href="\/charinfo\/"/);
-    assert.match(welcomePage, /class="primary-button welcome-primary"[^>]*>登录<\/a>/);
+    assert.match(welcomePage, /class="primary-button welcome-primary"[^>]*href="\/discover\/"[^>]*>Discover<\/a>/);
+    assert.match(welcomePage, /class="text-button welcome-secondary"[^>]*href="\/charinfo\/"[^>]*>CharInfo Creator<\/a>/);
+    assert.match(welcomePage, /data-account-action[^>]*href="\/api\/auth\/discord[^>]*>登录<\/a>/);
     assert.doesNotMatch(welcomePage, /id="albumGrid"|welcomeFeature|welcome-shortcut|Featured|精选作品/);
     assert.doesNotMatch(welcomeSource, /loadFeed|featured|localStorage/);
     assert.match(welcomePage, /returnTo=%2Faccount%2F%3Fview%3Dfiles"/);

@@ -42,6 +42,7 @@
 - 共享站点配置由 `frontend-dist/site-config.js` 读取并应用，`site.js` 启动；动态页面标题和公开文件复制链接使用共享接口，不能重新写死品牌或忽略 URL 前缀。保存后刷新共享缓存与当前页面显示，失败时保留已保存事实并提示刷新。
 - 默认品牌使用 `frontend-dist/brand/charatopia-wordmark.svg` 矢量英文字标，不带中文副标；PNG 仅保留为字形来源，不用于运行时显示。欢迎页、Discover、侧栏及欢迎标题复用 `theme.css` 的主题色遮罩；保留标题语义和无障碍名称。自定义站点名称／Logo 仍通过共享配置生效，不能强制覆盖管理员设置。
 - 欢迎页是访客入口，已登录用户进入文件工作区。壁纸配置请求不能阻塞认证跳转。
+- 欢迎页采用透明顶栏、左下文案和细线分隔，主入口为 Discover 与 CharInfo Creator；登录和上传保留在导航中。欢迎页继续使用共享矢量 Logo、自定义品牌配置和现有独立壁纸播放器。
 - 欢迎页壁纸使用独立的 `welcomeWallpaper` 配置；旧上传页／管理页壁纸不是同一队列。入口为 `/account/?tool=system-wallpaper`。
 - 壁纸保存复用 `/api/manage/sysConfig/page` 的 PATCH；公开读取经 `/api/userConfig`。只更新该配置，保留其他设置及公告状态。
 - 旧“网站设置”使用通用文本控件：管理配置中的壁纸值应提供有效 JSON 字符串；公开接口再解析为对象，不能让旧界面显示 `[object Object]`。
