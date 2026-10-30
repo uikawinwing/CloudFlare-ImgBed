@@ -1,6 +1,7 @@
 import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
 import { normalizeCharInfoCharacterName, validateCharInfoCharacterName } from '../../../utils/charInfoGallery.js';
 import { normalizeSlug } from './index.js';
+import { normalizeTags } from '../../../utils/tagHelpers.js';
 
 export async function onRequest(context) {
     const identity = await getDiscordIdentity(context.env, context.request);
@@ -13,8 +14,14 @@ export async function onRequest(context) {
     if (!album) return json({ error: 'Album not found' }, 404);
     if (album.owner_id !== identity.id && identity.role !== 'owner') return json({ error: 'Only the owner can change this album' }, 403);
     if (context.request.method === 'GET') {
-        const items = await context.env.img_d1.prepare('SELECT f.id, f.file_name, f.file_type, f.file_size_bytes, f.timestamp, f.visibility, f.moderation_status, ai.position FROM album_items ai JOIN files f ON f.id = ai.file_id WHERE ai.album_id = ? ORDER BY ai.position, ai.created_at').bind(id).all();
-        return json({ album: presentAlbum(album), items: items.results || [] });
+        const items = await context.env.img_d1.prepare('SELECT f.id, f.file_name, f.file_type, f.file_size_bytes, f.timestamp, f.visibility, f.moderation_status, f.metadata, ai.position FROM album_items ai JOIN files f ON f.id = ai.file_id WHERE ai.album_id = ? ORDER BY ai.position, ai.created_at').bind(id).all();
+        return json({ album: presentAlbum(album), items: (items.results || []).map(({ metadata, ...file }) => {
+            let tags = [];
+            try {
+                tags = normalizeTags(JSON.parse(metadata || '{}')?.Tags);
+            } catch {}
+            return { ...file, tags };
+        }) });
     }
     if (context.request.method === 'DELETE') {
         await context.env.img_d1.batch([

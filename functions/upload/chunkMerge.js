@@ -3,6 +3,7 @@ import { createResponse, getUploadIp, getIPAddress, selectConsistentChannel, bui
 import { retryFailedChunks, cleanupFailedMultipartUploads, checkChunkUploadStatuses, cleanupChunkData, cleanupUploadSession } from './chunkUpload';
 import { getDatabase } from '../utils/databaseAdapter.js';
 import { fetchPageConfig } from '../utils/sysConfig.js';
+import { resolveStorageFileName } from './uploadNaming.js';
 
 // 处理分块合并
 export async function handleChunkMerge(context) {
@@ -272,6 +273,7 @@ async function mergeR2ChunksInfo(context, uploadId, completedChunks, metadata) {
 
         // 使用multipart info中的finalFileId更新metadata
         const finalFileId = multipartInfo.key;
+        metadata.FileName = resolveStorageFileName(context, finalFileId);
         metadata.Channel = "CloudflareR2";
         // 从 R2 设置中获取渠道名称（优先使用指定的渠道名称）
         const r2Settings = context.uploadConfig.cfr2;
@@ -352,6 +354,7 @@ async function mergeTelegramChunksInfo(context, uploadId, completedChunks, metad
 
         // 生成 finalFileId
         const finalFileId = await buildUniqueFileId(context, metadata.FileName, metadata.FileType);
+        metadata.FileName = resolveStorageFileName(context, finalFileId);
 
         // 更新metadata
         metadata.Channel = "TelegramNew";
@@ -426,6 +429,7 @@ async function mergeDiscordChunksInfo(context, uploadId, completedChunks, metada
 
         // 生成 finalFileId
         const finalFileId = await buildUniqueFileId(context, metadata.FileName, metadata.FileType);
+        metadata.FileName = resolveStorageFileName(context, finalFileId);
 
         // 更新metadata
         metadata.Channel = "Discord";

@@ -66,8 +66,10 @@ describe('account media and album UI', () => {
       location: new URL('https://example.test/account/?view=files'), URLSearchParams,
       document: { querySelector: () => ({ querySelector: () => null }) },
     });
-    app.openFileViewer({ id: 'users/owner/portrait.png', file_name: 'portrait.png', file_type: 'image/png', thumbnail_url: '/thumb/low-resolution.webp' });
+    app.openFileViewer({ id: 'users/owner/portrait.png', file_name: 'old-original-name.png', file_type: 'image/png', thumbnail_url: '/thumb/low-resolution.webp' });
     assert.match(app.markup(), /<img src="\/file\/users\/owner\/portrait\.png"/);
+    assert.match(app.markup(), /<h2>portrait\.png<\/h2>/);
+    assert.doesNotMatch(app.markup(), /old-original-name/);
     assert.doesNotMatch(app.markup(), /\/thumb\//);
     assert.match(styles, /\.media-viewer-dialog \.file-preview-media\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)[^}]*grid-template-rows:\s*minmax\(0, 1fr\)/);
   });

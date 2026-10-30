@@ -242,6 +242,7 @@ async function processFileUpload(context, formdata = null) {
     // 构建文件ID
     const fullId = await buildUniqueFileId(context, fileName, fileType);
     const storageFileName = resolveStorageFileName(context, fullId, fileName);
+    metadata.FileName = storageFileName;
 
     // 获得返回链接格式, default为返回/file/id, full为返回完整链接
     const returnFormat = url.searchParams.get('returnFormat') || 'default';

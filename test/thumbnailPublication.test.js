@@ -105,8 +105,12 @@ describe('permanent thumbnail publication flow', () => {
             assert.equal(originals.size, 1);
             assert.equal(thumbnails.size, 3);
             assert.equal(transforms.length, 3);
-            const row = d1.db.prepare('SELECT metadata FROM files').get();
+            const row = d1.db.prepare('SELECT id, file_name, metadata FROM files').get();
             const metadata = JSON.parse(row.metadata);
+            assert.match(row.id, /^users\/owner-id\/[\da-f-]{36}\.png$/);
+            assert.equal(metadata.FileName, row.id.split('/').pop());
+            assert.equal(row.file_name, metadata.FileName);
+            assert.notEqual(metadata.FileName, 'image.png');
             assert.equal(metadata.Visibility, 'public');
             assert.equal(metadata.ThumbnailStatus, 'ready');
             assert.ok(metadata.Thumbnail);

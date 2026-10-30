@@ -65,6 +65,10 @@ function fileUrl(file) {
   return `/file/${encodeFilePath(file.id)}`;
 }
 
+function systemFileName(file) {
+  return String(file.id).split('/').pop();
+}
+
 function thumbnailUrl(file) {
   return file.thumbnail_url || `/thumb/${encodeFilePath(file.id)}`;
 }
@@ -268,7 +272,7 @@ function fileCard(file) {
   const selected = state.selected.has(file.id);
   const src = fileUrl(file);
   const preview = previewUrl(file);
-  const mediaLabel = file.file_name || file.id;
+  const mediaLabel = systemFileName(file);
   return `<article class="media-card${selected ? ' selected' : ''}" data-file-id="${escapeHtml(file.id)}">
     ${state.selectionMode ? `<input class="media-select" type="checkbox" aria-label="选择 ${escapeHtml(mediaLabel)}" ${selected ? 'checked' : ''}>` : ''}
     <button class="media-frame" type="button" data-open-media ${isVideo ? 'data-video-frame' : ''} aria-label="${state.selectionMode ? '选择' : '打开'} ${escapeHtml(mediaLabel)}">
@@ -303,7 +307,7 @@ function renderFiles({ focusSearch = false } = {}) {
   main.innerHTML = `<section class="page-section">
     ${workspaceHeader()}
     <div class="toolbar file-toolbar">
-      <label class="search-control"><span class="sr-only">搜索文件</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg><input id="fileSearch" type="search" value="${escapeHtml(state.fileQuery)}" placeholder="搜索文件名"></label>
+      <div class="search-control"><label class="sr-only" for="fileSearch">搜索标签或文件编号</label><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg><input id="fileSearch" type="search" value="${escapeHtml(state.fileQuery)}" placeholder="搜索标签或编号，#标签 精确搜索"><button class="icon-button" id="clearFileSearch" type="button" aria-label="清除文件搜索"${state.fileQuery ? '' : ' hidden'}>${icons.close}</button></div>
       <div class="segmented" aria-label="文件类型">
         <button type="button" data-filter="all" class="${state.filter === 'all' ? 'active' : ''}">全部</button>
         <button type="button" data-filter="image" class="${state.filter === 'image' ? 'active' : ''}">图片</button>
@@ -395,8 +399,8 @@ function moderationRow(file) {
   const canRestore = ['admin', 'owner'].includes(state.user.role);
   const status = file.moderation_status === 'quarantined' ? '已撤下' : file.moderation_status === 'deleting' ? '删除处理中' : '正常';
   return `<article class="moderation-row" data-file-id="${escapeHtml(file.id)}">
-    <button class="moderation-thumb" type="button" data-preview-admin aria-label="预览 ${escapeHtml(file.file_name || file.id)}">${isVideo ? `<video src="${fileUrl(file)}" muted playsinline disablepictureinpicture preload="metadata"></video>` : `<img src="${fileUrl(file)}" alt="" loading="lazy">`}</button>
-    <div class="moderation-copy file-column"><strong>${escapeHtml(file.file_name || file.id)}</strong><span>${escapeHtml(file.id)}</span></div>
+    <button class="moderation-thumb" type="button" data-preview-admin aria-label="预览 ${escapeHtml(systemFileName(file))}">${isVideo ? `<video src="${fileUrl(file)}" muted playsinline disablepictureinpicture preload="metadata"></video>` : `<img src="${fileUrl(file)}" alt="" loading="lazy">`}</button>
+    <div class="moderation-copy file-column"><strong>${escapeHtml(systemFileName(file))}</strong><span>${escapeHtml(file.id)}</span></div>
     <div class="moderation-copy owner-column"><strong>${escapeHtml(file.owner_name || '未绑定账号')}</strong><span>${escapeHtml(file.owner_id || '旧文件')}</span></div>
     <div class="moderation-copy type-column"><strong>${isVideo ? `视频 / ${videoTypeLabel(file)}` : '图片'}</strong><span>${formatBytes(file.file_size_bytes)}</span></div>
     <time class="moderation-time">${formatDate(file.timestamp)}</time>
@@ -504,8 +508,8 @@ function observeVideos() {
   });
 }
 
-function openDialog(content, { closeable = true, wide = false, className = '', label = '对话框' } = {}) {
-  activeDialogClose?.();
+function openDialog(content, { closeable = true, wide = false, className = '', label = '对话框', beforeClose, onClose } = {}) {
+  if (activeDialogClose?.() === false) return null;
   const previouslyFocused = document.activeElement;
   dialogRoot.innerHTML = `<div class="dialog-backdrop" role="presentation"><section class="dialog${wide ? ' wide' : ''}${className ? ` ${className}` : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(label)}" tabindex="-1">${content}</section></div>`;
   const backdrop = dialogRoot.firstElementChild;
@@ -514,10 +518,12 @@ function openDialog(content, { closeable = true, wide = false, className = '', l
   let closed = false;
   const close = () => {
     if (closed) return;
+    if (beforeClose?.() === false) return false;
     closed = true;
     document.removeEventListener('keydown', closeOnEscape);
     dialogRoot.innerHTML = '';
     if (activeDialogClose === close) activeDialogClose = null;
+    onClose?.();
     if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus();
   };
   const closeOnEscape = event => {
@@ -579,9 +585,84 @@ async function ensurePublicHandle() {
 function openFileViewer(file) {
   if (!file) return;
   const isVideo = isVideoFile(file);
-  openDialog(`<div class="media-viewer-head"><div><h2>${escapeHtml(file.file_name || file.id)}</h2><p>${formatBytes(file.file_size_bytes)}${formatDate(file.timestamp) ? ` · ${formatDate(file.timestamp)}` : ''}</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
-    <div class="file-preview-media" data-media-viewer-stage>${isVideo ? `<video src="${fileUrl(file)}" autoplay muted loop playsinline controls></video>` : `<img src="${fileUrl(file)}" alt="${escapeHtml(file.file_name || '')}">`}</div>
-    <div class="media-viewer-details"><p>加入人物图库后，可通过图库在发现页浏览。</p><div class="media-viewer-actions"><button class="button" type="button" id="copyViewerFile">${icons.link}复制链接</button><a class="button" href="${escapeHtml(fileUrl(file))}" target="_blank" rel="noopener">${icons.external}新标签页打开</a></div></div>`, { className: 'media-viewer-dialog', label: `查看 ${file.file_name || file.id}` });
+  const name = systemFileName(file);
+  const canEditTags = Array.isArray(file.tags);
+  let guardClose = () => true;
+  let guardUnload;
+  const onViewerClosed = () => {
+    if (guardUnload) window.removeEventListener('beforeunload', guardUnload);
+    if (state.view === 'files' && state.fileQuery && viewCache.files.dirty) refreshView('files');
+  };
+  const closeViewer = openDialog(`<div class="media-viewer-head"><div><h2>${escapeHtml(name)}</h2><p>系统名称 · ${formatBytes(file.file_size_bytes)}${formatDate(file.timestamp) ? ` · ${formatDate(file.timestamp)}` : ''}</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
+    <div class="file-preview-media" data-media-viewer-stage>${isVideo ? `<video src="${fileUrl(file)}" autoplay muted loop playsinline controls></video>` : `<img src="${fileUrl(file)}" alt="${escapeHtml(name)}">`}</div>
+    <div class="media-viewer-details">${canEditTags ? `<form id="fileTagsForm" class="file-tags-form" novalidate><div class="field"><label for="fileTags">标签</label><div class="file-tags-input"><input id="fileTags" name="tags" value="${escapeHtml(file.tags.join(', '))}" placeholder="例如：人物、金发、立绘" autocomplete="off" aria-describedby="fileTagsHelp fileTagsStatus"><button class="button" type="submit" disabled>保存标签</button></div><small id="fileTagsHelp">用逗号或空格分隔，最多 30 个标签，每个 32 字。文件名由系统管理。</small><small id="fileTagsStatus" role="status" aria-live="polite"></small><div id="fileTagsDiscard" class="file-tags-discard" hidden><span>标签尚未保存。</span><button class="button" type="button" data-keep-tags>继续编辑</button><button class="button" type="button" data-discard-tags>放弃修改并关闭</button></div></div></form>` : '<p>加入人物图库后，可通过图库在发现页浏览。</p>'}<div class="media-viewer-actions"><button class="button" type="button" id="copyViewerFile">${icons.link}复制链接</button><a class="button" href="${escapeHtml(fileUrl(file))}" target="_blank" rel="noopener">${icons.external}新标签页打开</a></div></div>`, { className: 'media-viewer-dialog', label: `查看 ${name}`, beforeClose: () => guardClose(), onClose: onViewerClosed });
+  if (closeViewer === null) return;
+  const form = dialogRoot.querySelector('#fileTagsForm');
+  if (form) {
+    const input = form.querySelector('#fileTags');
+    const button = form.querySelector('button[type="submit"]');
+    const status = form.querySelector('#fileTagsStatus');
+    let savedValue = input.value;
+    let saving = false;
+    const discard = form.querySelector('#fileTagsDiscard');
+    guardClose = () => {
+      if (saving) { status.textContent = '正在保存标签，请稍候。'; return false; }
+      if (input.value === savedValue) return true;
+      discard.hidden = false;
+      discard.querySelector('[data-keep-tags]').focus();
+      return false;
+    };
+    guardUnload = event => {
+      if (saving || input.value !== savedValue) { event.preventDefault(); event.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', guardUnload);
+    form.querySelector('[data-keep-tags]').addEventListener('click', () => { discard.hidden = true; input.focus(); });
+    form.querySelector('[data-discard-tags]').addEventListener('click', () => { input.value = savedValue; closeViewer(); });
+    input.addEventListener('keydown', event => { if (event.key === 'Enter' && event.isComposing) event.preventDefault(); });
+    input.addEventListener('input', () => {
+      button.disabled = saving || input.value === savedValue;
+      input.removeAttribute('aria-invalid');
+      status.textContent = '';
+      status.classList.remove('field-error');
+    });
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (saving || event.isComposing) return;
+      const tags = [...new Set(input.value.split(/[\s,，、]+/u).filter(Boolean).map(tag => tag.toLowerCase()))];
+      if (tags.length > 30 || tags.some(tag => tag.length > 32 || !/^[\w\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af-]+$/.test(tag))) {
+        status.textContent = '最多 30 个标签，每个不超过 32 字；可使用中日韩文字、英文字母、数字、短横线和下划线。';
+        status.classList.add('field-error');
+        input.setAttribute('aria-invalid', 'true');
+        input.focus();
+        return;
+      }
+      saving = true;
+      discard.hidden = true;
+      button.disabled = true;
+      input.disabled = true;
+      form.setAttribute('aria-busy', 'true');
+      status.classList.remove('field-error');
+      status.textContent = '正在保存标签…';
+      try {
+        const result = await api('/api/user/files', { method: 'PATCH', body: JSON.stringify({ fileId: file.id, tags }) });
+        file.tags = result.tags;
+        state.files.filter(item => item.id === file.id).forEach(item => { item.tags = result.tags; });
+        state.albums.forEach(album => (album.items || []).filter(item => item.id === file.id).forEach(item => { item.tags = result.tags; }));
+        input.value = result.tags.join(', ');
+        savedValue = input.value;
+        markViewDirty('files', 'albums');
+        status.textContent = '标签已保存。';
+      } catch (error) {
+        status.textContent = `标签未保存。${error.message || '请重试。'}`;
+        status.classList.add('field-error');
+      } finally {
+        saving = false;
+        input.disabled = false;
+        button.disabled = input.value === savedValue;
+        form.removeAttribute('aria-busy');
+      }
+    });
+  }
   dialogRoot.querySelector('#copyViewerFile')?.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(publicFileUrl(file.id, await getSiteConfig()));
@@ -606,8 +687,12 @@ function bindFileEvents() {
     }
   };
   document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', async () => { state.filter = button.dataset.filter; await reload(); }));
-  document.querySelector('#fileSearch')?.addEventListener('change', async event => { state.fileQuery = event.target.value; await reload(); });
-  document.querySelector('#fileSearch')?.addEventListener('keydown', async event => { if (event.key === 'Enter') { event.preventDefault(); state.fileQuery = event.currentTarget.value; await reload(true); } });
+  const search = document.querySelector('#fileSearch');
+  const clearSearch = document.querySelector('#clearFileSearch');
+  search?.addEventListener('input', () => { clearSearch.hidden = !search.value; });
+  search?.addEventListener('change', async event => { if (event.target.value !== state.fileQuery) { state.fileQuery = event.target.value; await reload(); } });
+  search?.addEventListener('keydown', async event => { if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); state.fileQuery = event.currentTarget.value; await reload(true); } });
+  clearSearch?.addEventListener('click', async () => { search.value = ''; state.fileQuery = ''; clearSearch.hidden = true; search.focus(); await reload(true); });
   document.querySelector('#fileSort')?.addEventListener('change', async event => { state.fileSort = event.target.value; await reload(); });
   document.querySelector('#loadMoreFiles')?.addEventListener('click', async event => {
     event.currentTarget.disabled = true;
@@ -699,7 +784,7 @@ async function addSelectedFilesToAlbum(albumId) {
 function confirmDeleteSelected() {
   const selectedFiles = state.files.filter(file => state.selected.has(file.id));
   const content = `<div class="dialog-head"><h2>永久删除文件？</h2><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
-    <div class="dialog-body"><p style="margin-top:0;color:var(--muted);line-height:1.65">将永久删除 ${selectedFiles.length} 个文件。它们会从所有图库和存储中移除，已保存的链接也会失效。此操作无法恢复。</p><ul>${selectedFiles.slice(0, 8).map(file => `<li>${escapeHtml(file.file_name || file.id)}</li>`).join('')}</ul>${selectedFiles.length > 8 ? `<p>以及另外 ${selectedFiles.length - 8} 个文件</p>` : ''}</div>
+    <div class="dialog-body"><p style="margin-top:0;color:var(--muted);line-height:1.65">将永久删除 ${selectedFiles.length} 个文件。它们会从所有图库和存储中移除，已保存的链接也会失效。此操作无法恢复。</p><ul>${selectedFiles.slice(0, 8).map(file => `<li>${escapeHtml(systemFileName(file))}</li>`).join('')}</ul>${selectedFiles.length > 8 ? `<p>以及另外 ${selectedFiles.length - 8} 个文件</p>` : ''}</div>
     <div class="dialog-actions"><button class="button" type="button" data-close-dialog>取消</button><button class="button danger" type="button" id="confirmDelete">确认永久删除</button></div>`;
   const close = openDialog(content);
   dialogRoot.querySelector('#confirmDelete').addEventListener('click', async event => {
@@ -710,7 +795,7 @@ function confirmDeleteSelected() {
         await api(`/api/user/files/${encodeFilePath(file.id)}`, { method: 'DELETE' });
         deleted += 1;
       } catch (error) {
-        toast(`${file.file_name || file.id}：${error.message}`, 'error');
+        toast(`${systemFileName(file)}：${error.message}`, 'error');
       }
     }
     close();
@@ -798,9 +883,9 @@ function albumDetailMarkup(album) {
   const items = [...(album.items || [])].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
   const coverFileId = selectedCoverFileId(album);
   const rows = items.map((item, index) => `<article class="album-item-row" data-file-id="${escapeHtml(item.id)}">
-    <button class="album-item-thumb" type="button" data-preview-item aria-label="查看 ${escapeHtml(item.file_name || item.id)}">${isVideoFile(item) ? `<video src="${fileUrl(item)}" muted playsinline disablepictureinpicture preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(item.file_name || item.id)}" loading="lazy" decoding="async">`}</button>
-    <div class="album-item-copy"><strong>${escapeHtml(item.file_name || item.id)}</strong><span>${formatBytes(item.file_size_bytes)}</span></div>
-    <div class="album-item-actions">${coverFileId === item.id ? '<span class="status-chip">当前封面</span>' : ''}${isStaticCoverFile(item) ? `<button class="button" type="button" data-edit-cover>${coverFileId === item.id ? '调整封面' : '设为封面'}</button>` : ''}<button class="icon-button" type="button" data-move-up aria-label="上移 ${escapeHtml(item.file_name || item.id)}" ${index === 0 ? 'disabled' : ''}>↑</button><button class="icon-button" type="button" data-move-down aria-label="下移 ${escapeHtml(item.file_name || item.id)}" ${index === items.length - 1 ? 'disabled' : ''}>↓</button><button class="button ghost" type="button" data-remove-item>移出图库</button></div>
+    <button class="album-item-thumb" type="button" data-preview-item aria-label="查看 ${escapeHtml(systemFileName(item))}">${isVideoFile(item) ? `<video src="${fileUrl(item)}" muted playsinline disablepictureinpicture preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(systemFileName(item))}" loading="lazy" decoding="async">`}</button>
+    <div class="album-item-copy"><strong>${escapeHtml(systemFileName(item))}</strong><span>${formatBytes(item.file_size_bytes)}</span></div>
+    <div class="album-item-actions">${coverFileId === item.id ? '<span class="status-chip">当前封面</span>' : ''}${isStaticCoverFile(item) ? `<button class="button" type="button" data-edit-cover>${coverFileId === item.id ? '调整封面' : '设为封面'}</button>` : ''}<button class="icon-button" type="button" data-move-up aria-label="上移 ${escapeHtml(systemFileName(item))}" ${index === 0 ? 'disabled' : ''}>↑</button><button class="icon-button" type="button" data-move-down aria-label="下移 ${escapeHtml(systemFileName(item))}" ${index === items.length - 1 ? 'disabled' : ''}>↓</button><button class="button ghost" type="button" data-remove-item>移出图库</button></div>
   </article>`).join('');
   const shareUrl = state.user.publicHandle ? `${location.origin}/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
   return `<div class="album-detail" data-album-id="${escapeHtml(album.id)}">
@@ -889,7 +974,7 @@ function openAlbumFilePicker(album) {
     confirm.disabled = selected.size === 0;
   };
   const renderResults = () => {
-    results.innerHTML = files.length ? `<div class="album-file-grid">${files.map(file => `<label class="album-file-option${included.has(file.id) ? ' included' : ''}"><input type="checkbox" value="${escapeHtml(file.id)}" ${included.has(file.id) || selected.has(file.id) ? 'checked' : ''} ${included.has(file.id) ? 'disabled' : ''}><span class="album-file-preview">${isVideoFile(file) ? `<video src="${fileUrl(file)}" muted playsinline disablepictureinpicture preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(file))}" alt="" loading="lazy" decoding="async">`}</span><strong title="${escapeHtml(file.file_name || file.id)}">${escapeHtml(file.file_name || file.id)}</strong><small>${included.has(file.id) ? '已在图库中' : formatBytes(file.file_size_bytes)}</small></label>`).join('')}</div>${cursor ? '<div class="load-more"><button class="button" type="button" data-more-album-files>加载更多</button></div>' : ''}` : `<div class="empty-state compact"><h3>${query ? '没有符合条件的文件' : '还没有上传文件'}</h3><p>${query ? '试试其他文件名，或清除搜索。' : '在“全部文件”上传后，即可在这里选择加入。'}</p></div>`;
+    results.innerHTML = files.length ? `<div class="album-file-grid">${files.map(file => `<label class="album-file-option${included.has(file.id) ? ' included' : ''}"><input type="checkbox" value="${escapeHtml(file.id)}" ${included.has(file.id) || selected.has(file.id) ? 'checked' : ''} ${included.has(file.id) ? 'disabled' : ''}><span class="album-file-preview">${isVideoFile(file) ? `<video src="${fileUrl(file)}" muted playsinline disablepictureinpicture preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(file))}" alt="" loading="lazy" decoding="async">`}</span><strong title="${escapeHtml(systemFileName(file))}">${escapeHtml(systemFileName(file))}</strong><small>${included.has(file.id) ? '已在图库中' : formatBytes(file.file_size_bytes)}</small></label>`).join('')}</div>${cursor ? '<div class="load-more"><button class="button" type="button" data-more-album-files>加载更多</button></div>' : ''}` : `<div class="empty-state compact"><h3>${query ? '没有符合条件的文件' : '还没有上传文件'}</h3><p>${query ? '试试其他文件名，或清除搜索。' : '在“全部文件”上传后，即可在这里选择加入。'}</p></div>`;
   };
   const load = async (more = false) => {
     const currentRequest = ++requestId;
@@ -972,7 +1057,7 @@ function openAlbumCoverEditor(album, item) {
   const content = `<form id="albumCoverForm">
     <div class="dialog-head"><h2>调整封面</h2><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
     <div class="dialog-body cover-editor-body">
-      <div class="cover-focus-preview"><img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(item.file_name || item.id)}" draggable="false" style="object-position:${initial.x}% ${initial.y}%"></div>
+      <div class="cover-focus-preview"><img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(systemFileName(item))}" draggable="false" style="object-position:${initial.x}% ${initial.y}%"></div>
       <label class="cover-focus-control" for="coverFocusX"><span>水平焦点 <output id="coverFocusXValue" for="coverFocusX">${initial.x}%</output></span><input id="coverFocusX" name="coverFocusX" type="range" min="0" max="100" step="1" value="${initial.x}" aria-label="水平焦点"></label>
       <label class="cover-focus-control" for="coverFocusY"><span>垂直焦点 <output id="coverFocusYValue" for="coverFocusY">${initial.y}%</output></span><input id="coverFocusY" name="coverFocusY" type="range" min="0" max="100" step="1" value="${initial.y}" aria-label="垂直焦点"></label>
     </div>
@@ -1153,12 +1238,15 @@ async function navigateWorkspace(target, { historyMode = 'push' } = {}) {
   if (view === 'admin' && section === 'users' && state.user?.role !== 'owner') section = 'content';
   if (state.view === view && (view !== 'admin' || state.adminSection === section) && (view !== 'albums' || state.albumId === albumId)) return;
 
+  if (activeDialogClose?.() === false) {
+    if (historyMode === 'none') history.pushState(null, '', buildWorkspaceUrl());
+    return;
+  }
   rememberScroll();
   state.view = view;
   state.albumId = view === 'albums' ? albumId : null;
   if (view === 'admin') state.adminSection = section;
   syncWorkspaceWallpaper();
-  activeDialogClose?.();
   const url = buildWorkspaceUrl(view, section);
   if (historyMode === 'push') history.pushState(null, '', url);
   else if (historyMode === 'replace') history.replaceState(null, '', url);

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { onRequestGet as listFiles } from '../functions/api/user/files/index.js';
+import { onRequestGet as listFiles, onRequestPatch as updateFileTags } from '../functions/api/user/files/index.js';
+import { onRequest as userMiddleware } from '../functions/api/user/_middleware.js';
+import { onRequest as readAlbum } from '../functions/api/user/albums/[id].js';
 import { onRequestPatch as swapAlbumItems } from '../functions/api/user/albums/[[id]]/items.js';
 import { TestD1 } from './helpers/d1.js';
 
@@ -110,6 +112,106 @@ describe('phase 1 file management', () => {
             const first = await (await listFiles({ env, request: request('https://example.test/api/user/files?limit=2&sort=name') })).json();
             const second = await (await listFiles({ env, request: request(`https://example.test/api/user/files?limit=2&sort=name&cursor=${encodeURIComponent(first.nextCursor)}`) })).json();
             assert.deepStrictEqual([...first.files, ...second.files].map(file => file.file_name), ['Clip', 'Older', 'Same A', 'Same B']);
+        } finally {
+            d1.db.close();
+        }
+    });
+
+    it('saves normalized owner tags without changing file identity, metadata or storage data', async () => {
+        const d1 = database();
+        try {
+            d1.exec(`UPDATE files SET metadata = '{"Channel":"Discord","Width":123,"Tags":["old"]}', value = 'storage-data' WHERE id = 'same-a.png';`);
+            const env = createEnv(d1);
+            const response = await updateFileTags({ env, request: request('https://example.test/api/user/files', 'owner', 'PATCH', { fileId: 'same-a.png', tags: [' Portrait ', 'portrait', '角色'] }) });
+            assert.strictEqual(response.status, 200);
+            assert.deepStrictEqual(await response.json(), { tags: ['portrait', '角色'] });
+            const file = d1.db.prepare('SELECT * FROM files WHERE id = ?').get('same-a.png');
+            assert.deepStrictEqual(JSON.parse(file.metadata), { Channel: 'Discord', Width: 123, Tags: ['portrait', '角色'] });
+            assert.strictEqual(file.value, 'storage-data');
+            assert.strictEqual(file.file_name, 'Same A');
+            assert.strictEqual(file.owner_id, 'owner-id');
+
+            const page = await (await listFiles({ env, request: request('https://example.test/api/user/files?query=%23portrait') })).json();
+            assert.deepStrictEqual(page.files.map(file => [file.id, file.tags]), [['same-a.png', ['portrait', '角色']]]);
+            assert.ok(!('metadata' in page.files[0]));
+            const album = await (await readAlbum({ env, request: request('https://example.test/api/user/albums/album-id'), params: { id: 'album-id' } })).json();
+            assert.deepStrictEqual(album.items[0].tags, ['portrait', '角色']);
+            assert.ok(!('metadata' in album.items[0]));
+
+            const cleared = await updateFileTags({ env, request: request('https://example.test/api/user/files', 'owner', 'PATCH', { fileId: 'same-a.png', tags: [] }) });
+            assert.deepStrictEqual(await cleared.json(), { tags: [] });
+            assert.deepStrictEqual(JSON.parse(d1.db.prepare('SELECT metadata FROM files WHERE id = ?').get('same-a.png').metadata).Tags, []);
+        } finally {
+            d1.db.close();
+        }
+    });
+
+    it('searches tag keywords and exact combined tags before pagination while keeping files owner-scoped', async () => {
+        const d1 = database();
+        try {
+            d1.exec(`UPDATE files SET metadata = '{"Tags":["portrait","角色"]}' WHERE id IN ('same-a.png', 'older.png', 'other.png');
+                UPDATE files SET metadata = '{"Tags":["portraits"]}' WHERE id = 'same-b.png';`);
+            const env = createEnv(d1);
+            const ids = [];
+            let cursor = '';
+            do {
+                const page = await (await listFiles({ env, request: request(`https://example.test/api/user/files?limit=1&query=${encodeURIComponent('#portrait #角色')}&cursor=${encodeURIComponent(cursor)}`) })).json();
+                ids.push(...page.files.map(file => file.id));
+                cursor = page.nextCursor;
+            } while (cursor);
+            assert.deepStrictEqual(ids, ['same-a.png', 'older.png']);
+            const keywordPage = await (await listFiles({ env, request: request('https://example.test/api/user/files?query=port') })).json();
+            assert.deepStrictEqual(keywordPage.files.map(file => file.id), ['same-b.png', 'same-a.png', 'older.png']);
+            const combined = await (await listFiles({ env, request: request(`https://example.test/api/user/files?query=${encodeURIComponent('older #portrait')}`) })).json();
+            assert.deepStrictEqual(combined.files.map(file => file.id), ['older.png']);
+            const literal = await (await listFiles({ env, request: request('https://example.test/api/user/files?query=%25') })).json();
+            assert.deepStrictEqual(literal.files, []);
+            const invalidTag = await (await listFiles({ env, request: request('https://example.test/api/user/files?query=%23portrait%2B') })).json();
+            assert.deepStrictEqual(invalidTag.files, []);
+        } finally {
+            d1.db.close();
+        }
+    });
+
+    it('keeps legacy malformed, empty and null metadata searchable and repairs only the tag metadata when saved', async () => {
+        const d1 = database();
+        try {
+            d1.exec(`DROP INDEX idx_files_management_order;
+                UPDATE files SET metadata = 'not-json' WHERE id = 'same-a.png';
+                UPDATE files SET metadata = '' WHERE id = 'same-b.png';
+                UPDATE files SET metadata = 'null' WHERE id = 'older.png';`);
+            const env = createEnv(d1);
+            const page = await (await listFiles({ env, request: request('https://example.test/api/user/files?query=same') })).json();
+            assert.deepStrictEqual(page.files.map(file => file.tags), [[], []]);
+            for (const id of ['same-a.png', 'same-b.png', 'older.png']) {
+                const saved = await updateFileTags({ env, request: request('https://example.test/api/user/files', 'owner', 'PATCH', { fileId: id, tags: ['saved'] }) });
+                assert.strictEqual(saved.status, 200);
+                assert.deepStrictEqual(JSON.parse(d1.db.prepare('SELECT metadata FROM files WHERE id = ?').get(id).metadata).Tags, ['saved']);
+            }
+        } finally {
+            d1.db.close();
+        }
+    });
+
+    it('rejects signed-out, cross-owner and invalid tag writes without changing existing tags', async () => {
+        const d1 = database();
+        try {
+            const env = createEnv(d1, { owner: 'owner-id', other: 'other-id' });
+            const save = (token, tags, fileId = 'same-a.png') => updateFileTags({ env, request: request('https://example.test/api/user/files', token, 'PATCH', { fileId, tags }) });
+            assert.strictEqual((await save('unknown', ['tag'])).status, 401);
+            assert.strictEqual((await save('other', ['tag'])).status, 404);
+            assert.strictEqual((await save('owner', ['tag'], 'missing.png')).status, 404);
+            for (const tags of [null, 'tag', [12], [''], ['bad tag'], ['<script>'], ['a'.repeat(33)], Array(31).fill('tag')]) {
+                assert.strictEqual((await save('owner', tags)).status, 400);
+            }
+            const malformed = await updateFileTags({ env, request: new Request('https://example.test/api/user/files', { method: 'PATCH', headers: { Cookie: 'user_session=owner' }, body: '{' }) });
+            assert.strictEqual(malformed.status, 400);
+            const crossSite = await userMiddleware({
+                request: new Request('https://example.test/api/user/files', { method: 'PATCH', headers: { Origin: 'https://other.test' } }),
+                next: () => { throw new Error('Cross-site request must not reach mutation'); },
+            });
+            assert.strictEqual(crossSite.status, 403);
+            assert.strictEqual(d1.db.prepare('SELECT metadata FROM files WHERE id = ?').get('same-a.png').metadata, '{}');
         } finally {
             d1.db.close();
         }
