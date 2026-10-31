@@ -60,6 +60,8 @@ Website settings use that same native shell and only expose controls consumed by
 
 Security settings reuse the native shell for active moderation, upload location records, file access, and management API tokens. The interface explains Discord sign-in and excludes legacy password and session controls. Review service credentials stay masked; only the selected service's credential is shown. Token creation is optional, displays the complete token only after successful creation, and keeps creation and revocation separate from saving site policies. Whitelist wording makes clear that it affects public access to all files.
 
+CharInfo opens directly into a single creation flow: optional original text or JSON, uploaded or existing images, display information, optional colors, then completion. Its existing standalone dark editor owns these controls and keeps native selects; the image picker uses a native dialog with focus restoration and paged results. Ordinary action buttons retain their content width on mobile. Original character text and JSON remain in the browser draft and are not automatically copied into public story or author-note fields. Completion explicitly creates or updates a public album, then offers the preserved original format with managed EJS, or EJS alone when no original was supplied. `frontend-src/charinfo/hosted-workflow.js` owns upload, account checks, picker states, and completion feedback; the existing editor owns form values and browser persistence.
+
 ## Do's and Don'ts
 
 Do explain what an administrator controls in plain Chinese. Do preserve clear loading, error, and empty states. Do not add a second design-token system, store sensitive settings in browser storage, or expose retired storage providers as configurable options.

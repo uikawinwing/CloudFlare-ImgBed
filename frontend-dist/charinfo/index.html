@@ -201,6 +201,29 @@ button,.button{border:1px solid var(--line);background:#182335;color:var(--text)
 [hidden]{display:none!important}.mode-picker{padding:28px 18px;border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-bottom:16px}.mode-picker h2{margin:0 0 8px}.mode-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px}.mode-card{display:grid;gap:12px;text-align:left;justify-items:start;padding:24px;min-height:180px}.mode-card strong{font-size:22px}.mode-card small{font-size:14px;color:var(--muted)}.mode-badge{color:var(--accent);font-size:12px;letter-spacing:.12em}.editor-context{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}.source-actions{display:flex;flex-wrap:wrap;gap:10px}.quick-only{display:none}.is-quick .quick-only{display:block}.is-quick .full-only,.is-quick [data-panel="4"] .full-gallery{display:none!important}.is-quick .steps{grid-template-columns:repeat(3,minmax(0,1fr))}.is-quick .steps button[data-step="2"],.is-quick .steps button[data-step="3"]{display:none!important}.is-quick .steps button[data-step="4"]{display:flex!important}.is-quick .steps button[data-step="1"] .step-copy strong{font-size:0}.is-quick .steps button[data-step="1"] .step-copy strong:after{content:'找角色';font-size:13px}.is-quick .steps button[data-step="4"] .step-copy strong{font-size:0}.is-quick .steps button[data-step="4"] .step-copy strong:after{content:'一张图片';font-size:13px}.is-quick .step-copy small{display:none}.inline-status{min-height:24px;margin:10px 0;color:var(--muted)}.inline-status.bad{color:var(--danger)}.media-error{padding:18px;text-align:center;color:var(--muted)}.media-preview button{position:absolute;bottom:8px;right:8px;z-index:3}.decision-dialog{width:min(480px,calc(100% - 24px));padding:24px;border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--text)}.decision-dialog::backdrop{background:rgba(0,0,0,.7)}.decision-dialog p{white-space:pre-line}.decision-actions{display:flex;justify-content:flex-end;gap:10px}.code-output{min-height:300px}.quick-summary{padding:14px;border:1px solid var(--line);border-radius:12px;margin-bottom:14px;white-space:pre-line}.media-preview img{content-visibility:auto}
 @media(max-width:900px){.steps{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:4px}.steps button{padding:8px 2px}.steps .step-copy strong{font-size:11px}.is-quick .steps{grid-template-columns:repeat(3,minmax(0,1fr))!important}.panel.active[data-panel="5"]{display:block!important}.nav-actions{display:flex!important}.top-actions{display:flex!important;flex-wrap:wrap;gap:6px}.top-actions>*{flex:0 1 auto}.mode-picker{padding:20px 14px}.mode-cards{grid-template-columns:1fr}.mode-card{min-height:140px;padding:20px}.editor-context{font-size:12px}#mobileActionBar{display:none!important}}
 </style>
+<style>
+textarea{resize:none}
+.hosted-auth,.hosted-upload-results,.hosted-result{overflow-wrap:anywhere}
+.hosted-upload-results{padding-left:20px;margin:8px 0}
+.hosted-link-row{display:flex;align-items:flex-end;gap:8px;margin-top:10px}
+.hosted-link-row label{flex:1;min-width:0;display:grid;gap:6px}
+.hosted-link-row button{flex:0 0 auto}
+.hosted-file-picker{width:min(840px,calc(100% - 24px));max-height:85dvh;margin:auto;padding:20px;overflow:auto;border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--text);scrollbar-width:thin;scrollbar-color:var(--muted) var(--panel)}
+.hosted-file-picker::backdrop{background:rgba(3,6,10,.78)}
+.hosted-picker-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.hosted-picker-header h3{margin:0}
+.hosted-file-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
+.hosted-file-choice{display:grid;align-content:start;gap:6px;padding:10px;border:1px solid var(--line);border-radius:10px;overflow-wrap:anywhere;cursor:pointer}
+.hosted-file-choice input{width:auto;justify-self:start}
+.hosted-file-choice img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;background:var(--bg)}
+.hosted-file-choice:has(input:checked){border-color:var(--accent)}
+.hosted-file-choice:has(input:disabled){opacity:.6;cursor:default}
+.hosted-file-picker .gallery-toolbar{gap:8px;align-items:flex-end}
+.hosted-file-picker .field{flex:1;min-width:160px}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.workspace{scrollbar-width:thin;scrollbar-color:var(--muted) var(--panel)}
+@media(max-width:600px){.hosted-file-picker{padding:14px}.hosted-file-grid{gap:8px}.source-actions{gap:6px}.source-actions button{min-height:38px;padding:7px 10px}.editor-context{flex-wrap:wrap}}
+</style>
 </head>
 <body>
 <div class="app">
@@ -208,21 +231,21 @@ button,.button{border:1px solid var(--line);background:#182335;color:var(--text)
     <div class="title"><h1>CharInfo 人物资料编辑器</h1></div>
     <div class="top-actions">
       <a class="button quiet" href="/account/?view=albums">返回我的图库</a>
-      <input id="worldbookFileInput" type="file" accept=".json,application/json" hidden />
-      <button id="importWorldbookBtn" class="quiet">导入世界书 JSON</button>
-      <button id="pasteCharacterBtn" class="quiet">粘贴角色 Content</button>
+      <input id="worldbookFileInput" type="file" accept=".json,.txt,.yaml,.yml,application/json,text/plain" hidden />
+      <button id="importWorldbookBtn" class="quiet">导入原稿 / JSON</button>
+      <button id="pasteCharacterBtn" class="quiet">粘贴人物原稿</button>
       <button id="previewBtn">预览角色卡</button>
-      <button id="copyTopBtn">复制条目 Content</button>
+      <button id="copyTopBtn">复制结果</button>
       <button id="cartBtn" class="cart-button primary" disabled aria-label="打开待导出修改"><span class="cart-icon">🛒</span><span>待导出</span><span id="cartCount" class="cart-count">0</span></button>
     </div>
   </header>
 
   <section id="modePicker" class="mode-picker">
     <span class="mode-badge">CHARINFO</span><h2>想怎样建立角色资料？</h2>
-    <p class="hint">可从世界书读取已有角色，也可直接填写。切换模式会保留当前资料。</p>
+    <p class="hint">默认按步骤创建；也可以选择精简填写。两种方式都能直接上传图片并自动建立图库。</p>
     <div class="mode-cards"><button id="quickModeBtn" class="mode-card"><span class="mode-badge">FLASH</span><strong>快速建立</strong><small>找角色 · 一张图片 · 完成<br>适合先建立一个可用的角色展示。</small><span>开始 →</span></button><button id="fullModeBtn" class="mode-card"><span class="mode-badge">PRO</span><strong>完整编辑</strong><small>档案 · 配色 · 相册 · 远程图库<br>完整编辑故事、作者资料和多来源媒体。</small><span>打开完整编辑器 →</span></button></div>
   </section>
-  <div id="editorContext" class="editor-context" hidden><strong id="editorModeLabel">完整编辑</strong><button id="changeModeBtn" class="quiet" type="button">切换模式</button></div>
+  <div id="editorContext" class="editor-context" hidden><strong id="editorModeLabel">创建角色</strong><div class="source-actions"><button id="changeModeBtn" class="quiet" type="button">填写方式</button><button id="newCharacterBtn" class="quiet" type="button">新建角色</button></div></div>
   <div id="editorStatus" class="inline-status" role="status" aria-live="polite"></div>
 
   <section id="worldbookBox" class="section worldbook-box" hidden>
@@ -266,18 +289,18 @@ button,.button{border:1px solid var(--line);background:#182335;color:var(--text)
   <div id="editorLayout" class="layout" hidden>
     <nav class="steps">
       <button data-step="1" class="active"><span class="step-index">1</span><span class="step-copy"><strong>来源</strong><small>读取或手动建立</small></span></button>
-      <button data-step="2"><span class="step-index">2</span><span class="step-copy"><strong>档案</strong><small>姓名、故事、署名</small></span></button>
-      <button data-step="3"><span class="step-index">3</span><span class="step-copy"><strong>配色</strong><small>种族与阶层色</small></span></button>
-      <button data-step="4"><span class="step-index">4</span><span class="step-copy"><strong>相册</strong><small>主立绘、多源与用途</small></span></button>
-      <button data-step="5"><span class="step-index">5</span><span class="step-copy"><strong>确认</strong><small>复制或加入待导出</small></span></button>
+      <button data-step="4"><span class="step-index">2</span><span class="step-copy"><strong>图片</strong><small>上传、选择与用途</small></span></button>
+      <button data-step="2"><span class="step-index">3</span><span class="step-copy"><strong>档案</strong><small>补齐展示资料</small></span></button>
+      <button data-step="3"><span class="step-index">4</span><span class="step-copy"><strong>配色</strong><small>选填展示颜色</small></span></button>
+      <button data-step="5"><span class="step-index">5</span><span class="step-copy"><strong>完成</strong><small>图库与导出结果</small></span></button>
     </nav>
 
     <main class="workspace">
       <section class="panel active" data-panel="1">
-        <div class="panel-head"><div><h2>选择资料来源</h2><p>读取已有角色，或直接手动建立新资料。</p></div></div>
-        <div class="section"><h3>已有角色</h3><div class="source-actions"><button id="sourceWorldbookBtn" type="button">导入世界书 JSON</button><button id="sourcePasteBtn" type="button">粘贴 CharInfo 内容</button></div><p class="hint">世界书导出会保留其他条目、设置和当前条目中配置区块以外的内容。图库分享链接也会保留。</p></div>
-        <div class="section"><h3>手动建立</h3><label class="field"><span class="label">角色姓名 *</span><input id="sourceCharacterName" maxlength="80" placeholder="填写角色姓名" /></label><p id="sourceSummary" class="hint">尚未读取角色，可直接填写姓名开始。</p></div>
-        <div class="nav-actions"><span></span><button id="sourceNextBtn" class="primary" type="button">下一步：档案</button></div>
+        <div class="panel-head"><div><h2>从人物原稿开始，也可以跳过</h2><p>读取已有资料，上传图片，补齐信息，最后一次完成。</p></div></div>
+        <div class="section"><h3>人物原稿 <small class="hint">选填</small></h3><label class="field"><span class="label">人物正文或角色 JSON</span><textarea id="sourceDraftText" rows="6" placeholder="粘贴人物设定、角色卡 JSON 或世界书 JSON。能识别的姓名、性别、种族等会自动填入。"></textarea></label><div class="source-actions" style="margin-top:10px"><button id="readSourceBtn" type="button">读取并预填</button><button id="sourceWorldbookBtn" type="button">从文件导入</button><button id="sourcePasteBtn" type="button">打开粘贴窗口</button><button id="clearSourceBtn" class="quiet" type="button" hidden>不附带原稿</button></div><p id="sourceDocumentStatus" class="hint" role="status">原稿只保存在此浏览器。有原稿时保留正文并加入 EJS；没有原稿时只生成 EJS。</p></div>
+        <div class="section"><h3>角色姓名</h3><label class="field"><span class="label">可在资料步骤补齐</span><input id="sourceCharacterName" maxlength="80" placeholder="填写或从原稿读取角色姓名" /></label><p id="sourceSummary" class="hint">尚未读取角色，可直接下一步上传图片。</p></div>
+        <div class="nav-actions"><span></span><button id="sourceNextBtn" class="primary" type="button">下一步：图片</button></div>
       </section>
       <section class="panel" data-panel="2">
         <div class="panel-head"><div><h2>角色资料</h2></div></div>
@@ -304,7 +327,8 @@ button,.button{border:1px solid var(--line);background:#182335;color:var(--text)
             <label class="field full"><span class="label">作者说明 <small>选填</small></span><textarea id="authorNote" rows="3" placeholder="角色简介、创作重点、版本备注或推荐阅读方式。"></textarea></label>
           </div>
         </div>
-        <div class="nav-actions"><button data-next="1">上一步</button><button class="primary" data-next="3">下一步：配色</button></div>
+        <p class="hint">这里填写的故事、台词和作者说明会用于公开展示；原稿正文不会自动复制到这些栏目。</p>
+        <div class="nav-actions"><button data-next="4">上一步：图片</button><button class="primary" data-next="3">下一步：配色</button></div>
       </section>
 
       <section class="panel" data-panel="3">
@@ -314,11 +338,12 @@ button,.button{border:1px solid var(--line);background:#182335;color:var(--text)
           <label class="field"><span class="label">种族颜色</span><span class="color-row"><input id="raceColorPicker" type="color" value="#A9DBC3"/><input id="raceColor" maxlength="7" value="#A9DBC3" /></span></label>
           <label class="field"><span class="label">阶层颜色</span><span class="color-row"><input id="tierColorPicker" type="color" value="#B7D9E8"/><input id="tierColor" maxlength="7" value="#B7D9E8" /></span></label>
         </div>
-        <div class="nav-actions"><button data-next="2">上一步</button><button class="primary" data-next="4">下一步：相册与头像</button></div>
+        <div class="nav-actions"><button data-next="2">上一步：档案</button><button class="primary" data-next="5">下一步：完成</button></div>
       </section>
 
       <section class="panel" data-panel="4">
-        <div class="panel-head"><div><h2>相册与头像</h2><p>设置主立绘、头像、封面及备用地址。</p></div></div>
+        <div class="panel-head"><div><h2>上传角色图片</h2><p>直接上传或选择已有文件，完成时会自动整理成角色图库。</p></div></div>
+        <div id="hostedMediaSection" class="section"></div>
         <div class="section quick-only"><h3>先放一张图片</h3><label class="field"><span class="label">图片直链</span><input id="quickImageUrl" type="url" placeholder="https://…/portrait.webp" /></label><p class="hint">将这张图片作为主立绘；已有配色、作者资料、远程图库及其他媒体会保留。</p><div id="quickImagePreview" class="media-preview" hidden></div><button id="quickToFullBtn" type="button" class="quiet">需要视频或更多图片？切换完整编辑</button></div>
         <div class="section full-only"><h3>远程图库</h3><label class="field"><span class="label">图库包 URL <small>选填</small></span><input id="remoteGalleryUrl" type="url" placeholder="https://…/api/public/gallery/用户/图库" /></label><p class="hint">填写 ImgBed 的图库包 JSON 链接；人物资料分享页链接不能用于此处。可只使用远程图库，也可同时保留下方本地媒体。</p></div>
         <div class="section full-gallery">
@@ -337,23 +362,25 @@ button,.button{border:1px solid var(--line);background:#182335;color:var(--text)
         </div>
         <div id="galleryList" class="gallery-list"></div>
         <div class="gallery-add-footer"><button id="addImageBtn" class="gallery-add-button">＋ 添加下一张媒体</button></div></div>
-        <div class="nav-actions"><button id="galleryBackBtn" type="button">上一步</button><button class="primary" data-next="5">下一步：确认</button></div>
+        <div class="nav-actions"><button id="galleryBackBtn" type="button">上一步：来源</button><button id="galleryNextBtn" class="primary" type="button">下一步：档案</button></div>
       </section>
 
       <section class="panel" data-panel="5">
         <div class="panel-head">
-          <div><h2>保存角色修改</h2><p id="outputDescription">保存后会加入待导出清单。</p></div>
+          <div><h2>确认并完成</h2><p id="outputDescription">自动整理图库，并按原稿格式导出结果。</p></div>
           <div class="output-toolbar">
             <button id="applyEntryBtn" class="primary" disabled>保存修改</button>
-            <button id="copyBtn">复制条目 Content</button>
+            <button id="copyBtn">复制结果</button>
+            <button id="downloadOutputBtn">下载结果</button>
           </div>
         </div>
         <div id="confirmSummary" class="quick-summary"></div>
+        <div id="hostedCompleteSection" class="section"></div>
         <div id="targetEntryMeta" class="entry-meta" hidden></div>
         <div id="validation" class="validation"></div>
-        <textarea id="codeOutput" class="code-output" spellcheck="false" readonly></textarea>
+        <label class="field"><span class="label">导出预览</span><textarea id="codeOutput" class="code-output" spellcheck="false" readonly></textarea></label>
         <div id="copyStatus" class="status"></div>
-        <div class="nav-actions"><button data-next="4">上一步</button><span></span></div>
+        <div class="nav-actions"><button id="confirmBackBtn" type="button">上一步</button><span></span></div>
       </section>
     </main>
   </div>
@@ -498,6 +525,9 @@ button,.button{border:1px solid var(--line);background:#182335;color:var(--text)
 <dialog id="decisionDialog" class="decision-dialog" aria-labelledby="decisionTitle"><h2 id="decisionTitle">确认操作</h2><p id="decisionMessage"></p><div class="decision-actions"><button id="decisionCancelBtn" type="button">保留当前编辑</button><button id="decisionAcceptBtn" class="primary" type="button">继续</button></div></dialog>
 <script type="module">
 import * as ProfileCore from './profile-core.js';
+import { inspectSource, mergeSource } from './source-document.js';
+import { initializeHostedWorkflow } from './hosted-workflow.js';
+import { getSiteConfig, publicFileUrl } from '../site-config.js';
 (() => {
 'use strict';
 const DEFAULT_RACE_COLOR=ProfileCore.DEFAULT_RACE_COLOR,DEFAULT_TIER_COLOR=ProfileCore.DEFAULT_TIER_COLOR;
@@ -508,12 +538,14 @@ const worldbookState={document:null,fileName:'',selectedKey:'',loadedEntryKey:''
 const cartState={items:{}};
 const WORKSPACE_DB='charinfo-creator-editor',WORKSPACE_STORE='workspace',WORKSPACE_KEY='current';
 let workspaceSaveTimer=0,workspaceRestoring=false,currentEntryDirty=false,albumProfile=null;
+let sourceDocument=null,sourceFileName='',sourceReadText='',hostedWorkflow=null,flowBusy=false;
 const $=id=>document.getElementById(id), $$=sel=>Array.from(document.querySelectorAll(sel));
 function showEditorStatus(message,type=''){$('editorStatus').textContent=message;$('editorStatus').className='inline-status '+type}
+function setEditorBusy(value){flowBusy=value;for(const element of [$('editorLayout'),document.querySelector('.topbar'),$('editorContext'),$('worldbookBox')])element.inert=value;}
 function askBeforeDiscard(message){return new Promise(resolve=>{const dialog=$('decisionDialog');$('decisionMessage').textContent=message;const finish=value=>{dialog.close();$('decisionAcceptBtn').removeEventListener('click',accept);$('decisionCancelBtn').removeEventListener('click',cancel);dialog.removeEventListener('cancel',cancel);resolve(value)};const accept=()=>finish(true),cancel=e=>{e?.preventDefault();finish(false)};$('decisionAcceptBtn').addEventListener('click',accept);$('decisionCancelBtn').addEventListener('click',cancel);dialog.addEventListener('cancel',cancel);dialog.showModal()})}
-function chooseMode(mode,{step=1,persist=true}={}){editorMode=mode==='quick'?'quick':'full';document.body.classList.toggle('is-quick',editorMode==='quick');$('modePicker').hidden=true;$('editorLayout').hidden=false;$('editorContext').hidden=false;$('editorModeLabel').textContent=editorMode==='quick'?'快速建立 · 3 步':'完整编辑 · 5 步';$('sourceNextBtn').textContent=editorMode==='quick'?'下一步：一张图片':'下一步：档案';$('sourceCharacterName').value=$('characterName').value;$('quickImageUrl').value=firstViewer()?.sources.find(source=>source.trim())||'';$$('.steps button').forEach(button=>{const num=Number(button.dataset.step);button.querySelector('.step-index').textContent=editorMode==='quick'?String({1:1,4:2,5:3}[num]||num):String(num)});goto(step);renderGallery();if(persist)scheduleWorkspaceSave()}
+function chooseMode(mode,{step=1,persist=true}={}){editorMode=mode==='quick'?'quick':'full';document.body.classList.toggle('is-quick',editorMode==='quick');$('modePicker').hidden=true;$('editorLayout').hidden=false;$('editorContext').hidden=false;$('editorModeLabel').textContent=editorMode==='quick'?'精简填写 · 3 步':'创建角色 · 5 步';$('sourceNextBtn').textContent='下一步：图片';$('galleryNextBtn').textContent=editorMode==='quick'?'下一步：完成':'下一步：档案';$('sourceCharacterName').value=$('characterName').value;$('quickImageUrl').value=firstViewer()?.sources.find(source=>source.trim())||'';$$('.steps button').forEach(button=>{const num=Number(button.dataset.step);button.querySelector('.step-index').textContent=String((editorMode==='quick'?{1:1,4:2,5:3}:{1:1,4:2,2:3,3:4,5:5})[num]||num)});goto(step);renderGallery();if(persist)scheduleWorkspaceSave()}
 $('quickModeBtn').addEventListener('click',()=>chooseMode('quick'));$('fullModeBtn').addEventListener('click',()=>chooseMode('full'));$('changeModeBtn').addEventListener('click',()=>{$('modePicker').hidden=false;$('editorLayout').hidden=true;$('editorContext').hidden=true});$('quickToFullBtn').addEventListener('click',()=>chooseMode('full',{step:4}));
-$('sourceWorldbookBtn').addEventListener('click',()=>$('importWorldbookBtn').click());$('sourcePasteBtn').addEventListener('click',()=>$('pasteCharacterBtn').click());$('sourceNextBtn').addEventListener('click',()=>{if(!$('characterName').value.trim()){showEditorStatus('请先填写或读取角色姓名。','bad');$('sourceCharacterName').focus();return}showEditorStatus('');goto(editorMode==='quick'?4:2)});$('galleryBackBtn').addEventListener('click',()=>goto(editorMode==='quick'?1:3));
+$('sourceWorldbookBtn').addEventListener('click',()=>$('importWorldbookBtn').click());$('sourcePasteBtn').addEventListener('click',()=>$('pasteCharacterBtn').click());$('sourceNextBtn').addEventListener('click',async()=>{try{const raw=$('sourceDraftText').value;if(raw.trim()&&raw!==sourceReadText)await readSourceText(raw);if(worldbookState.document&&!currentLoadedEntry()){showEditorStatus('请先选择并读取要更新的世界书条目。','bad');return}showEditorStatus('');goto(4)}catch(error){showEditorStatus(error.message,'bad')}});$('galleryBackBtn').addEventListener('click',()=>goto(1));$('galleryNextBtn').addEventListener('click',()=>goto(editorMode==='quick'?5:2));$('confirmBackBtn').addEventListener('click',()=>goto(editorMode==='quick'?4:3));
 $('sourceCharacterName').addEventListener('input',()=>{$('characterName').value=$('sourceCharacterName').value;state.characterName=$('characterName').value;$('nameCount').textContent=`${state.characterName.length} 字`;markUnexportedChanges();scheduleWorkspaceSave()});
 $('quickImageUrl').addEventListener('input',()=>{const value=$('quickImageUrl').value.trim();let image=firstViewer();if(!image){image=makeImage();state.gallery.unshift(image)}const previous=image.sources[0]||'',avatar=currentAvatarUrl(),cover=currentCoverUrl();image.sources=[value,...image.sources.slice(1)];image.viewerVisible=true;image.previewIndex=0;if(!avatar||avatar===previous){state.avatarMode='custom';state.customAvatarUrl=value;$('customAvatarUrl').value=value}if(!cover||cover===previous){state.coverMode='custom';state.customCoverUrl=value;$('customCoverUrl').value=value}renderGallery();markUnexportedChanges();scheduleWorkspaceSave()});
 function cartItems(){return Object.values(cartState.items).sort((a,b)=>(a.savedAt||0)-(b.savedAt||0))}
@@ -523,7 +555,7 @@ function markUnexportedChanges(){if(workspaceRestoring||!worldbookState.document
 function clearUnexportedChanges(){currentEntryDirty=false;cartState.items={};worldbookState.modified=false;updateWorldbookBadges();updateCartUi()}
 function openWorkspaceDb(){return new Promise((resolve,reject)=>{const req=indexedDB.open(WORKSPACE_DB,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(WORKSPACE_STORE))req.result.createObjectStore(WORKSPACE_STORE)};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 function cloneEditorState(){syncStateFromInputs();return{...state,storySections:state.storySections.map(x=>({...x})),gallery:state.gallery.map(x=>({...x,sources:[...(x.sources||[])]}))}}
-async function persistWorkspace(){if(workspaceRestoring)return;clearTimeout(workspaceSaveTimer);workspaceSaveTimer=0;try{const db=await openWorkspaceDb();const tx=db.transaction(WORKSPACE_STORE,'readwrite');tx.objectStore(WORKSPACE_STORE).put({version:2,savedAt:Date.now(),currentStep,editorMode,stepLayout:5,editor:cloneEditorState(),cart:{items:cartState.items},worldbook:{document:worldbookState.document,fileName:worldbookState.fileName,selectedKey:worldbookState.selectedKey,loadedEntryKey:worldbookState.loadedEntryKey,modified:worldbookState.modified,currentEntryDirty}},WORKSPACE_KEY);await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)});db.close()}catch(error){console.warn('[CharInfo Creator] 浏览器恢复数据写入失败',error);showEditorStatus('当前浏览器无法保存草稿，请在离开前复制内容或导出世界书。','bad')}}
+async function persistWorkspace(){if(workspaceRestoring)return false;clearTimeout(workspaceSaveTimer);workspaceSaveTimer=0;try{const db=await openWorkspaceDb();const tx=db.transaction(WORKSPACE_STORE,'readwrite');tx.objectStore(WORKSPACE_STORE).put({version:3,savedAt:Date.now(),currentStep,editorMode,stepLayout:5,sourceDocument,sourceFileName,sourceReadText,sourceDraftText:$('sourceDraftText').value,hosted:hostedWorkflow?.snapshot(),editor:cloneEditorState(),cart:{items:cartState.items},worldbook:{document:worldbookState.document,fileName:worldbookState.fileName,selectedKey:worldbookState.selectedKey,loadedEntryKey:worldbookState.loadedEntryKey,modified:worldbookState.modified,currentEntryDirty}},WORKSPACE_KEY);await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)});db.close();return true}catch(error){console.warn('[CharInfo Creator] 浏览器恢复数据写入失败',error);showEditorStatus('当前浏览器无法保存草稿，请在离开前复制或下载结果。','bad');return false}}
 function scheduleWorkspaceSave(){if(workspaceRestoring)return;clearTimeout(workspaceSaveTimer);workspaceSaveTimer=setTimeout(()=>void persistWorkspace(),250)}
 async function readWorkspace(){const db=await openWorkspaceDb();const tx=db.transaction(WORKSPACE_STORE,'readonly');const req=tx.objectStore(WORKSPACE_STORE).get(WORKSPACE_KEY);const value=await new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error)});db.close();return value}
 async function clearWorkspace(){try{const db=await openWorkspaceDb();const tx=db.transaction(WORKSPACE_STORE,'readwrite');tx.objectStore(WORKSPACE_STORE).delete(WORKSPACE_KEY);await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close()}catch(error){console.warn('[CharInfo Creator] 清除草稿失败',error)}}
@@ -547,7 +579,7 @@ function fillProfileInputs(){
 async function restoreWorkspace(){
   workspaceRestoring=true;
   try{
-    const saved=await readWorkspace();if(!saved)return;restoreEditorState(saved.editor);
+    const saved=await readWorkspace();if(!saved)return;restoreEditorState(saved.editor);sourceDocument=saved.sourceDocument||null;sourceFileName=saved.sourceFileName||'';sourceReadText=saved.sourceReadText||'';$('sourceDraftText').value=saved.sourceDraftText||'';hostedWorkflow?.restore(saved.hosted);updateSourceDocumentStatus();
     const wb=saved.worldbook||{};worldbookState.document=wb.document||null;worldbookState.fileName=wb.fileName||'';worldbookState.selectedKey=wb.selectedKey||'';worldbookState.loadedEntryKey=wb.loadedEntryKey||'';
     cartState.items=saved.cart?.items&&typeof saved.cart.items==='object'?saved.cart.items:{};currentEntryDirty=!!wb.currentEntryDirty||!!wb.unexportedChanges;worldbookState.modified=cartCount()>0;
     if(worldbookState.document){$('worldbookBox').hidden=false;$('entrySearch').value='';$('characterEntriesOnly').checked=true;updateWorldbookSummary();renderEntryPicker();if(worldbookState.selectedKey&&worldbookState.document.entries?.[worldbookState.selectedKey])$('entrySelect').value=worldbookState.selectedKey;updateEntrySelectHint();renderTargetEntryMeta();$('revertEntryBtn').disabled=!worldbookState.loadedEntryKey;setWorldbookExpanded(false)}
@@ -578,13 +610,22 @@ function syncStateFromInputs(){
 function profileMetadata(){const stories=state.storySections.map(s=>({title:s.title.trim(),content:s.content.trim()})).filter(s=>s.title||s.content);const m={};if(state.author.trim())m.author=state.author.trim();if(state.version.trim())m.version=state.version.trim();if(state.authorNote.trim())m.author_note=state.authorNote.trim();if(state.sex.trim())m.sex=state.sex.trim();if(state.race.trim())m.race=state.race.trim();if(stories.length)m.story_sections=stories;return Object.keys(m).length?m:undefined}
 function fullProfile(){syncStateFromInputs();const p={characterName:state.characterName.trim(),avatarUrl:currentAvatarUrl(),coverUrl:currentCoverUrl(),raceColor:state.customizeColors?normalizeHex(state.raceColor):'',tierColor:state.customizeColors?normalizeHex(state.tierColor):'',entranceQuote:state.entranceQuote.trim(),gallery:state.gallery.map((x,i)=>({title:x.title.trim()||(i===0?'主立绘':`备用立绘 ${i+1}`),sources:normalizedSources(x),...(x.thumbnail?.trim()?{thumbnail:x.thumbnail.trim()}:{}),...(x.viewerVisible===false?{viewerVisible:false}:{})})),...(state.remoteGalleryUrl.trim()?{remoteGalleryUrl:state.remoteGalleryUrl.trim()}:{})};const m=profileMetadata();if(m)p.metadata=m;return p}
 function serialProfile(){return fullProfile()}
-function validate(){const errors=ProfileCore.validateProfile(fullProfile());state.storySections.forEach((section,index)=>{if(!!section.title.trim()!==!!section.content.trim())errors.push(`第 ${index+1} 个故事栏目标题和内容需同时填写。`)});if(editorMode==='quick'&&!ProfileCore.isSupportedRemoteImageUrl($('quickImageUrl').value.trim()))errors.push('快速建立请填写一条 HTTPS 图片直链；视频或远程图库请使用完整编辑。');return [...new Set(errors)]}
-function buildManagedBlock(){const errors=validate();if(errors.length)throw new Error(errors[0]);return ProfileCore.buildManagedEjsBlock(serialProfile())}
+function validate(){const errors=ProfileCore.validateProfile(fullProfile());state.storySections.forEach((section,index)=>{if(!!section.title.trim()!==!!section.content.trim())errors.push(`第 ${index+1} 个故事栏目标题和内容需同时填写。`)});if(editorMode==='quick'&&!ProfileCore.isSupportedRemoteImageUrl($('quickImageUrl').value.trim()))errors.push('精简填写请放入一张图片；视频或远程图库请使用完整编辑。');if($('sourceDraftText').value!==sourceReadText&&(sourceReadText||$('sourceDraftText').value.trim()))errors.push('人物原稿已更改，请返回来源步骤读取并确认。');if(worldbookState.document&&!currentLoadedEntry())errors.push('请先选择并读取要更新的世界书条目。');return [...new Set(errors)]}
+function currentExport(){
+  const errors=validate();if(errors.length)throw new Error(errors[0]);
+  if(worldbookState.document){
+    if(!currentLoadedEntry())throw new Error('请先选择并读取要更新的世界书条目。');
+    const source=inspectSource(JSON.stringify(worldbookState.document),{entryKey:worldbookState.loadedEntryKey},ProfileCore);
+    return mergeSource(source,serialProfile(),ProfileCore);
+  }
+  return mergeSource(sourceDocument,serialProfile(),ProfileCore);
+}
 function updateOutput(){
   const errors=validate(),box=$('validation'),out=$('codeOutput'),profile=fullProfile();
-  $('confirmSummary').textContent=`${profile.characterName||'未命名角色'}\n${profile.gallery.filter(image=>image.sources.length).length} 个本地媒体${profile.remoteGalleryUrl?' · 已连接远程图库':''}`;
+  $('confirmSummary').textContent=`${profile.characterName||'未命名角色'}\n${profile.gallery.filter(image=>image.sources.length).length} 个媒体${profile.remoteGalleryUrl?' · 已连接远程图库':''}`;
   if(errors.length){box.className='validation bad';box.innerHTML='<strong>请先修正以下内容</strong><ul>'+errors.map(error=>`<li>${esc(error)}</li>`).join('')+'</ul>';out.value='';$('applyEntryBtn').disabled=true;return}
-  try{const hasTarget=!!currentLoadedEntry();out.value=hasTarget?previewUpdatedEntryContent():buildManagedBlock();box.className='validation ok';box.innerHTML=hasTarget?'<strong>可以保存到待导出清单。</strong>':'<strong>可以复制 CharInfo 内容。</strong>';$('outputDescription').textContent=hasTarget?'保存后会加入待导出清单，导出完整世界书时才会得到修改后的文件。':'复制内容到角色条目，或先导入世界书并选择目标条目再保存。';$('applyEntryBtn').disabled=!hasTarget;renderTargetEntryMeta()}catch(error){box.className='validation bad';box.innerHTML=`<strong>无法更新：</strong>${esc(error?.message||String(error))}`;out.value='';$('applyEntryBtn').disabled=true}
+  try{const hasTarget=!!currentLoadedEntry();out.value=currentExport().text;box.className='validation ok';box.innerHTML='<strong>资料已通过检查，可以完成并导出。</strong>';$('outputDescription').textContent=worldbookState.document||sourceDocument?'保留原稿及 JSON 中的其他资料，只新增或更新 CharInfo EJS。':'没有附带原稿，结果只包含 EJS Builder 内容。';$('applyEntryBtn').disabled=!hasTarget;$('applyEntryBtn').hidden=!hasTarget;renderTargetEntryMeta()}catch(error){box.className='validation bad';box.innerHTML=`<strong>无法更新：</strong>${esc(error?.message||String(error))}`;out.value='';$('applyEntryBtn').disabled=true}
+  hostedWorkflow?.renderSummary();
 }
 function goto(step){step=Number(step);if(!Number.isInteger(step)||step<1||step>5)step=1;if(editorMode==='quick'&&(step===2||step===3))step=4;currentStep=step;$$('.steps button').forEach(b=>{const active=Number(b.dataset.step)===currentStep;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'step':'false')});$$('.panel').forEach(p=>p.classList.toggle('active',Number(p.dataset.panel)===currentStep));if(currentStep===5)updateOutput();if(worldbookState.document&&worldbookState.loadedEntryKey)setWorldbookExpanded(false);syncMobileActionBar();window.scrollTo({top:0,behavior:'smooth'});scheduleWorkspaceSave()}
 $$('[data-step]').forEach(b=>b.addEventListener('click',()=>goto(b.dataset.step)));$$('[data-next]').forEach(b=>b.addEventListener('click',()=>goto(b.dataset.next)));
@@ -645,7 +686,7 @@ function renderGallery(){
   $$('[data-source-add]').forEach(button=>button.addEventListener('click',()=>{state.gallery.find(image=>image.id===Number(button.dataset.sourceAdd)).sources.push('');renderGallery()}));
   for(const [attribute,operation] of [['source-del','del'],['source-up',-1],['source-down',1]])$$('[data-'+attribute+']').forEach(button=>button.addEventListener('click',()=>sourceOp(button.getAttribute('data-'+attribute),operation)));
   $$('[data-image-up]').forEach(button=>button.addEventListener('click',()=>moveImage(Number(button.dataset.imageUp),-1)));$$('[data-image-down]').forEach(button=>button.addEventListener('click',()=>moveImage(Number(button.dataset.imageDown),1)));
-  $$('[data-image-del]').forEach(button=>button.addEventListener('click',()=>{state.gallery=state.gallery.filter(image=>image.id!==Number(button.dataset.imageDel));renderGallery()}));
+  $$('[data-image-del]').forEach(button=>button.addEventListener('click',()=>{const image=state.gallery.find(image=>image.id===Number(button.dataset.imageDel));if(image)hostedWorkflow?.removeMedia(image);state.gallery=state.gallery.filter(image=>image.id!==Number(button.dataset.imageDel));renderGallery()}));
   $$('[data-image-main]').forEach(button=>button.addEventListener('click',()=>setMain(Number(button.dataset.imageMain))));$$('[data-image-visibility]').forEach(button=>button.addEventListener('click',()=>{const image=state.gallery.find(item=>item.id===Number(button.dataset.imageVisibility));setVisibility([image.id],image.viewerVisible===false)}));
   $$('[data-select]').forEach(input=>input.addEventListener('change',()=>{state.gallery.find(image=>image.id===Number(input.dataset.select)).selected=input.checked;renderGallery()}));
   if(editorMode!=='quick')$$('[data-gallery-preview]').forEach(host=>mountGalleryMedia(host,state.gallery.find(image=>image.id===Number(host.dataset.galleryPreview))));const quickPreview=$('quickImagePreview');quickPreview.hidden=editorMode!=='quick'||!firstViewer();if(!quickPreview.hidden)mountGalleryMedia(quickPreview,firstViewer());
@@ -664,7 +705,6 @@ function bindColor(textId,pickerId){$(textId).addEventListener('input',()=>{cons
 
 function inspectManagedBlockContent(content){return ProfileCore.inspectManagedBlock(String(content??''))}
 function buildUpdatedEntryContent(content){const errors=validate();if(errors.length)throw new Error(errors[0]);return ProfileCore.upsertManagedEjsBlockWithLegacyMigration(String(content??''),serialProfile())}
-function previewUpdatedEntryContent(){const entry=currentLoadedEntry();return entry?buildUpdatedEntryContent(entry.content||''):buildManagedBlock()}
 function deriveCharacterNameFromEntry(entry){const comment=String(entry?.comment||'');const remainder=comment.match(/^\[DLC\]\[角色\](?:\[[^\]]+\])+\s*(.+)$/i)?.[1]?.trim();if(remainder){const name=remainder.split('(')[0].trim();if(name)return name}const bracket=comment.match(/^\[DLC\]\[角色\]\[([^\]]+)\]/i)?.[1]?.trim();if(bracket)return bracket;const keys=Array.isArray(entry?.key)?entry.key:[];return String(keys.find(Boolean)||'').trim()}
 function emptyProfileForEntry(entry){return{characterName:deriveCharacterNameFromEntry(entry),avatarUrl:'',coverUrl:'',raceColor:'',tierColor:'',entranceQuote:'',gallery:[{title:'主立绘',sources:['']} ]}}
 function normalizeImportedProfile(input){
@@ -674,12 +714,36 @@ function normalizeImportedProfile(input){
 }
 function loadProfile(profile){
   const p=normalizeImportedProfile(profile);
+  const hosted=state.gallery.filter(image=>image.fileId&&image.hostedUrl);
   state.characterName=p.characterName;state.sex=p.metadata.sex;state.race=p.metadata.race;state.entranceQuote=p.entranceQuote;state.author=p.metadata.author;state.version=p.metadata.version;state.authorNote=p.metadata.author_note;
   state.storySections=p.metadata.story_sections.map(section=>({id:nextStoryId++,...section}));state.customizeColors=!!(p.raceColor||p.tierColor);state.raceColor=p.raceColor;state.tierColor=p.tierColor;state.remoteGalleryUrl=p.remoteGalleryUrl||'';
-  state.gallery=p.gallery.map((image,index)=>({id:nextImageId++,title:image.title||`图片 ${index+1}`,sources:image.sources.length?[...image.sources]:[''],...(image.thumbnail?{thumbnail:image.thumbnail}:{}),viewerVisible:image.viewerVisible!==false,previewIndex:0}));
+  state.gallery=p.gallery.map((image,index)=>{const existing=hosted.find(item=>image.sources.includes(item.hostedUrl));return{id:nextImageId++,title:image.title||`图片 ${index+1}`,sources:image.sources.length?[...image.sources]:[''],...(image.thumbnail?{thumbnail:image.thumbnail}:{}),...(existing?{fileId:existing.fileId,hostedUrl:existing.hostedUrl,moderationStatus:existing.moderationStatus}:{}),viewerVisible:image.viewerVisible!==false,previewIndex:0}});
   state.avatarMode=p.avatarUrl?'custom':'';state.customAvatarUrl=p.avatarUrl;state.coverMode=p.coverUrl?'custom':'';state.customCoverUrl=p.coverUrl;
   const match=state.gallery.find(image=>staticUrl(image)===p.coverUrl);if(match)state.coverMode=`gallery:${match.id}`;fillProfileInputs();
 }
+function updateSourceDocumentStatus(){
+  const attached=!!sourceDocument||!!worldbookState.document;$('clearSourceBtn').hidden=!attached;
+  $('sourceDocumentStatus').textContent=worldbookState.document?`已保留世界书 ${worldbookState.fileName}；导出时只更新选定条目的 EJS。`:sourceDocument?`已保留${sourceFileName||'人物原稿'}；完成时返回原稿并加入 EJS。`:'原稿只保存在此浏览器。有原稿时保留正文并加入 EJS；没有原稿时只生成 EJS。';
+}
+async function readSourceText(raw,fileName=''){
+  if(flowBusy)throw new Error('正在处理图片或保存资料，请完成后再切换原稿。');
+  const parsed=inspectSource(raw,{},ProfileCore);
+  if(parsed.kind==='none')throw new Error('请先粘贴人物原稿，或直接下一步上传图片。');
+  if(hasUnexportedWork()&&!await askBeforeDiscard('读取另一份原稿会替换当前未导出的条目修改，确定继续吗？'))return;
+  if(flowBusy)throw new Error('正在保存资料，请稍后再切换原稿。');
+  if(parsed.kind==='worldbook'){
+    worldbookState.document=parsed.document;worldbookState.fileName=fileName||'worldbook.json';worldbookState.selectedKey='';worldbookState.loadedEntryKey='';worldbookState.modified=false;currentEntryDirty=false;cartState.items={};sourceDocument=null;sourceFileName='';
+    $('worldbookBox').hidden=false;$('entrySearch').value='';$('characterEntriesOnly').checked=Object.values(parsed.document.entries).some(isCharacterCandidate);updateWorldbookSummary();renderEntryPicker();updateWorldbookBadges();setWorldbookExpanded(true);showWorldbookStatus('已保留完整世界书，请选择要更新的角色条目。','ok');
+  }else{
+    const previous=fullProfile(),profile=normalizeImportedProfile(parsed.profile);
+    if(!profile.gallery.some(image=>image.sources.some(Boolean))){profile.gallery=previous.gallery.filter(image=>image.sources.length);profile.avatarUrl=previous.avatarUrl;profile.coverUrl=previous.coverUrl;profile.remoteGalleryUrl=previous.remoteGalleryUrl;}
+    sourceDocument=parsed;sourceFileName=fileName;worldbookState.document=null;worldbookState.loadedEntryKey='';cartState.items={};currentEntryDirty=false;$('worldbookBox').hidden=true;loadProfile(profile);updateWorldbookBadges();showEditorStatus('已保留原稿并预填可识别的资料；未识别的信息可在后续步骤补齐。','ok');
+  }
+  sourceReadText=raw;$('sourceDraftText').value=raw;updateSourceDocumentStatus();if(!editorMode)chooseMode('full');else goto(1);await persistWorkspace();
+}
+$('readSourceBtn').addEventListener('click',()=>readSourceText($('sourceDraftText').value).catch(error=>showEditorStatus(error.message,'bad')));
+$('clearSourceBtn').addEventListener('click',async()=>{if(!await askBeforeDiscard('导出结果将只包含 EJS，不再附带人物原稿。表单和图片会保留，确定继续吗？'))return;sourceDocument=null;sourceFileName='';worldbookState.document=null;worldbookState.loadedEntryKey='';cartState.items={};currentEntryDirty=false;$('worldbookBox').hidden=true;$('sourceDraftText').value='';sourceReadText='';updateWorldbookBadges();updateSourceDocumentStatus();await persistWorkspace()});
+$('newCharacterBtn').addEventListener('click',async()=>{if(!await askBeforeDiscard('新建角色会清空当前表单和此浏览器的编辑草稿。已上传文件和已建立的图库会保留，确定继续吗？'))return;sourceDocument=null;sourceFileName='';albumProfile=null;worldbookState.document=null;worldbookState.loadedEntryKey='';cartState.items={};currentEntryDirty=false;state.gallery=[];hostedWorkflow.reset();loadProfile(ProfileCore.createEmptyProfile());$('sourceDraftText').value='';sourceReadText='';$('worldbookBox').hidden=true;updateWorldbookBadges();updateSourceDocumentStatus();history.replaceState(null,'',location.pathname);chooseMode('full');showEditorStatus('已开始新角色。');await persistWorkspace()});
 function profileFromCharInfoPack(pack){
   const visual=pack?.visual&&typeof pack.visual==='object'?pack.visual:{},metadata=visual.metadata&&typeof visual.metadata==='object'?visual.metadata:{};
   return {characterName:String(pack?.characterName||''),avatarUrl:String(visual.avatarUrl||''),coverUrl:String(visual.coverUrl||''),raceColor:String(visual.raceColor||''),tierColor:String(visual.tierColor||''),entranceQuote:String(visual.entranceQuote||''),...(typeof pack?.galleryUrl==='string'&&pack.galleryUrl?{remoteGalleryUrl:pack.galleryUrl}:{}),
@@ -690,8 +754,29 @@ function mergeAlbumProfile(entryProfile){
   return {...base,characterName:album.characterName||base.characterName,avatarUrl:album.avatarUrl||base.avatarUrl,coverUrl:album.coverUrl||base.coverUrl,raceColor:album.raceColor||base.raceColor,tierColor:album.tierColor||base.tierColor,entranceQuote:album.entranceQuote||base.entranceQuote,remoteGalleryUrl:album.remoteGalleryUrl||base.remoteGalleryUrl,gallery:albumHasGallery?album.gallery:base.gallery,
     metadata:{author:album.metadata.author||base.metadata.author,version:album.metadata.version||base.metadata.version,author_note:album.metadata.author_note||base.metadata.author_note,sex:album.metadata.sex||base.metadata.sex,race:album.metadata.race||base.metadata.race,story_sections:album.metadata.story_sections.length?album.metadata.story_sections:base.metadata.story_sections}};
 }
-async function loadAlbumProfileFromQuery(){const albumId=new URLSearchParams(location.search).get('album');if(!albumId)return;try{const response=await fetch(`/api/public/charinfo/${encodeURIComponent(albumId)}`,{credentials:'same-origin'});if(!response.ok)throw new Error(`无法读取当前图库的人物资料（HTTP ${response.status}）`);const pack=await response.json();if(pack?.format!=='char-info-visual-pack')throw new Error('当前图库没有可读取的人物资料。');albumProfile=profileFromCharInfoPack(pack);loadProfile(mergeAlbumProfile(fullProfile()));if(worldbookState.document&&worldbookState.loadedEntryKey)currentEntryDirty=true;showWorldbookStatus(`已从当前图库自动载入“${pack.characterName||'未命名角色'}”的头像、封面和 ${Array.isArray(pack.gallery)?pack.gallery.length:0} 个媒体。`,'ok');updateWorldbookBadges();scheduleWorkspaceSave()}catch(error){showWorldbookStatus(error?.message||'无法自动载入当前图库资料。','bad')}}
-function validateWorldbookDocument(doc){if(!doc||typeof doc!=='object'||Array.isArray(doc))throw new Error('世界书 JSON 顶层必须是对象。');if(!doc.entries||typeof doc.entries!=='object'||Array.isArray(doc.entries))throw new Error('找不到 SillyTavern 世界书的 entries 对象。');const pairs=Object.entries(doc.entries);if(!pairs.length)throw new Error('这个世界书没有任何 entries。');for(const[key,entry]of pairs){if(!entry||typeof entry!=='object'||Array.isArray(entry))throw new Error(`entries.${key} 不是有效条目对象。`);if(entry.content!==undefined&&typeof entry.content!=='string')throw new Error(`entries.${key}.content 必须是字符串。`)}return pairs.length}
+async function loadAlbumProfileFromQuery(){
+  if(flowBusy)return;
+  const albumId=new URLSearchParams(location.search).get('album');if(!albumId)return;
+  if(hostedWorkflow.snapshot().albumId===albumId&&state.characterName)return;
+  if(state.characterName&&!await askBeforeDiscard('当前浏览器已有编辑草稿。读取此图库会替换表单，确定继续吗？'))return;
+  if(flowBusy)return;setEditorBusy(true);
+  try{
+    const access=await fetch(`/api/user/albums/${encodeURIComponent(albumId)}/charinfo`,{credentials:'same-origin'});
+    if(access.ok){
+      const response=await fetch(`/api/user/albums/${encodeURIComponent(albumId)}`,{credentials:'same-origin'});if(!response.ok)throw new Error('无法读取图库文件，请稍后重试。');
+      const [{config},data,site]=await Promise.all([access.json(),response.json(),getSiteConfig()]);
+      const files=data.items.filter(file=>file.moderation_status==='active'&&(String(file.file_type).startsWith('image/')||['video/mp4','video/webm'].includes(file.file_type)));
+      const main=files.findIndex(file=>file.id===config.mainFileId);if(main>0)files.unshift(...files.splice(main,1));
+      const fileUrl=id=>files.some(file=>file.id===id)?publicFileUrl(id,site):'';
+      albumProfile={characterName:data.album.charInfoCharacterName||data.album.name,avatarUrl:fileUrl(config.avatarFileId),coverUrl:fileUrl(config.coverFileId),entranceQuote:config.entranceQuote,raceColor:config.raceColor,tierColor:config.tierColor,metadata:config.metadata,gallery:files.map(file=>({title:file.file_name||'角色图片',sources:[fileUrl(file.id)],viewerVisible:!config.viewerHiddenFileIds?.includes(file.id)})),remoteGalleryUrl:new URL(`/api/public/charinfo/${encodeURIComponent(albumId)}?view=gallery`,location.origin).href};
+      hostedWorkflow.reset();loadProfile(albumProfile);state.gallery.forEach((image,index)=>Object.assign(image,{fileId:files[index].id,hostedUrl:image.sources[0],moderationStatus:files[index].moderation_status}));hostedWorkflow.bindAlbum(albumId);
+      showEditorStatus('已读取您的图库。完成时更新此图库；移除图片只会解除关联，原文件保留。','ok');
+    }else if([401,403,404].includes(access.status)){
+      const response=await fetch(`/api/public/charinfo/${encodeURIComponent(albumId)}`);if(!response.ok)throw new Error('无法读取此图库的人物资料。');const pack=await response.json();if(pack.format!=='char-info-visual-pack')throw new Error('无法识别此图库资料。');albumProfile=profileFromCharInfoPack(pack);loadProfile(albumProfile);hostedWorkflow.reset();showEditorStatus('已导入公开图库资料。您没有此图库的编辑权限，可使用自己的图片创建新图库。','ok');
+    }else throw new Error(`读取图库失败（HTTP ${access.status}），草稿尚未更改。`);
+    sourceDocument=null;sourceFileName='';sourceReadText='';$('sourceDraftText').value='';worldbookState.document=null;worldbookState.loadedEntryKey='';cartState.items={};currentEntryDirty=false;$('worldbookBox').hidden=true;updateSourceDocumentStatus();updateWorldbookBadges();renderGallery();chooseMode('full',{step:4});await persistWorkspace();
+  }catch(error){showEditorStatus(error.message,'bad')}finally{setEditorBusy(false)}
+}
 function isCharacterCandidate(entry){const content=String(entry?.content||'');return /\[DLC\]\[角色\]/i.test(String(entry?.comment||''))||content.includes(BLOCK_START)||content.includes('char_info.profiles')||content.includes('char_info_visuals')}
 function entrySearchText(key,entry){return[key,entry?.uid,entry?.comment,...(Array.isArray(entry?.key)?entry.key:[]),...(Array.isArray(entry?.keysecondary)?entry.keysecondary:[])].filter(v=>v!==undefined&&v!==null).join(' ').toLocaleLowerCase()}
 function worldbookEntries(){return worldbookState.document?Object.entries(worldbookState.document.entries):[]}
@@ -703,28 +788,30 @@ function updateEntrySelectHint(){worldbookState.selectedKey=$('entrySelect').val
 function updateWorldbookSummary(){if(!worldbookState.document)return;const all=worldbookEntries(),roles=all.filter(([,e])=>/\[DLC\]\[角色\]/i.test(String(e.comment||''))).length;$('worldbookSummary').textContent=`${worldbookState.fileName} · ${all.length} 个条目 · ${roles} 个角色条目`;updateWorldbookCompact()}
 function showWorldbookStatus(message,type=''){$('worldbookStatus').className='status '+type;$('worldbookStatus').textContent=message;showEditorStatus(message,type)}
 async function importWorldbookFile(file){
-  if(!file)return;if(hasUnexportedWork()&&!await askBeforeDiscard('当前还有未导出的修改。导入另一份世界书会清空这些修改，确定继续吗？'))return;
-  try{const raw=await file.text(),doc=JSON.parse(raw),count=validateWorldbookDocument(doc);worldbookState.document=doc;worldbookState.fileName=file.name||'worldbook.json';worldbookState.selectedKey='';worldbookState.loadedEntryKey='';worldbookState.modified=false;currentEntryDirty=false;cartState.items={};$('worldbookBox').hidden=false;$('entrySearch').value='';$('characterEntriesOnly').checked=true;updateWorldbookSummary();renderEntryPicker();updateWorldbookBadges();setWorldbookExpanded(true);showWorldbookStatus(`已导入 ${count} 个条目。请选择要编辑的角色。`,'ok');if(!editorMode)chooseMode('full');else goto(1);scheduleWorkspaceSave()}catch(error){showWorldbookStatus(error?.message||String(error),'bad');$('worldbookBox').hidden=false;setWorldbookExpanded(true)}
+  if(!file)return;
+  try{await readSourceText(await file.text(),file.name)}catch(error){showEditorStatus(error.message,'bad')}
 }
 function currentLoadedEntry(){return worldbookState.document?.entries?.[worldbookState.loadedEntryKey]||null}
 function renderTargetEntryMeta(){const box=$('targetEntryMeta'),entry=currentLoadedEntry();if(!entry){box.hidden=true;box.innerHTML='';updateWorldbookCompact();return}const inspection=inspectManagedBlockContent(entry.content||'');box.hidden=false;box.innerHTML=`<span>世界书<strong>${esc(worldbookState.fileName)}</strong></span><span>Entry UID<strong>${esc(entry.uid??worldbookState.loadedEntryKey)}</strong></span><span>状态<strong>${entry.disable?'已禁用':'已启用'}</strong></span><span>CharInfo<strong>${inspection.state==='valid'?'已有配置':inspection.state==='malformed'?'配置异常':'新增配置'}</strong></span>`;updateWorldbookCompact()}
 async function loadSelectedWorldbookEntry(){
+  if(flowBusy)return;
   const key=$('entrySelect').value,entry=worldbookState.document?.entries?.[key];if(!entry)return;
   if(currentEntryDirty&&worldbookState.loadedEntryKey&&key!==worldbookState.loadedEntryKey&&!await askBeforeDiscard('当前角色有未保存修改。切换角色会丢弃这些修改，确定继续吗？'))return;
+  if(flowBusy)return;
   try{
-    const content=String(entry.content||''),inspection=inspectManagedBlockContent(content);let entryProfile;
-    if(inspection.state==='malformed'||inspection.state==='multiple')throw new Error(inspection.reason);
-    if(inspection.state==='valid')entryProfile=inspection.profile;
-    else {const legacy=ProfileCore.inspectLegacyVisualProfile(content);if(legacy.state==='unsupported')throw new Error(legacy.reason);entryProfile=legacy.state==='importable'?legacy.profile:emptyProfileForEntry(entry)}
+    const parsed=inspectSource(JSON.stringify(worldbookState.document),{entryKey:key},ProfileCore);let entryProfile=parsed.profile;
+    const switching=worldbookState.loadedEntryKey&&worldbookState.loadedEntryKey!==key;
+    if(switching){albumProfile=null;hostedWorkflow.reset();}
+    else if(!entryProfile.gallery?.some(image=>image.sources.some(Boolean))){const previous=fullProfile();entryProfile={...entryProfile,gallery:previous.gallery.filter(image=>image.sources.length),avatarUrl:previous.avatarUrl,coverUrl:previous.coverUrl,remoteGalleryUrl:previous.remoteGalleryUrl};}
     const merged=mergeAlbumProfile(entryProfile);
     loadProfile(merged);worldbookState.selectedKey=key;worldbookState.loadedEntryKey=key;currentEntryDirty=!!albumProfile;
     showWorldbookStatus(albumProfile?'已载入角色条目，并合并当前图库资料。保存后可导出世界书。':'已载入角色资料。','ok');renderTargetEntryMeta();$('revertEntryBtn').disabled=false;updateWorldbookBadges();setWorldbookExpanded(false);
-    if(!editorMode)chooseMode('full',{step:2});else goto(editorMode==='quick'?1:2);scheduleWorkspaceSave();
+    updateSourceDocumentStatus();if(!editorMode)chooseMode('full',{step:4});else goto(4);scheduleWorkspaceSave();
   }catch(error){showWorldbookStatus(error?.message||String(error),'bad');setWorldbookExpanded(true)}
 }
 function animateCartPlusOne(){const btn=$('cartBtn');if(!btn)return;const el=document.createElement('span');el.className='cart-plus-one';el.textContent='+1';btn.appendChild(el);setTimeout(()=>el.remove(),850)}
 function applyCurrentEntry({silent=false}={}){const entry=currentLoadedEntry();if(!worldbookState.document||!entry)throw new Error('请先导入世界书并读取一个目标条目。');const errors=validate();if(errors.length)throw new Error(errors[0]);const key=worldbookState.loadedEntryKey,nextContent=buildUpdatedEntryContent(entry.content||''),existing=cartState.items[key];if(!existing&&nextContent===entry.content&&!currentEntryDirty){if(!silent)showWorldbookStatus('没有新的修改。','ok');return nextContent}const beforeContent=existing?.beforeContent??entry.content;entry.content=nextContent;cartState.items[key]={key,uid:entry.uid??key,comment:String(entry.comment||''),characterName:state.characterName.trim()||String(entry.comment||''),beforeContent,afterContent:nextContent,savedAt:Date.now()};worldbookState.modified=true;currentEntryDirty=false;updateWorldbookBadges();renderTargetEntryMeta();updateCartUi();if(!existing)animateCartPlusOne();if(!silent)showWorldbookStatus(`已保存到待导出清单（${cartCount()}）。`,'ok');scheduleWorkspaceSave();return nextContent}
-async function closeWorldbook(){if(hasUnexportedWork()&&!await askBeforeDiscard('当前还有未导出的修改。关闭世界书会清空这些修改，确定继续吗？'))return;worldbookState.document=null;worldbookState.fileName='';worldbookState.selectedKey='';worldbookState.loadedEntryKey='';worldbookState.modified=false;currentEntryDirty=false;cartState.items={};$('worldbookBox').hidden=true;setWorldbookExpanded(false);$('revertEntryBtn').disabled=true;$('applyEntryBtn').disabled=true;updateWorldbookBadges();renderTargetEntryMeta();showWorldbookStatus('');scheduleWorkspaceSave()}
+async function closeWorldbook(){if(flowBusy)return;if(hasUnexportedWork()&&!await askBeforeDiscard('当前还有未导出的修改。关闭世界书会清空这些修改，确定继续吗？'))return;if(flowBusy)return;worldbookState.document=null;worldbookState.fileName='';worldbookState.selectedKey='';worldbookState.loadedEntryKey='';worldbookState.modified=false;currentEntryDirty=false;cartState.items={};$('sourceDraftText').value='';sourceReadText='';$('worldbookBox').hidden=true;setWorldbookExpanded(false);$('revertEntryBtn').disabled=true;$('applyEntryBtn').disabled=true;updateSourceDocumentStatus();updateWorldbookBadges();renderTargetEntryMeta();showWorldbookStatus('');scheduleWorkspaceSave()}
 function openCart(){if(!worldbookState.document)return;renderCart();$('cartModal').classList.add('open');$('cartModal').setAttribute('aria-hidden','false')}
 function closeCart(){$('cartModal').classList.remove('open');$('cartModal').setAttribute('aria-hidden','true')}
 function syncMobileActionBar(){const bar=$('mobileActionBar');if(!bar)return;const mobile=window.matchMedia('(max-width:900px)').matches,hasBook=!!worldbookState.document,hasEntry=!!worldbookState.loadedEntryKey,count=cartCount();bar.style.display=mobile&&hasBook?'flex':'none';const preview=$('mobilePreviewBtn'),save=$('mobileSaveBtn'),cart=$('mobileCartBtn');if(preview)preview.disabled=!hasEntry;if(save){save.disabled=!hasEntry;save.textContent=currentEntryDirty?'保存修改 +1':'保存修改'}if(cart){cart.disabled=!(count>0||hasEntry);const n=$('mobileCartCount');if(n)n.textContent=String(count)}}
@@ -747,33 +834,13 @@ function closePasteCharacterModal(){
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden','true');
 }
-function profileFromPastedCharacterText(raw){
-  let text=String(raw||'').trim();
-  if(!text)throw new Error('请先粘贴角色 Content。');
-  if(text[0]==='{'){
-    try{
-      const parsed=JSON.parse(text);
-      if(parsed&&typeof parsed==='object'&&typeof parsed.content==='string')text=parsed.content;
-      else if(parsed&&typeof parsed==='object'&&(parsed.characterName||parsed.gallery||parsed.avatarUrl||parsed.metadata))return parsed;
-    }catch(_){}
-  }
-  const inspection=inspectManagedBlockContent(text);
-  if(inspection.state==='valid')return inspection.profile;
-  if(inspection.state==='malformed'||inspection.state==='multiple')throw new Error(inspection.reason);
-  const legacy=ProfileCore.inspectLegacyVisualProfile(text);if(legacy.state==='importable')return legacy.profile;if(legacy.state==='unsupported')throw new Error(legacy.reason);
-  throw new Error('没有找到可读取的人物资料。请粘贴完整角色条目 Content 或 CharInfo 配置内容。');
-}
 async function loadPastedCharacterContent(){
-  if(currentEntryDirty&&!await askBeforeDiscard('当前角色有未保存修改。读取粘贴内容会覆盖当前编辑器表单，确定继续吗？'))return;
   try{
-    const profile=normalizeImportedProfile(profileFromPastedCharacterText($('pasteCharacterInput').value));
-    const errors=ProfileCore.validateProfile(profile);if(errors.length)throw new Error(errors[0]);
-    loadProfile(profile);
-    if(worldbookState.document&&worldbookState.loadedEntryKey){currentEntryDirty=true;updateWorldbookBadges();updateCartUi();}
-    if(!editorMode)chooseMode('full',{step:2});else goto(editorMode==='quick'?1:2);
+    const raw=$('pasteCharacterInput').value;
+    let config;try{config=JSON.parse(raw)}catch{}
+    if(config&&typeof config==='object'&&config.characterName&&!config.content&&!config.data&&!config.entries){loadProfile(config);showEditorStatus('已读取 CharInfo 展示配置。人物原稿可在来源步骤另行附带。','ok');scheduleWorkspaceSave();}
+    else await readSourceText(raw);
     closePasteCharacterModal();
-    showWorldbookStatus('已读取粘贴的角色 Content。','ok');
-    scheduleWorkspaceSave();
   }catch(error){
     $('pasteCharacterStatus').className='status bad';
     $('pasteCharacterStatus').textContent=error?.message||String(error);
@@ -782,7 +849,8 @@ async function loadPastedCharacterContent(){
 $('worldbookToggleBtn').addEventListener('click',()=>setWorldbookExpanded(!$('worldbookBox').classList.contains('expanded')));$('pasteCharacterBtn').addEventListener('click',openPasteCharacterModal);$('pasteCharacterCloseBtn').addEventListener('click',closePasteCharacterModal);$('pasteCharacterLoadBtn').addEventListener('click',loadPastedCharacterContent);$('pasteCharacterModal').addEventListener('click',e=>{if(e.target===$('pasteCharacterModal'))closePasteCharacterModal()});$('importWorldbookBtn').addEventListener('click',()=>{$('worldbookFileInput').value='';$('worldbookFileInput').click()});$('worldbookFileInput').addEventListener('change',e=>importWorldbookFile(e.target.files?.[0]));$('entrySearch').addEventListener('input',renderEntryPicker);$('characterEntriesOnly').addEventListener('change',renderEntryPicker);$('entrySelect').addEventListener('change',updateEntrySelectHint);$('loadEntryBtn').addEventListener('click',loadSelectedWorldbookEntry);$('revertEntryBtn').addEventListener('click',async()=>{if(!worldbookState.loadedEntryKey)return;if(currentEntryDirty&&!await askBeforeDiscard('当前角色有未保存修改。重新读取会放弃这些修改，确定吗？'))return;$('entrySelect').value=worldbookState.loadedEntryKey;await loadSelectedWorldbookEntry()});$('closeWorldbookBtn').addEventListener('click',closeWorldbook);$('applyEntryBtn').addEventListener('click',()=>{try{applyCurrentEntry();updateOutput()}catch(error){showWorldbookStatus(error?.message||String(error),'bad')}});$('cartBtn').addEventListener('click',openCart);$('cartCloseBtn').addEventListener('click',closeCart);$('cartModal').addEventListener('click',e=>{if(e.target===$('cartModal'))closeCart();const edit=e.target.closest('[data-cart-edit]'),remove=e.target.closest('[data-cart-remove]');if(edit)editCartItem(edit.dataset.cartEdit);if(remove)removeCartItem(remove.dataset.cartRemove)});$('cartSaveCurrentBtn').addEventListener('click',()=>{try{applyCurrentEntry();renderCart();updateOutput()}catch(error){showWorldbookStatus(error?.message||String(error),'bad');closeCart();goto(4)}});$('checkoutBtn').addEventListener('click',checkoutWorldbook);$('mobilePreviewBtn').addEventListener('click',()=>$('previewBtn').click());$('mobileCartBtn').addEventListener('click',openCart);$('mobileSaveBtn').addEventListener('click',()=>{try{applyCurrentEntry();updateOutput()}catch(error){showWorldbookStatus(error?.message||String(error),'bad')}});window.addEventListener('resize',syncMobileActionBar);
 
 async function copyText(text){if(!text)return false;try{await navigator.clipboard.writeText(text);return true}catch{const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();const ok=document.execCommand('copy');ta.remove();return ok}}
-async function copyOutput(){updateOutput();const text=$('codeOutput').value;if(!text){showEditorStatus('请先修正确认页中的问题，再复制。','bad');return}const ok=await copyText(text);$('copyStatus').className='status '+(ok?'ok':'bad');$('copyStatus').textContent=ok?'目标条目 Content 已复制。':'浏览器阻止了自动复制，请在输出框手动复制。'}$('copyBtn').addEventListener('click',copyOutput);$('copyTopBtn').addEventListener('click',()=>{if(!editorMode)chooseMode('full',{step:5});else goto(5);copyOutput()});
+async function copyOutput(){updateOutput();const text=$('codeOutput').value;if(!text){showEditorStatus('请先修正确认页中的问题，再复制。','bad');return}const ok=await copyText(text);$('copyStatus').className='status '+(ok?'ok':'bad');$('copyStatus').textContent=ok?'结果已复制。':'浏览器阻止了自动复制，请在输出框手动复制。'}$('copyBtn').addEventListener('click',copyOutput);$('copyTopBtn').addEventListener('click',()=>{if(!editorMode)chooseMode('full',{step:5});else goto(5);copyOutput()});
+$('downloadOutputBtn').addEventListener('click',()=>{try{const result=currentExport(),base=(sourceFileName||worldbookState.fileName||state.characterName||'CharInfo').replace(/\.(json|txt|ya?ml)$/i,'').replace(/[\\/:*?"<>|]/g,'_');download(`${base}_CharInfo.${result.filenameExtension}`,result.text,result.mime);showEditorStatus('结果已下载。','ok')}catch(error){showEditorStatus(error.message,'bad')}});
 function download(name,text,type='text/plain;charset=utf-8'){const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 
 document.addEventListener('input',e=>{scheduleWorkspaceSave();if(e.target.closest('.workspace')&&!e.target.closest('#codeOutput')&&!e.target.matches('[data-select]'))markUnexportedChanges()});document.addEventListener('change',e=>{scheduleWorkspaceSave();if(e.target.closest('.workspace')&&!e.target.closest('#codeOutput')&&!e.target.matches('[data-select]'))markUnexportedChanges()});document.addEventListener('click',e=>{if(e.target.closest('button'))scheduleWorkspaceSave();if(e.target.closest('#addStoryBtn,[data-story-del],[data-story-up],[data-story-down],#addImageBtn,[data-source-add],[data-source-del],[data-source-up],[data-source-down],[data-image-up],[data-image-down],[data-image-del],[data-image-main],[data-image-visibility],#batchViewer,#batchAlbum'))markUnexportedChanges()});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')void persistWorkspace()});window.addEventListener('pagehide',()=>{void persistWorkspace()});window.addEventListener('beforeunload',event=>{if(!hasUnexportedWork())return;event.preventDefault();event.returnValue=''});
@@ -858,7 +926,20 @@ $('portraitPrev').addEventListener('click',()=>{previewPortraitIndex--;previewPo
 $('mobileQuote').addEventListener('click',openQuoteDialog);$('quoteDialogClose').addEventListener('click',closeQuoteDialog);$('quoteDialogBackdrop').addEventListener('click',e=>{if(e.target===$('quoteDialogBackdrop'))closeQuoteDialog()});
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!$('quoteDialogBackdrop').hidden){closeQuoteDialog();return}if($('cartModal').classList.contains('open')){closeCart();return}if($('previewModal').classList.contains('open'))$('previewClose').click()});
 
-$('previewModal').classList.add(previewLayout==='mobile'?'preview-mode-mobile':'preview-mode-desktop');renderGallery();renderPreview();void restoreWorkspace().then(loadAlbumProfileFromQuery);
+hostedWorkflow=initializeHostedWorkflow({
+  getProfile:fullProfile,getMedia:()=>state.gallery,validate,persist:persistWorkspace,showStatus:showEditorStatus,
+  setBusy:setEditorBusy,
+  addMedia(media){
+    if(state.gallery.some(image=>image.fileId===media.fileId))return;
+    state.gallery=state.gallery.filter(image=>normalizedSources(image).length);
+    const image={...makeImage(media.title||`图片 ${state.gallery.length+1}`),sources:[media.url],fileId:media.fileId,hostedUrl:media.url,moderationStatus:media.moderationStatus};state.gallery.push(image);
+    if(!currentAvatarUrl()){state.avatarMode=`gallery:${image.id}`;$('avatarSelect').value=state.avatarMode;}
+    if(!currentCoverUrl()){state.coverMode=`gallery:${image.id}`;$('coverSelect').value=state.coverMode;}
+    $('quickImageUrl').value=firstViewer()?.sources[0]||'';renderGallery();markUnexportedChanges();
+  },
+  onSaved(result){if(!result.exportOnly){state.remoteGalleryUrl=result.remoteGalleryUrl;$('remoteGalleryUrl').value=result.remoteGalleryUrl;}if(currentLoadedEntry())applyCurrentEntry({silent:true});updateOutput();if(!$('codeOutput').value)throw new Error('图库已保存，请检查导出预览中的问题。');},
+});
+$('previewModal').classList.add(previewLayout==='mobile'?'preview-mode-mobile':'preview-mode-desktop');renderGallery();renderPreview();chooseMode('full',{persist:false});setEditorBusy(true);void restoreWorkspace().finally(()=>setEditorBusy(false)).then(()=>{updateSourceDocumentStatus();return loadAlbumProfileFromQuery()});
 })();
 </script>
 </body>

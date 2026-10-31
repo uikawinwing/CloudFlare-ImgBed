@@ -14,6 +14,8 @@ export async function onRequestOptions() {
 
 export async function onRequestGet({ request, env, params }) {
     if (!env.img_d1?.prepare) return json({ error: 'D1 is required' }, 503);
+    const view = new URL(request.url).searchParams.get('view') || 'visual';
+    if (!['visual', 'gallery'].includes(view)) return json({ error: 'Unknown CharInfo view' }, 400);
 
     const albumId = normalizeAlbumId(params?.albumId) || albumIdFromRequest(request.url);
     if (!albumId) return json({ error: 'Gallery not found' }, 404);
@@ -32,16 +34,42 @@ export async function onRequestGet({ request, env, params }) {
     let pack;
     try {
         pack = createCharInfoVisualPack({ album, files, storedVisualConfig, requestUrl: request.url });
+        if (view === 'gallery') {
+            const gallery = pack.gallery.filter(item => isViewerMediaUrl(item.sources[0]));
+            const fallbackImage = gallery.map(item => item.sources[0]).find(source => isViewerMediaUrl(source, true)) || null;
+            pack = {
+                format: 'char-info-gallery-pack',
+                version: 1,
+                packId: pack.packId,
+                profileId: pack.profileId,
+                characterName: pack.characterName,
+                avatarThumbnail: isViewerMediaUrl(pack.visual?.avatarUrl, true) ? pack.visual.avatarUrl : fallbackImage,
+                libraryThumbnail: isViewerMediaUrl(pack.visual?.coverUrl, true) ? pack.visual.coverUrl : fallbackImage,
+                gallery,
+            };
+        }
     } catch (error) {
         return json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }
 
-    const etag = makeEtag(album, files, storedVisualConfig);
+    const etag = makeEtag(album, files, storedVisualConfig, view);
     const lastModifiedAt = Math.max(Number(album.updated_at) || 0, ...files.map((file) => Number(file.timestamp) || 0));
     const headers = publicHeaders(etag, lastModifiedAt);
     if (request.headers.get('If-None-Match') === etag) return new Response(null, { status: 304, headers });
 
     return new Response(JSON.stringify(pack), { headers });
+}
+
+function isViewerMediaUrl(value, imageOnly = false) {
+    if (typeof value !== 'string') return false;
+    try {
+        const url = new URL(value);
+        if (url.protocol !== 'https:' || url.username || url.password) return false;
+        return /\.(png|jpe?g|gif|apng|webp|avif)$/iu.test(url.pathname)
+            || (!imageOnly && /\.(mp4|webm)$/iu.test(url.pathname));
+    } catch {
+        return false;
+    }
 }
 
 export function albumIdFromRequest(requestUrl) {
@@ -65,8 +93,9 @@ function normalizeAlbumId(value) {
     return normalized;
 }
 
-function makeEtag(album, files, storedVisualConfig) {
+function makeEtag(album, files, storedVisualConfig, view) {
     const signature = [
+        view,
         album.id || '',
         album.public_handle || '',
         album.slug || '',
@@ -74,7 +103,7 @@ function makeEtag(album, files, storedVisualConfig) {
         album.name || '',
         album.description || '',
         storedVisualConfig || '',
-        ...files.map((file) => `${file.id}:${file.file_name || ''}:${file.file_type || ''}:${file.timestamp || ''}`),
+        ...files.map((file) => `${file.id}:${file.file_name || ''}:${file.file_type || ''}:${file.timestamp || ''}:${file.thumbnail_created_at || ''}`),
     ].join('|');
     return `W/\"${album.id}:${hashString(signature)}\"`;
 }

@@ -20,3 +20,6 @@ buildSync({
 });
 copyFileSync(join(root, 'frontend-src/charinfo/upstream/LICENSE'), join(dirname(destination), 'CharInfo-Manager.LICENSE'));
 copyFileSync(join(root, 'node_modules/json5/LICENSE.md'), join(dirname(destination), 'json5.LICENSE'));
+for (const module of ['source-document.js', 'hosted-workflow.js']) {
+    copyFileSync(join(root, 'frontend-src/charinfo', module), join(dirname(destination), module));
+}

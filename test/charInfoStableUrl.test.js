@@ -110,6 +110,31 @@ describe('stable CharInfo visual URL', () => {
         assert.deepStrictEqual(firstPack.gallery.map((item) => item.title), ['First.png', 'Second.webm']);
         assert.strictEqual(firstPack.gallery[1].viewerVisible, false);
 
+        const galleryUrl = `${url}?view=gallery`;
+        const galleryResponse = await stableCharInfoGet({
+            request: new Request(galleryUrl, { headers: { 'If-None-Match': firstEtag } }), env, params: { albumId: 'album-id' },
+        });
+        assert.strictEqual(galleryResponse.status, 200, 'a visual-view ETag must not return a gallery-view 304');
+        const galleryEtag = galleryResponse.headers.get('etag');
+        const galleryPack = await galleryResponse.json();
+        assert.deepStrictEqual(galleryPack, {
+            format: 'char-info-gallery-pack', version: 1, packId: 'master', profileId: 'album-id',
+            characterName: album.char_info_character_name,
+            avatarThumbnail: 'https://example.test/file/first.png?v=1',
+            libraryThumbnail: 'https://example.test/file/first.png?v=1',
+            gallery: firstPack.gallery,
+        });
+        assert.strictEqual(galleryResponse.headers.get('Access-Control-Allow-Origin'), '*');
+        assert.strictEqual(galleryResponse.headers.get('Cache-Control'), 'public, max-age=60');
+        const unchangedGalleryResponse = await stableCharInfoGet({
+            request: new Request(galleryUrl, { headers: { 'If-None-Match': galleryEtag } }), env, params: { albumId: 'album-id' },
+        });
+        assert.strictEqual(unchangedGalleryResponse.status, 304);
+        const visualWithGalleryEtag = await stableCharInfoGet({
+            request: new Request(url, { headers: { 'If-None-Match': galleryEtag } }), env, params: { albumId: 'album-id' },
+        });
+        assert.strictEqual(visualWithGalleryEtag.status, 200);
+
         visualConfig = JSON.stringify({
             entranceQuote: 'Updated',
             mainFileId: 'second.webm',
@@ -125,6 +150,8 @@ describe('stable CharInfo visual URL', () => {
         assert.notStrictEqual(secondEtag, firstEtag, 'visual-only edits must invalidate the ETag');
         assert.strictEqual(secondPack.visual.entranceQuote, 'Updated');
         assert.deepStrictEqual(secondPack.gallery.map((item) => item.title), ['Second.webm', 'First.png'], 'main portrait moves to the front without changing the URL');
+        const reorderedGalleryResponse = await stableCharInfoGet({ request: new Request(galleryUrl), env, params: { albumId: 'album-id' } });
+        assert.deepStrictEqual((await reorderedGalleryResponse.json()).gallery, secondPack.gallery, 'viewer gallery keeps visual ordering and visibility');
 
         files = [
             ...files,
@@ -166,5 +193,52 @@ describe('stable CharInfo visual URL', () => {
         const brokenPack = await brokenResponse.json();
         assert.strictEqual(brokenPack.visual, null, 'broken visual config must be ignored instead of clearing local visual state');
         assert.deepStrictEqual(brokenPack.gallery.map((item) => item.title), ['First.png', 'Second.webm', 'Third.png']);
+        const brokenGalleryResponse = await stableCharInfoGet({ request: new Request(galleryUrl), env, params: { albumId: 'album-id' } });
+        const brokenGalleryPack = await brokenGalleryResponse.json();
+        assert.strictEqual(brokenGalleryPack.avatarThumbnail, 'https://example.test/file/first.png?v=1');
+        assert.strictEqual(brokenGalleryPack.libraryThumbnail, 'https://example.test/file/first.png?v=1');
+    });
+
+    it('rejects unknown views without reading album contents', async () => {
+        const response = await stableCharInfoGet({
+            request: new Request('https://example.test/api/public/charinfo/album-id?view=unknown'),
+            env: { img_d1: { prepare() { throw new Error('Unknown views must fail before data access'); } } },
+            params: { albumId: 'album-id' },
+        });
+        assert.strictEqual(response.status, 400);
+        assert.strictEqual(response.headers.get('Access-Control-Allow-Origin'), '*');
+    });
+
+    it('filters unsupported legacy media only at the viewer protocol boundary', async () => {
+        const album = { id: 'album-id', slug: 'gallery', char_info_character_name: '角色', public_handle: 'master' };
+        let files = [
+            { id: 'old.svg', file_type: 'image/svg+xml' },
+            { id: 'old.bmp', file_type: 'image/bmp' },
+            { id: 'old-no-extension', file_type: 'image/png' },
+            { id: 'clip.webm', file_type: 'video/webm' },
+            { id: 'portrait.PNG', file_type: 'image/png' },
+        ];
+        const visualConfig = JSON.stringify({ avatarFileId: 'old.svg', coverFileId: 'old.bmp' });
+        const env = { img_d1: { prepare(sql) {
+            if (sql.includes('FROM albums a JOIN users u')) return { bind: () => ({ first: async () => album }) };
+            if (sql.includes('FROM album_items ai')) return { bind: () => ({ all: async () => ({ results: files }) }) };
+            if (sql.includes('FROM other_data')) return { bind: () => ({ first: async () => ({ value: visualConfig }) }) };
+            throw new Error(`Unexpected SQL: ${sql}`);
+        } } };
+        const url = 'https://example.test/api/public/charinfo/album-id';
+        const read = async view => (await stableCharInfoGet({ request: new Request(url + view), env, params: { albumId: 'album-id' } })).json();
+        const visualPack = await read('');
+        assert.strictEqual(visualPack.gallery.length, 5, 'legacy files remain in the editor view and in their album');
+        const galleryPack = await read('?view=gallery');
+        assert.deepStrictEqual(galleryPack.gallery.map(item => item.sources[0]), [
+            'https://example.test/file/clip.webm', 'https://example.test/file/portrait.PNG',
+        ]);
+        assert.strictEqual(galleryPack.avatarThumbnail, 'https://example.test/file/portrait.PNG');
+        assert.strictEqual(galleryPack.libraryThumbnail, 'https://example.test/file/portrait.PNG');
+        files = files.slice(0, 4);
+        const allVideoPack = await read('?view=gallery');
+        assert.strictEqual(allVideoPack.avatarThumbnail, null);
+        assert.strictEqual(allVideoPack.libraryThumbnail, null);
+        assert.deepStrictEqual(allVideoPack.gallery.map(item => item.sources[0]), ['https://example.test/file/clip.webm']);
     });
 });
