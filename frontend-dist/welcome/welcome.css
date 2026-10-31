@@ -74,7 +74,17 @@ body::after {
 }
 .welcome-checking .welcome-wrap { visibility: hidden; }
 .welcome-hero { width: 100%; text-align: left; }
-.welcome-copy { width: min(460px, 100%); }
+.welcome-copy { position: relative; isolation: isolate; width: min(460px, 100%); }
+.welcome-copy::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -24px -16px;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--app-bg) 80%, transparent);
+  filter: blur(24px);
+  pointer-events: none;
+}
 .welcome-heading { filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--app-bg) 85%, transparent)); }
 .welcome-copy h1, .welcome-greeting, .welcome-lead {
   text-shadow: 0 1px 3px color-mix(in srgb, var(--app-bg) 90%, transparent), 0 0 12px color-mix(in srgb, var(--app-bg) 65%, transparent);
@@ -101,7 +111,7 @@ body::after {
 .welcome-poem { padding-left: 20px; border-left: 1px solid var(--app-border-strong); }
 .welcome-lead {
   margin: 0;
-  color: var(--app-muted-strong);
+  color: var(--app-text-strong);
   font-family: "Welcome WenKai", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
   font-size: 14px;
   font-weight: 400;
@@ -109,7 +119,6 @@ body::after {
   line-height: 2.15;
 }
 .welcome-lead + .welcome-lead { margin-top: 14px; }
-.welcome-lead:last-child { color: var(--app-text); }
 .welcome-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; margin-top: 36px; }
 .welcome-primary, .welcome-secondary { min-height: 42px; border-radius: 0; box-shadow: none; font-size: 13px; font-weight: 400; letter-spacing: .12em; }
 .welcome-primary { padding-inline: 24px; border-color: var(--app-text); background: var(--app-text); color: var(--app-bg); }
