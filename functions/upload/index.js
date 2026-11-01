@@ -290,8 +290,8 @@ async function processFileUpload(context, formdata = null) {
 }
 
 // 构建上传成功响应，自动附带 publicUrl（如果已配置）
-function buildUploadResponse(context, returnLink, metadata = null) {
-    const result = { src: returnLink };
+function buildUploadResponse(context, returnLink, fileId, metadata = null) {
+    const result = { src: returnLink, fileId };
     if (context.publicUrl) {
         result.publicUrl = context.publicUrl;
     }
@@ -358,7 +358,7 @@ async function uploadFileToCloudflareR2(context, fullId, metadata, returnLink) {
     waitUntil(endUpload(context, fullId, metadata));
 
     // 成功上传，将文件ID返回给客户端
-    return buildUploadResponse(context, returnLink);
+    return buildUploadResponse(context, returnLink, fullId);
 }
 // 上传到Telegram
 async function uploadFileToTelegram(context, fullId, metadata, fileExt, storageFileName, fileType, returnLink) {
@@ -449,7 +449,7 @@ async function uploadFileToTelegram(context, fullId, metadata, fileExt, storageF
         metadata.FileSize = (fileInfo.file_size / 1024 / 1024).toFixed(2);
 
         // 将响应返回给客户端
-        res = buildUploadResponse(context, returnLink);
+        res = buildUploadResponse(context, returnLink, fullId);
 
 
         // 图像审查（使用代理域名或官方域名）
@@ -564,7 +564,7 @@ async function uploadFileToDiscord(context, fullId, metadata, returnLink) {
         waitUntil(endUpload(context, fullId, metadata));
 
         // 返回成功响应
-        return buildUploadResponse(context, returnLink, metadata);
+        return buildUploadResponse(context, returnLink, fullId, metadata);
 
     } catch (error) {
         console.error('Discord upload error:', error.message);

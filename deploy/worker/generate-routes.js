@@ -480,6 +480,7 @@ export default {
         const routeHandlesRevalidation = pathname.startsWith('/file/')
             || pathname.startsWith('/thumb/')
             || pathname.startsWith('/api/public/gallery/')
+            || pathname.startsWith('/api/public/album-gallery/')
             || pathname.startsWith('/api/public/charinfo/');
         if (routeHandlesRevalidation) return await executeRoute();
         return await maybeServeFromCache(request, ctx, executeRoute);

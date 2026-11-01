@@ -41,6 +41,7 @@ import * as apiManageSysConfigUpload from '../../functions/api/manage/sysConfig/
 import * as apiManageTagsAutocomplete from '../../functions/api/manage/tags/autocomplete.js';
 import * as apiManageTagsBatch from '../../functions/api/manage/tags/batch.js';
 import * as apiManageThumbnailsBackfill from '../../functions/api/manage/thumbnails/backfill.js';
+import * as apiPublicAlbumGalleryParamAlbumId from '../../functions/api/public/album-gallery/[albumId].js';
 import * as apiPublicCharinfoParamAlbumId from '../../functions/api/public/charinfo/[albumId].js';
 import * as apiUserAlbumsParamId from '../../functions/api/user/albums/[id].js';
 import * as apiUserCharinfoComplete from '../../functions/api/user/charinfo/complete.js';
@@ -123,6 +124,7 @@ const routes = [
     { path: '/api/manage/tags/autocomplete', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"tags"},{"type":"static","value":"autocomplete"}], module: apiManageTagsAutocomplete, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/tags/batch', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"tags"},{"type":"static","value":"batch"}], module: apiManageTagsBatch, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/thumbnails/backfill', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"thumbnails"},{"type":"static","value":"backfill"}], module: apiManageThumbnailsBackfill, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/public/album-gallery/:albumId', segments: [{"type":"static","value":"api"},{"type":"static","value":"public"},{"type":"static","value":"album-gallery"},{"type":"dynamic","name":"albumId","array":false}], module: apiPublicAlbumGalleryParamAlbumId, middlewares: [mw_api] },
     { path: '/api/public/charinfo/:albumId', segments: [{"type":"static","value":"api"},{"type":"static","value":"public"},{"type":"static","value":"charinfo"},{"type":"dynamic","name":"albumId","array":false}], module: apiPublicCharinfoParamAlbumId, middlewares: [mw_api] },
     { path: '/api/user/albums/:id', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"albums"},{"type":"dynamic","name":"id","array":false}], module: apiUserAlbumsParamId, middlewares: [mw_api, mw_api_user] },
     { path: '/api/user/charinfo/complete', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"charinfo"},{"type":"static","value":"complete"}], module: apiUserCharinfoComplete, middlewares: [mw_api, mw_api_user] },
@@ -421,6 +423,7 @@ export default {
         const routeHandlesRevalidation = pathname.startsWith('/file/')
             || pathname.startsWith('/thumb/')
             || pathname.startsWith('/api/public/gallery/')
+            || pathname.startsWith('/api/public/album-gallery/')
             || pathname.startsWith('/api/public/charinfo/');
         if (routeHandlesRevalidation) return await executeRoute();
         return await maybeServeFromCache(request, ctx, executeRoute);

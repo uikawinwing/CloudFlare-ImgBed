@@ -1,5 +1,5 @@
 import { charInfoVisualStorageKey } from '../../../utils/charInfoVisualConfig.js';
-import { createCharInfoVisualPack } from '../../../utils/charInfoVisualPack.js';
+import { createCharInfoVisualPack, createCharInfoGalleryPack } from '../../../utils/charInfoVisualPack.js';
 import { listSharedAlbumFiles } from '../../../utils/publicCatalog.js';
 
 const CORS_HEADERS = {
@@ -33,21 +33,8 @@ export async function onRequestGet({ request, env, params }) {
 
     let pack;
     try {
-        pack = createCharInfoVisualPack({ album, files, storedVisualConfig, requestUrl: request.url });
-        if (view === 'gallery') {
-            const gallery = pack.gallery.filter(item => isViewerMediaUrl(item.sources[0]));
-            const fallbackImage = gallery.map(item => item.sources[0]).find(source => isViewerMediaUrl(source, true)) || null;
-            pack = {
-                format: 'char-info-gallery-pack',
-                version: 1,
-                packId: pack.packId,
-                profileId: pack.profileId,
-                characterName: pack.characterName,
-                avatarThumbnail: isViewerMediaUrl(pack.visual?.avatarUrl, true) ? pack.visual.avatarUrl : fallbackImage,
-                libraryThumbnail: isViewerMediaUrl(pack.visual?.coverUrl, true) ? pack.visual.coverUrl : fallbackImage,
-                gallery,
-            };
-        }
+        const createPack = view === 'gallery' ? createCharInfoGalleryPack : createCharInfoVisualPack;
+        pack = createPack({ album, files, storedVisualConfig, requestUrl: request.url });
     } catch (error) {
         return json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }
@@ -58,18 +45,6 @@ export async function onRequestGet({ request, env, params }) {
     if (request.headers.get('If-None-Match') === etag) return new Response(null, { status: 304, headers });
 
     return new Response(JSON.stringify(pack), { headers });
-}
-
-function isViewerMediaUrl(value, imageOnly = false) {
-    if (typeof value !== 'string') return false;
-    try {
-        const url = new URL(value);
-        if (url.protocol !== 'https:' || url.username || url.password) return false;
-        return /\.(png|jpe?g|gif|apng|webp|avif)$/iu.test(url.pathname)
-            || (!imageOnly && /\.(mp4|webm)$/iu.test(url.pathname));
-    } catch {
-        return false;
-    }
 }
 
 export function albumIdFromRequest(requestUrl) {

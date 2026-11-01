@@ -4,6 +4,26 @@ import { existsSync, readFileSync } from 'fs';
 const creatorSource = readFileSync(new URL('../frontend-dist/charinfo/index.html', import.meta.url), 'utf8');
 const redirects = readFileSync(new URL('../frontend-dist/_redirects', import.meta.url), 'utf8');
 
+describe('Creator upload file ID contract', () => {
+  let fileIdFromUpload;
+  before(() => {
+    const source = readFileSync(new URL('../frontend-src/charinfo/hosted-workflow.js', import.meta.url), 'utf8');
+    const start = source.indexOf('function fileIdFromUpload(');
+    assert.ok(start >= 0, 'upload response parsing must have a single entry point');
+    const end = source.indexOf('async function requestJson(', start);
+    fileIdFromUpload = new Function('location', `return (${source.slice(start, end).trim()});`)({ origin: 'https://example.test' });
+  });
+
+  it('uses the server ID without decoding it or relying on the response URL path', () => {
+    assert.strictEqual(fileIdFromUpload({ fileId: 'users/owner/a%20b.png', src: 'https://cdn.example.test/different-path.png' }), 'users/owner/a%20b.png');
+  });
+
+  it('keeps the old URL format as a fallback when the server ID is absent', () => {
+    assert.strictEqual(fileIdFromUpload({ src: '/file/users/owner/a%20b.png?v=1' }), 'users/owner/a b.png');
+    assert.throws(() => fileIdFromUpload({ src: '/unrecognized-path.png' }), /上传响应没有返回有效的图片位置/);
+  });
+});
+
 describe('CharInfo Worldbook frontend integration', () => {
   it('makes the root CharInfo route the complete Creator Editor', () => {
     assert.match(creatorSource, /<title>CharInfo Creator · Charatopia<\/title>/);

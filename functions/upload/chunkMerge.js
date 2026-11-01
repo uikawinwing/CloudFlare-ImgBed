@@ -310,7 +310,7 @@ async function mergeR2ChunksInfo(context, uploadId, completedChunks, metadata) {
 
         return {
             success: true,
-            result: [{ 'src': updatedReturnLink }]
+            result: [{ src: updatedReturnLink, fileId: finalFileId }]
         };
 
     } catch (error) {
@@ -384,7 +384,7 @@ async function mergeTelegramChunksInfo(context, uploadId, completedChunks, metad
 
         return {
             success: true,
-            result: [{ 'src': updatedReturnLink }]
+            result: [{ src: updatedReturnLink, fileId: finalFileId }]
         };
 
     } catch (error) {
@@ -459,7 +459,7 @@ async function mergeDiscordChunksInfo(context, uploadId, completedChunks, metada
 
         return {
             success: true,
-            result: [{ 'src': updatedReturnLink }]
+            result: [{ src: updatedReturnLink, fileId: finalFileId }]
         };
 
     } catch (error) {

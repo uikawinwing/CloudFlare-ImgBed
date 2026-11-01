@@ -1,6 +1,6 @@
 import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
 import { normalizeCharInfoCharacterName, validateCharInfoCharacterName } from '../../../utils/charInfoGallery.js';
-import { normalizeSlug } from './index.js';
+import { explicitSlug } from './index.js';
 import { normalizeTags } from '../../../utils/tagHelpers.js';
 
 export async function onRequest(context) {
@@ -34,7 +34,7 @@ export async function onRequest(context) {
     const payload = await context.request.json();
     const name = payload.name === undefined ? album.name : String(payload.name).trim();
     const description = payload.description === undefined ? album.description : String(payload.description).trim();
-    const slug = payload.slug === undefined ? album.slug : normalizeSlug(payload.slug);
+    const slug = payload.slug === undefined ? album.slug : explicitSlug(payload.slug);
     const charInfoCharacterName = payload.charInfoCharacterName === undefined
         ? normalizeCharInfoCharacterName(album.char_info_character_name)
         : normalizeCharInfoCharacterName(payload.charInfoCharacterName);

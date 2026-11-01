@@ -1111,7 +1111,7 @@ export async function uploadLargeFileToTelegram(context, file, fullId, metadata,
         const pageConfig = await fetchPageConfig(env);
         const urlPrefixConfig = pageConfig.config?.find(c => c.id === 'urlPrefix');
         const urlPrefix = urlPrefixConfig?.value || '';
-        const responseBody = [{ 'src': returnLink }];
+        const responseBody = [{ src: returnLink, fileId: fullId }];
         if (urlPrefix) {
             responseBody[0].publicUrl = `${urlPrefix.replace(/\/+$/, '')}/${fullId}`;
         }

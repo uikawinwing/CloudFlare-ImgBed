@@ -28,8 +28,9 @@ function safeUrl(value) {
     } catch { return ''; }
 }
 
-function fileIdFromSrc(src) {
-    const url = new URL(String(src || ''), location.origin);
+function fileIdFromUpload(uploaded) {
+    if (typeof uploaded.fileId === 'string' && uploaded.fileId) return uploaded.fileId;
+    const url = new URL(String(uploaded.src || ''), location.origin);
     if (!url.pathname.startsWith('/file/')) throw new Error('上传响应没有返回有效的图片位置，请从“我的文件”确认上传结果。');
     const fileId = url.pathname.slice('/file/'.length).split('/').map(decodeURIComponent).join('/');
     if (!fileId || fileId.split('/').some(part => !part || part === '.' || part === '..')) {
@@ -84,15 +85,13 @@ export function initializeHostedWorkflow({ getProfile, getMedia, addMedia, onSav
     const knownFiles = new Map(), selectedFiles = new Set();
     let pickerOpener = null;
 
-    mediaSection.innerHTML = `<h3>上传角色图片</h3>
-      <p class="hint">在这里上传或选择已有图片，完成时会自动建立图库。图片上传后已有直链，尚未完成的图片仍保留在“我的文件”。</p>
-      <div class="gallery-toolbar"><button type="button" class="primary" data-hosted-upload>上传图片</button><button type="button" data-hosted-select>从我的文件选择</button><input type="file" accept=".png,.jpg,.jpeg,.gif,.apng,.webp,.avif" multiple hidden data-hosted-input></div>
-      <p class="hint">支持 PNG、JPEG、GIF、APNG、WebP、AVIF，每张小于 95 MB。</p>
+    mediaSection.innerHTML = `<div class="gallery-toolbar"><button type="button" data-hosted-upload>上传图片</button><button type="button" data-hosted-select>从我的文件选择</button><input type="file" accept=".png,.jpg,.jpeg,.gif,.apng,.webp,.avif" multiple hidden data-hosted-input></div>
+      <p class="hint">上传后即可通过直链访问。</p>
+      <p class="hint">PNG、JPEG、GIF、APNG、WebP、AVIF · 每张小于 95 MB</p>
       <div class="hosted-auth hint" data-hosted-auth></div><div class="status" role="status" aria-live="polite" data-hosted-upload-status></div><ul class="hosted-upload-results" data-hosted-upload-results></ul>`;
-    completeSection.innerHTML = `<h3>完成角色资料</h3>
-      <p class="hint">完成后将创建公开图库，并显示在发现页；图库包含你填写的展示资料。原始人物正文和 JSON 只保存在此浏览器，不会自动公开。</p>
-      <p class="hint" data-hosted-summary></p>
-      <div class="field" data-hosted-handle-field hidden><label for="hostedPublicHandle">公开用户名</label><input id="hostedPublicHandle" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="例如 snow-gallery"><span class="hint">首次建立图库时设置，使用 3–32 位小写字母、数字或短横线。</span></div>
+    completeSection.innerHTML = `<p data-hosted-summary></p>
+      <div class="field" data-hosted-handle-field hidden><label for="hostedPublicHandle">公开用户名</label><input id="hostedPublicHandle" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="例如 snow-gallery" aria-describedby="hostedHandleHint"><span id="hostedHandleHint" class="hint">3–32 位小写字母、数字或短横线</span></div>
+      <p class="hint">原稿只保存在此浏览器，不会自动公开。</p>
       <button type="button" class="primary" data-hosted-complete>生成导出内容</button>
       <div class="status" role="status" aria-live="polite" data-hosted-complete-status></div><div class="hosted-result" data-hosted-result></div>`;
     const uploadButton = mediaSection.querySelector('[data-hosted-upload]');
@@ -150,12 +149,12 @@ export function initializeHostedWorkflow({ getProfile, getMedia, addMedia, onSav
         if (wrongOwner()) {
             authStatus.textContent = '此草稿的图片属于另一个账号。请切回原账号，或使用“新建角色”重新开始。';
         } else if (identity) {
-            authStatus.textContent = '已登录，可以上传或选择自己的图片。';
+            authStatus.textContent = '已登录';
         } else {
-            authStatus.append(document.createTextNode(identityError || '上传或建立图库需要先登录；仍可填写资料和生成 EJS。'));
+            authStatus.append(document.createTextNode(identityError || '上传和发布图库需要登录，仍可填写资料和导出。'));
             const login = document.createElement('a');
             login.href = '/api/auth/discord?returnTo=%2Fcharinfo%2F';
-            login.textContent = '登录';
+            login.textContent = '使用 Discord 登录';
             login.addEventListener('click', async event => {
                 event.preventDefault();
                 try { await saveDraft(); location.assign(login.href); } catch (error) { showStatus(error.message, 'bad'); }
@@ -177,8 +176,8 @@ export function initializeHostedWorkflow({ getProfile, getMedia, addMedia, onSav
         const links = document.createElement('div');
         links.className = 'gallery-toolbar';
         appendLink(links, '查看公开图库', result.albumUrl);
-        appendLink(links, '打开图库数据', result.remoteGalleryUrl);
-        appendLink(links, '在我的文件中查看', `/account/?view=albums&album=${encodeURIComponent(result.album.id)}`);
+        appendLink(links, '远程图库链接', result.remoteGalleryUrl);
+        appendLink(links, '管理图库', `/account/?view=albums&album=${encodeURIComponent(result.album.id)}`);
         resultContainer.append(links);
         for (const image of hostedMedia()) {
             const row = document.createElement('div');
@@ -202,8 +201,8 @@ export function initializeHostedWorkflow({ getProfile, getMedia, addMedia, onSav
     function renderSummary() {
         const media = hostedMedia();
         const count = new Set(media.map(image => image.fileId)).size;
-        summary.textContent = count ? `已选择 ${count} 张本站图片，完成时会自动${albumId ? '更新' : '建立'}图库。` : `未选择本站图片时，只生成导出内容；外部图片链接会保留在 EJS 中。${albumId ? '现有公开图库不会更改。' : ''}`;
-        completeButton.textContent = busy ? '正在处理…' : count ? `完成并${albumId ? '更新' : '创建'}公开图库` : '生成导出内容';
+        summary.textContent = count ? `${count} 张图片 · 图库公开并显示在发现页` : `仅导出角色资料${albumId ? '，不更改现有公开图库' : ''}`;
+        completeButton.textContent = busy ? '正在处理…' : count ? `${albumId ? '更新' : '创建'}公开图库并导出` : '生成导出内容';
         uploadButton.disabled = busy || wrongOwner();
         selectButton.disabled = busy || wrongOwner();
         completeButton.disabled = busy || wrongOwner();
@@ -259,7 +258,7 @@ export function initializeHostedWorkflow({ getProfile, getMedia, addMedia, onSav
                 }
                 const uploaded = Array.isArray(body) ? body[0] : null;
                 if (!uploaded?.src) throw new Error('无法确认上传结果。请先从“我的文件”查找这张图片，避免重复上传。');
-                const fileId = fileIdFromSrc(uploaded.src);
+                const fileId = fileIdFromUpload(uploaded);
                 const url = safeUrl(uploaded.publicUrl) || publicFileUrl(fileId, siteConfig);
                 addMedia({ fileId, url, title: file.name, moderationStatus: uploaded.moderationStatus || 'active' });
                 success += 1;
@@ -317,7 +316,7 @@ export function initializeHostedWorkflow({ getProfile, getMedia, addMedia, onSav
             }
             pickerCursor = body.nextCursor || null;
             pickerMore.hidden = !pickerCursor;
-            setStatus(pickerStatus, pickerList.children.length ? '勾选图片后添加，可继续搜索或加载更多。' : '没有找到图片，可调整搜索或直接上传。');
+            setStatus(pickerStatus, pickerList.children.length ? '' : '没有找到图片，可调整搜索或直接上传。');
         } catch (error) { if (error.name !== 'AbortError' && version === pickerVersion) setStatus(pickerStatus, error.message, 'bad'); }
         finally { if (version === pickerVersion) pickerSearch.disabled = false; }
     }
@@ -393,8 +392,8 @@ export function initializeHostedWorkflow({ getProfile, getMedia, addMedia, onSav
             await saveDraft();
             await onSaved(response);
             await saveDraft();
-            setStatus(completeStatus, '公开图库已保存，原稿与 EJS 导出内容已更新。', 'ok');
-            showStatus('角色资料和图库已保存，可以复制或下载最终内容。', 'ok');
+            setStatus(completeStatus, '公开图库已保存，可复制或下载。', 'ok');
+            showStatus('角色资料和公开图库已保存。', 'ok');
         } catch (error) {
             const message = saved ? `公开图库已经保存，但本机草稿或导出更新未完成。${error.message || '请保留当前页面后重试。'}` : error.message || '保存未完成，当前资料和图片已保留。';
             setStatus(completeStatus, message, 'bad'); showStatus(message, 'bad');

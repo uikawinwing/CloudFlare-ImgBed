@@ -38,6 +38,54 @@ export function createCharInfoVisualPack({ album, files, storedVisualConfig, req
     };
 }
 
+// The dedicated Album URL uses UUID identity and member order. The legacy
+// gallery view keeps its existing handle identity and selected main portrait.
+export function createCharInfoGalleryPack({ album, files, storedVisualConfig, requestUrl, stableIdentity = false }) {
+    const identity = requireCharInfoAlbumIdentity(stableIdentity ? { ...album, public_handle: album.id } : album);
+    const visualConfig = parsePublicVisualConfig(storedVisualConfig);
+    const sharedFiles = Array.isArray(files) ? files : [];
+    const orderedFiles = stableIdentity ? sharedFiles : orderGalleryFiles(sharedFiles, visualConfig?.mainFileId);
+    const gallery = orderedFiles.map(file => buildGalleryItem(file, visualConfig, requestUrl))
+        .filter(item => isViewerMediaUrl(item.sources[0]));
+    if (stableIdentity) {
+        // Historical filenames may contain characters forbidden by the v1
+        // parser. Normalize only the displayed title at this protocol boundary.
+        gallery.forEach((item, index) => {
+            item.title = String(item.title).replace(/[\x00-\x1f\x7f]/gu, ' ').trim() || `Media ${index + 1}`;
+        });
+    }
+    const visual = visualConfig ? buildVisualPayload(visualConfig, new Map(sharedFiles.map(file => [String(file.id), file])), requestUrl) : null;
+    const fallbackImage = gallery.map(item => item.sources[0]).find(source => isViewerMediaUrl(source, true)) || null;
+    let avatarThumbnail = isViewerMediaUrl(visual?.avatarUrl, true) ? visual.avatarUrl : fallbackImage;
+    let libraryThumbnail = isViewerMediaUrl(visual?.coverUrl, true) ? visual.coverUrl : fallbackImage;
+    if (stableIdentity) {
+        const avatarFile = sharedFiles.find(file => absoluteFileUrl(requestUrl, file.id, file.timestamp) === avatarThumbnail);
+        const libraryFile = sharedFiles.find(file => absoluteFileUrl(requestUrl, file.id, file.timestamp) === libraryThumbnail);
+        avatarThumbnail = avatarFile ? absoluteThumbnailUrl(requestUrl, avatarFile.id, 'avatar', thumbnailContentVersion(avatarFile)) : null;
+        libraryThumbnail = libraryFile ? absoluteThumbnailUrl(requestUrl, libraryFile.id, 'library', thumbnailContentVersion(libraryFile)) : null;
+    }
+    return {
+        format: 'char-info-gallery-pack',
+        version: 1,
+        ...identity,
+        avatarThumbnail,
+        libraryThumbnail,
+        gallery,
+    };
+}
+
+function isViewerMediaUrl(value, imageOnly = false) {
+    if (typeof value !== 'string') return false;
+    try {
+        const url = new URL(value);
+        if (url.protocol !== 'https:' || url.username || url.password) return false;
+        return /\.(png|jpe?g|gif|apng|webp|avif)$/iu.test(url.pathname)
+            || (!imageOnly && /\.(mp4|webm)$/iu.test(url.pathname));
+    } catch {
+        return false;
+    }
+}
+
 function orderGalleryFiles(files, mainFileId) {
     if (!mainFileId) return [...files];
     const index = files.findIndex(file => String(file.id) === mainFileId);

@@ -131,6 +131,32 @@ describe('Worker route adapter', () => {
         assert.strictEqual(pack.gallery[0].thumbnail, 'https://staging.example.test/thumb/users/master/portrait.png?v=11');
     });
 
+    it('serves the dedicated UUID gallery route and revalidates without the generic cache', async () => {
+        globalThis.caches = { default: { match() { throw new Error('Gallery must revalidate at its route'); } } };
+        const albumId = '12345678-1234-4234-8234-123456789abc';
+        const env = { img_d1: { prepare(sql) {
+            if (sql.includes('FROM albums a JOIN users u')) return { bind: id => {
+                assert.strictEqual(id, albumId);
+                return { first: async () => ({ id, char_info_character_name: '旅人' }) };
+            } };
+            if (sql.includes('FROM album_items ai')) return { bind: () => ({ all: async () => ({ results: [] }) }) };
+            if (sql.includes('FROM other_data')) return { bind: () => ({ first: async () => null }) };
+            throw new Error(`Unexpected SQL: ${sql}`);
+        } } };
+        const url = `https://staging.example.test/api/public/album-gallery/${albumId}`;
+        const read = headers => worker.fetch(new Request(url, { headers }), env, executionContext());
+        const first = await read();
+        assert.strictEqual(first.status, 200);
+        assert.strictEqual((await first.json()).packId, albumId);
+        assert.strictEqual((await read({ 'If-None-Match': first.headers.get('etag') })).status, 304);
+        const options = await worker.fetch(new Request(url, { method: 'OPTIONS' }), env, executionContext());
+        assert.strictEqual(options.status, 204);
+        assert.strictEqual(options.headers.get('Access-Control-Allow-Methods'), 'GET, OPTIONS');
+        for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+            assert.strictEqual((await worker.fetch(new Request(url, { method }), env, executionContext())).status, 405);
+        }
+    });
+
     it('preserves Gallery Pack ETag revalidation through the Worker adapter', async () => {
         let genericCacheMatches = 0;
         globalThis.caches = {

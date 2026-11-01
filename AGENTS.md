@@ -22,7 +22,8 @@
 | `frontend-dist/account/` | 手工维护的文件／图库工作区、侧栏、原生设置页及旧管理工具桥接。`vendor/` 是生成依赖，不能手改。 |
 | `frontend-dist/discover/` | 公开图库发现页。 |
 | `frontend-dist/theme.css` | 共享明暗主题与主色；账户页通过 `account/unified.css` 使用同一组变量。 |
-| `frontend-src/charinfo/` | CharInfo 编辑器源代码。修改这里，再运行对应构建；保留上游许可证和来源说明。 |
+| `frontend-dist/charinfo/index.html`、`frontend-dist/charinfo/editor.css` | 手工维护的 CharInfo 编辑器入口与页面样式，可以直接编辑；编辑器复用 `theme.css` 明暗主题，完整角色卡预览的深色变量只限定在 `#previewModal`。 |
+| `frontend-src/charinfo/` | CharInfo 的 `profile-core.js`、`source-document.js`、`hosted-workflow.js` 模块源码。修改这里，再运行对应构建生成或复制到 `frontend-dist/charinfo/`，不手改对应生成文件；保留上游许可证和来源说明。 |
 | `frontend-dist/js/`、`frontend-dist/css/` | 旧前端的哈希构建产物。可用于追踪旧行为，不直接修改压缩包来实现新功能。 |
 | `frontend-dist/legacy.html`、`frontend-dist/_redirects` | 旧登录和管理页面的承载与路由。不能只改新页面而忽略仍在使用的旧入口。 |
 | `deploy/worker/` | 路由与资源构建、环境配置生成和 Worker 部署配置。 |
@@ -53,6 +54,7 @@
 - CharInfo 默认按来源、图片、档案、配色、完成的顺序创建；原稿、完整 JSON 和未完成表单只保存在浏览器草稿，不自动写入公开故事或作者说明。有原稿时只更新受管理 EJS，保留其他正文和 JSON 字段；无原稿时只导出 EJS。原稿解析与上传／图库流程源码分别为 `frontend-src/charinfo/source-document.js`、`hosted-workflow.js`，由 CharInfo 构建脚本复制到发布目录，不直接修改对应生成文件。
 - CharInfo 完成保存通过 `POST /api/user/charinfo/complete` 原子写入图库、文件关联和展示配置；浏览器持久草稿 UUID 用于避免重复建立图库。只更新本人图库、关联本人可用文件；明确移出成员时保留原文件及未载入的旧成员。完成按钮必须说明图库公开并显示在发现页，上传前也须说明图片已有直链。上传、保存和载入草稿期间禁止切换角色，每次写入前重新核对当前登录身份。
 - `/api/public/charinfo/{albumId}` 默认仍返回编辑器使用的视觉资料包；`?view=gallery` 返回 EJS 查看器要求的远程图库协议，使用稳定图库 ID，保留主图排序和隐藏设置。两个视图分别验证缓存；只在远程图库协议输出处过滤不支持的媒体后缀，不删除原图库文件。
+- 新的 NPC 远程引用使用 `/api/public/album-gallery/{albumId}`，返回 `char-info-gallery-pack` v1；`packId`、`profileId` 均为相册 UUID，按相册成员顺序输出并保留隐藏设置，不依赖公开用户名或 slug。该路由自行校验 ETag，不能交给通用页面缓存绕过校验；旧 CharInfo 视图与 slug 分享接口继续保留。接入与兼容边界见 `docs/charinfo-album-integration.md`。
 
 ## 数据与认证边界
 
