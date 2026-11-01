@@ -342,9 +342,9 @@ function albumRow(album) {
     ? `<video src="${fileUrl(cover)}" muted loop playsinline disablepictureinpicture preload="metadata"></video>`
     : `<img src="${escapeHtml(previewUrl(cover))}" alt="${escapeHtml(cover.file_name || album.name)}" loading="lazy" decoding="async"${useSavedFocus ? ` style="object-position:${focus.x}% ${focus.y}%"` : ''}>`;
   const canShare = Boolean(state.user.publicHandle);
-  const canShareCharInfo = canShare && Boolean(album.charInfoCharacterName);
+  const canShareCharInfo = Boolean(album.charInfoCharacterName);
   const shareUrl = canShare ? `${location.origin}/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
-  const feedUrl = canShareCharInfo ? `${location.origin}/api/public/charinfo/${encodeURIComponent(album.id)}` : '';
+  const feedUrl = canShareCharInfo ? `${location.origin}/api/public/album-gallery/${encodeURIComponent(album.id)}` : '';
   return `<article class="album-row" data-album-id="${escapeHtml(album.id)}">
     <a class="album-cover" href="/account/?view=albums&album=${encodeURIComponent(album.id)}" aria-label="打开图库 ${escapeHtml(album.name)}">${coverMedia}</a>
     <div class="album-body">
@@ -356,7 +356,7 @@ function albumRow(album) {
         <div class="album-actions">
           <p class="album-visibility">${state.user.publicHandle ? `会显示在发现页 · 可通过分享链接访问${album.charInfoCharacterName ? ` · CharInfo：${escapeHtml(album.charInfoCharacterName)}` : ' · CharInfo 未配置角色全名'}` : '设置公开名称后，图库会显示在发现页并可分享'}</p>
           ${canShare ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : ''}
-          ${canShareCharInfo ? `<button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制 CharInfo 链接</button>` : ''}
+          ${canShareCharInfo ? `<button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制远程图库链接</button>` : ''}
           ${album.charInfoCharacterName ? `<a class="button primary" href="/charinfo/?album=${encodeURIComponent(album.id)}">打开 Creator</a>` : '<button class="button primary" type="button" data-edit-album>配置 CharInfo</button>'}
           <button class="button danger" type="button" data-delete-album>删除图库</button>
         </div>
@@ -891,7 +891,7 @@ function albumDetailMarkup(album) {
   return `<div class="album-detail" data-album-id="${escapeHtml(album.id)}">
     <a class="album-back" href="/account/?view=albums">← 所有图库</a>
     <div class="workspace-section-head"><div><h2>${escapeHtml(album.name)}</h2><p>${items.length} 个文件${album.description ? ` · ${escapeHtml(album.description)}` : ''}</p></div><div class="album-detail-actions"><button class="button" type="button" data-edit-album>编辑信息</button><button class="button primary" id="addAlbumFiles" type="button">${icons.plus}添加已有文件</button></div></div>
-    <div class="album-detail-tools">${shareUrl ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : '<button class="button" id="setPublicHandle" type="button">设置公开名称以分享</button>'}${shareUrl && album.charInfoCharacterName ? `<button class="button" type="button" data-copy="${escapeHtml(`${location.origin}/api/public/charinfo/${encodeURIComponent(album.id)}`)}">复制 CharInfo 链接</button>` : ''}${album.charInfoCharacterName ? `<a class="button primary" href="/charinfo/?album=${encodeURIComponent(album.id)}">打开 Creator</a>` : ''}${coverFileId ? '<button class="button ghost" type="button" data-clear-cover>恢复自动封面</button>' : ''}<button class="button ghost album-delete" type="button" data-delete-album>删除图库</button></div>
+    <div class="album-detail-tools">${shareUrl ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : '<button class="button" id="setPublicHandle" type="button">设置公开名称以分享</button>'}${album.charInfoCharacterName ? `<button class="button" type="button" data-copy="${escapeHtml(`${location.origin}/api/public/album-gallery/${encodeURIComponent(album.id)}`)}">复制远程图库链接</button>` : ''}${album.charInfoCharacterName ? `<a class="button primary" href="/charinfo/?album=${encodeURIComponent(album.id)}">打开 Creator</a>` : ''}${coverFileId ? '<button class="button ghost" type="button" data-clear-cover>恢复自动封面</button>' : ''}<button class="button ghost album-delete" type="button" data-delete-album>删除图库</button></div>
     <p class="album-content-hint">使用上下箭头调整文件顺序；移出图库会保留原文件。</p>
     <div class="album-items">${rows || '<div class="empty-state compact"><span class="empty-icon">' + icons.folder + '</span><h3>图库里还没有文件</h3><p>点击“添加已有文件”，直接选择要加入的图片或视频。</p></div>'}</div>
   </div>`;

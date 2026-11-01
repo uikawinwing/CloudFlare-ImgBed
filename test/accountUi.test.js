@@ -92,11 +92,11 @@ describe('account media and album UI', () => {
     assert.doesNotMatch(previewStyles, /\.media-frame video\s*\{/);
   });
 
-  it('keeps sharing buttons available when the owner has a handle, regardless of discover visibility', () => {
+  it('keeps public sharing tied to the handle but offers UUID gallery links independently', () => {
     assert.match(source, /const canShare = Boolean\(state\.user\.publicHandle\)/);
-    assert.match(source, /const canShareCharInfo = canShare && Boolean\(album\.charInfoCharacterName\)/);
+    assert.match(source, /const canShareCharInfo = Boolean\(album\.charInfoCharacterName\)/);
     assert.doesNotMatch(source, /const canShare = album\.visibility === 'public'/);
-    assert.match(source, /\/api\/public\/charinfo\/\$\{encodeURIComponent\(album\.id\)\}/);
+    assert.match(source, /\/api\/public\/album-gallery\/\$\{encodeURIComponent\(album\.id\)\}/);
   });
 
   it('renders paginated albums returned by Discover', () => {

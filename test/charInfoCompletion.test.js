@@ -56,7 +56,7 @@ describe('CharInfo workflow completion', () => {
         assert.equal(response.status, 200);
         const result = await response.json();
         assert.deepEqual(result.album, { id: draftId, name: '旅行者', slug: `character-${draftId}` });
-        assert.equal(result.remoteGalleryUrl, `https://example.test/api/public/charinfo/${draftId}?view=gallery`);
+        assert.equal(result.remoteGalleryUrl, `https://example.test/api/public/album-gallery/${draftId}`);
         assert.equal(result.albumUrl, `https://example.test/gallery/master/character-${draftId}`);
         assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM album_items').get().n, 2);
         assert.equal(db.db.prepare("SELECT visibility FROM files WHERE id = 'first.png'").get().visibility, 'private');

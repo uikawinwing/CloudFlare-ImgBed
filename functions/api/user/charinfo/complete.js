@@ -132,7 +132,7 @@ export async function onRequestPost(context) {
 
     return json({
         album: { id: albumId, name: characterName, slug },
-        remoteGalleryUrl: publicUrl(request.url, `/api/public/charinfo/${encodeURIComponent(albumId)}?view=gallery`),
+        remoteGalleryUrl: publicUrl(request.url, `/api/public/album-gallery/${encodeURIComponent(albumId)}`),
         albumUrl: publicUrl(request.url, `/gallery/${encodeURIComponent(user.public_handle)}/${encodeURIComponent(slug)}`),
         config,
     });

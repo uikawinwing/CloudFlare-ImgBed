@@ -66,7 +66,7 @@
 | 分类 | 实际证据与影响面 |
 | --- | --- |
 | 仍在使用 | `frontend-dist/charinfo/index.html` 的 `loadAlbumProfileFromQuery` 先读 `/api/user/albums/{id}/charinfo`，只读回退再读 `/api/public/charinfo/{id}`；账户页 `account/account.js` 仍生成视觉包链接和 Creator 编辑入口。删除任一路由会破坏当前网页载入。 |
-| 仍在使用 | `/api/user/charinfo/complete` 写 `other_data` 的 `charinfo.visual:{albumId}`（type 为 `charinfo_visual`），返回旧 `?view=gallery` URL；`frontend-src/charinfo/hosted-workflow.js` 消费完成接口。`charInfoVisualConfig.js` 负责校验、规范化、存储键；`charInfoVisualPack.js` 被旧公开视觉包和两个 Gallery 视图复用。 |
+| 仍在使用 | `/api/user/charinfo/complete` 写 `other_data` 的 `charinfo.visual:{albumId}`（type 为 `charinfo_visual`），返回新 `/api/public/album-gallery/{albumId}` URL；`frontend-src/charinfo/hosted-workflow.js` 消费完成接口。`charInfoVisualConfig.js` 负责校验、规范化、存储键；`charInfoVisualPack.js` 被旧公开视觉包和两个 Gallery 视图复用。 |
 | 仍在使用 | 默认 `/api/public/charinfo/{id}` 继续返回 `char-info-visual-pack`；`?view=gallery` 保持现有 owner handle 的 `packId`、UUID 的 `profileId`、主图置前和隐藏设置。新引用统一使用独立 `/api/public/album-gallery/{id}`，不向 ST 覆盖文本或 metadata。 |
 | 仍在使用 | `/api/public/gallery/{ownerSlug}/{albumSlug}` 继续支持 CharInfo 与普通 `imgbed-gallery` 相册，输出形状不变。欢迎页、侧栏仍链接 `/charinfo/`；`worldbookUi`、`charInfoStableUrl`、`charInfoVisualConfig`、`charInfoCompletion` 和 `gallerySharing` 测试覆盖现有路径。 |
 | 仅为兼容保留 | `frontend-dist/_redirects` 将 `/charinfo/worldbook` 和尾斜杠形式重定向到现 Creator。旧 CharInfo 配置 PUT／DELETE 路由仍可维护历史展示配置；当前网页读取它们，保存则走原子完成接口。外部调用者数量未知，不能据此删除写接口。 |
