@@ -55,6 +55,10 @@ import * as apiAuthMe from '../../functions/api/auth/me.js';
 import * as apiAuthResetAuth from '../../functions/api/auth/resetAuth.js';
 import * as apiAuthSessionCheck from '../../functions/api/auth/sessionCheck.js';
 import * as apiBingWallpaper_index from '../../functions/api/bing/wallpaper/index.js';
+import * as apiCharinfoUploadAuth from '../../functions/api/charinfo-upload/auth.js';
+import * as apiCharinfoUploadFile from '../../functions/api/charinfo-upload/file.js';
+import * as apiCharinfoUploadGallery from '../../functions/api/charinfo-upload/gallery.js';
+import * as apiCharinfoUploadPair from '../../functions/api/charinfo-upload/pair.js';
 import * as apiManageApiTokens from '../../functions/api/manage/apiTokens.js';
 import * as apiManageList from '../../functions/api/manage/list.js';
 import * as apiManageQuota from '../../functions/api/manage/quota.js';
@@ -138,6 +142,10 @@ const routes = [
     { path: '/api/auth/resetAuth', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"resetAuth"}], module: apiAuthResetAuth, middlewares: [mw_api] },
     { path: '/api/auth/sessionCheck', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"sessionCheck"}], module: apiAuthSessionCheck, middlewares: [mw_api] },
     { path: '/api/bing/wallpaper', segments: [{"type":"static","value":"api"},{"type":"static","value":"bing"},{"type":"static","value":"wallpaper"}], module: apiBingWallpaper_index, middlewares: [mw_api] },
+    { path: '/api/charinfo-upload/auth', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"auth"}], module: apiCharinfoUploadAuth, middlewares: [mw_api] },
+    { path: '/api/charinfo-upload/file', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"file"}], module: apiCharinfoUploadFile, middlewares: [mw_api] },
+    { path: '/api/charinfo-upload/gallery', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"gallery"}], module: apiCharinfoUploadGallery, middlewares: [mw_api] },
+    { path: '/api/charinfo-upload/pair', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"pair"}], module: apiCharinfoUploadPair, middlewares: [mw_api] },
     { path: '/api/manage/apiTokens', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"apiTokens"}], module: apiManageApiTokens, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/list', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"list"}], module: apiManageList, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/quota', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"quota"}], module: apiManageQuota, middlewares: [mw_api, mw_api_manage] },

@@ -4,7 +4,7 @@ import {
     createResponse, getUploadIp, getIPAddress, resolveFileExt,
     moderateContent, moderateContentDetailed, purgeCDNCache, isBlockedUploadIp, buildUniqueFileId, endUpload, getImageDimensions
 } from "./uploadTools";
-import { resolveStorageFileName } from "./uploadNaming.js";
+import { isOwnedCanonicalFileId, resolveStorageFileName } from "./uploadNaming.js";
 import { initializeChunkedUpload, handleChunkUpload, uploadLargeFileToTelegram, handleCleanupRequest } from "./chunkUpload";
 import { handleChunkMerge } from "./chunkMerge";
 import { TelegramAPI } from "../utils/storage/telegramAPI";
@@ -112,6 +112,31 @@ export async function onRequest(context) {  // Contents of context object
         throw error;
     }
 }
+
+// Internal only: the caller owns durable quota reservation and a fixed file identity.
+// No HTTP parameter can enable this path.
+export async function uploadPreparedCharInfoFile({ env, identity, file, fileId, requestUrl, target, timestamp, authorize, beforeUpload }) {
+    if (!isOwnedCanonicalFileId(identity, fileId)) throw new Error('Owned canonical file id is required');
+    const pending = [];
+    const context = {
+        env, discordIdentity: identity, url: new URL(requestUrl),
+        request: new Request(requestUrl, { method: 'POST' }),
+        securityConfig: await fetchSecurityConfig(env),
+        uploadConfig: await fetchUploadConfig(env),
+        preparedUpload: { fileId, target, timestamp, beforeUpload, noRetries: true },
+        waitUntil: promise => pending.push(promise),
+    };
+    const form = new FormData();
+    form.set('file', file, fileId.split('/').pop());
+    try {
+        await authorize();
+        const response = await processFileUpload(context, form);
+        await authorize();
+        return response;
+    } finally {
+        await Promise.allSettled(pending);
+    }
+}
 // 通用文件上传处理函数
 async function processFileUpload(context, formdata = null) {
     const { request, url } = context;
@@ -123,7 +148,7 @@ async function processFileUpload(context, formdata = null) {
     context.formdata = formdata;
 
     const pageConfig = await fetchPageConfig(context.env);
-    const uploadTarget = resolveUploadTarget(pageConfig);
+    const uploadTarget = context.preparedUpload?.target || resolveUploadTarget(pageConfig);
     const configuredChannel = String(pageConfig?.config?.find((item) => item?.id === 'defaultUploadChannel')?.value || 'telegram').trim().toLowerCase();
     if (configuredChannel === 'huggingface') {
         return createResponse('Error: Hugging Face uploads are disabled', { status: 503 });
@@ -165,7 +190,7 @@ async function processFileUpload(context, formdata = null) {
     context.specifiedChannelName = urlParamChannelName || null;
 
     // 获取文件信息
-    const time = new Date().getTime();
+    const time = context.preparedUpload?.timestamp || new Date().getTime();
     const file = formdata.get('file');
     if (!file) {
         return createResponse('Error: No file provided', { status: 400 });
@@ -185,7 +210,7 @@ async function processFileUpload(context, formdata = null) {
             if (!await matchesAllowedFileSignature(file, fileType)) {
                 return createResponse('Error: File content does not match an allowed format', { status: 400 });
             }
-            context.quotaReservedBytes = await assertUploadAllowed(context.env, context.discordIdentity, file);
+            if (!context.preparedUpload) context.quotaReservedBytes = await assertUploadAllowed(context.env, context.discordIdentity, file);
         } catch (error) {
             return createResponse(`Error: ${error.message}`, { status: 400 });
         }
@@ -240,7 +265,7 @@ async function processFileUpload(context, formdata = null) {
     const fileExt = resolveFileExt(fileName, fileType);
 
     // 构建文件ID
-    const fullId = await buildUniqueFileId(context, fileName, fileType);
+    const fullId = context.preparedUpload?.fileId || await buildUniqueFileId(context, fileName, fileType);
     const storageFileName = resolveStorageFileName(context, fullId, fileName);
     metadata.FileName = storageFileName;
 
@@ -261,6 +286,7 @@ async function processFileUpload(context, formdata = null) {
     /* ====================================不同渠道上传======================================= */
     // 上传失败直接返回，避免文件在未经明确配置的后端中落库。
     let response;
+    await context.preparedUpload?.beforeUpload?.(uploadTarget);
     if (uploadChannel === 'CloudflareR2') {
         response = await uploadFileToCloudflareR2(context, fullId, metadata, returnLink);
     } else if (uploadChannel === 'Discord') {

@@ -25,6 +25,11 @@ binding = "THUMBNAILS"
 bucket_name = "imgbed-local-thumbnails"
 remote = false
 
+[[r2_buckets]]
+binding = "CHARINFO_UPLOAD_STAGING"
+bucket_name = "imgbed-local-charinfo-upload-staging"
+remote = false
+
 [[kv_namespaces]]
 binding = "img_url"
 id = "00000000000000000000000000000000"

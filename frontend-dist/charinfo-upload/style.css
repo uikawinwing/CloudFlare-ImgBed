@@ -1,0 +1,12 @@
+.upload-authorization { width: min(640px, calc(100% - 40px)); margin: 48px auto; }
+.upload-authorization h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.3; }
+.upload-authorization p { color: var(--app-muted); line-height: 1.75; }
+.upload-authorization dl { margin-block: 28px; padding-block: 20px; border-block: 1px solid var(--app-border); }
+.upload-authorization dt { margin-top: 14px; font-size: 13px; color: var(--app-muted); }
+.upload-authorization dt:first-child { margin-top: 0; }
+.upload-authorization dd { margin: 5px 0 0; overflow-wrap: anywhere; font-weight: 650; }
+.connection-status { min-height: 5.25em; }
+.authorization-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.authorization-actions button { cursor: pointer; min-height: 44px; }
+.authorization-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.authorization-note { margin-top: 28px; font-size: 13px; }

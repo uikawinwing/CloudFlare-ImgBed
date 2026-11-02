@@ -23,6 +23,7 @@
 | `frontend-dist/discover/` | 公开图库发现页。 |
 | `frontend-dist/theme.css` | 共享明暗主题与主色；账户页通过 `account/unified.css` 使用同一组变量。 |
 | `frontend-dist/charinfo/index.html`、`retired.js`、`retired.css` | 手工维护的旧编辑器退役说明与只读浏览器草稿下载入口；不重新提供角色／世界书编辑。旧 `editor.css` 和编辑器模块仅为历史兼容保留，不由该页加载。 |
+| `frontend-dist/charinfo-upload/` | ST 编辑器内上传的隐藏 iframe 与顶层明确授权页；只管理媒体授权，不提供角色编辑。协议见 `docs/charinfo-upload.md`。 |
 | `frontend-src/charinfo/` | 历史 CharInfo 核心、原稿及上传模块源码，为兼容与序列化测试保留；需要修改这些模块时再显式构建，不手改对应生成文件，保留上游许可证和来源说明。 |
 | `frontend-dist/js/`、`frontend-dist/css/` | 旧前端的哈希构建产物。可用于追踪旧行为，不直接修改压缩包来实现新功能。 |
 | `frontend-dist/legacy.html`、`frontend-dist/_redirects` | 旧登录和管理页面的承载与路由。不能只改新页面而忽略仍在使用的旧入口。 |
@@ -56,11 +57,14 @@
 - `/api/public/charinfo/{albumId}` 默认仍返回编辑器使用的视觉资料包；`?view=gallery` 返回 EJS 查看器要求的远程图库协议，使用稳定图库 ID，保留主图排序和隐藏设置。两个视图分别验证缓存；只在远程图库协议输出处过滤不支持的媒体后缀，不删除原图库文件。
 - 新的 NPC 远程引用使用 `/api/public/album-gallery/{albumId}`，返回 `char-info-gallery-pack` v1；`packId`、`profileId` 均为相册 UUID，按相册成员顺序输出并保留隐藏设置，不依赖公开用户名或 slug。该路由自行校验 ETag，不能交给通用页面缓存绕过校验；旧 CharInfo 视图与 slug 分享接口继续保留。接入与兼容边界见 `docs/charinfo-album-integration.md`。
 - CharInfo Manager 的弹窗连接复用 `/account/`，v1 协议见 `docs/charinfo-popup-bridge.md`。允许任意规范 HTTP／HTTPS ST 来源，无逐人白名单；查询来源仅作为声明，握手必须匹配真实 opener、事件来源、nonce 和版本，后续只向绑定来源发送公开 UUID 链接。导航、刷新和 Discord 登录返回保留连接上下文，刷新后重新握手；短期记录绑定来源与账号，成功／取消／过期后不能重放。选择前核对本人归属及有效公开图库包，不交换认证信息或新增跨来源特权操作。
+- 新编辑器内上传使用独立 `charinfo-imgbed-upload` v1 协议，不自动回退旧窗口。iframe 验证真实父窗口／来源，授权页通过同源内部挑战匹配实际 iframe，并在用户明确同意后取得最小媒体权限。公开连接／请求／会话／账号 ID 都不是凭证；私有证明仅留在 ImgBed。Cookie、普通 API 的 CSRF/CORS 均不放宽。
+- 上传私有配对、24 小时绝对授权、12 分钟内部会话及 `(真实账号,requestId)` 不可变操作账本，直接在 D1 `other_data` 保存并条件更新。`functions/utils/charinfoUploadAuth.js` 与 `charinfoUploadOperations.js` 是实现入口；正式文件仍走既有渠道。完整暂存预检后才预留一次配额，最终成员与结果须同事务检查授权和完整旧快照。Telegram／Discord 上游结果不确定时禁止自动重传；取消不删除原文件。
 
 ## 数据与认证边界
 
 - 数据库入口是 `functions/utils/databaseAdapter.js`。身份、文件归属和图库以 D1 为准；配置通过现有适配器读取，保留既有 KV／D1 数据路径，不自行复制或迁移数据。
 - 文件存储、私有缩略图存储和 Images 绑定有不同职责。不要把私有文件或缩略图桶改成公开来绕过访问问题。
+- `CHARINFO_UPLOAD_STAGING` 是独立的私有原始文件暂存绑定，不复用文件或缩略图桶，不开启公开域名／r2.dev。staging 发布要求 `STAGING_CHARINFO_UPLOAD_STAGING_BUCKET_NAME`；配置临时对象生命周期，不自动删除正式文件或恢复账本。新资源需明确授权后创建，不能将缺少绑定时的本地测试当作线上上传可用。
 - 管理接口权限沿用 `functions/api/manage/_middleware.js` 与共享认证逻辑；写接口同时遵循现有跨站请求校验。
 - Discord 登录需要运行时同时存在 `DISCORD_CLIENT_ID` 和 `DISCORD_CLIENT_SECRET`，并使用正确的 `DISCORD_CALLBACK_URL`。缺少前两者会返回 `Discord OAuth is not configured`。
 - Discord 已配置时，旧 `login`／`adminLogin` 不再签发会话，认证与 `sessionCheck` 都不得接受没有 Discord 身份的旧会话。API Token 仍按权限用于管理接口，不能替代新版上传所需的 Discord 身份；不要重新引入空账号密码直接获取管理员会话的行为。

@@ -68,6 +68,8 @@ Character profiles are authored and saved only in SillyTavern's CharInfo Manager
 
 Album management and popup selection reuse the account workspace's existing controls, dialogs and feedback. Ordinary action buttons retain their content width on mobile. The album identity field remains minimal association metadata required by the gallery feed, not a profile form. Explain that connecting returns a public gallery reference and that the user must preview and save in ST. Preserve the private same-origin account operations and server ownership checks; manual URL copy remains available when a browser cannot retain the opener.
 
+The editor upload authorization page at `/charinfo-upload/connect` reuses public navigation, theme tokens and a single reading column. It displays the server-verified ST origin and current account before enabling explicit consent. Explain upload/gallery public-link access, the limited media permissions, the fixed 24-hour deadline and revocation without deleting files. Keep long origins wrapping and all actions keyboard accessible. The companion iframe is hidden transport, not another profile editor; errors keep the user's draft in ST and never silently switch upload methods.
+
 ## Do's and Don'ts
 
 Do explain what an administrator controls in plain Chinese. Do preserve clear loading, error, and empty states. Do not add a second design-token system, store sensitive settings in browser storage, or expose retired storage providers as configurable options.

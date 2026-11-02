@@ -1051,6 +1051,7 @@ export async function uploadLargeFileToTelegram(context, file, fullId, metadata,
 
             // 上传分片（带重试机制）
             const tgProxyUrl = tgChannel.proxyUrl || '';
+            await context.preparedUpload?.beforeUpload?.({ channel: 'telegram', channelName: tgChannel.name });
             const chunkInfo = await uploadChunkToTelegramWithRetry(
                 tgBotToken,
                 tgChatId,
@@ -1058,7 +1059,8 @@ export async function uploadLargeFileToTelegram(context, file, fullId, metadata,
                 chunkBlob,
                 chunkFileName,
                 i,
-                totalChunks
+                totalChunks,
+                context.preparedUpload?.noRetries ? 1 : 2
             );
 
             if (!chunkInfo) {
