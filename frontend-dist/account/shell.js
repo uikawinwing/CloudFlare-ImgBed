@@ -51,7 +51,6 @@ function buildNavigation(role) {
   const member = [
     { key: 'upload', label: '上传', href: '/studio', icon: 'upload' },
     { key: 'files', label: '我的文件', href: accountHref('files'), icon: 'files' },
-    { key: 'charinfo', label: 'CharInfo Creator', href: '/charinfo/', icon: 'gallery' },
   ];
   const staff = [
     { key: 'content', label: '内容管理', href: accountHref('admin', 'content'), icon: 'shield' },

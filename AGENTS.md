@@ -22,8 +22,8 @@
 | `frontend-dist/account/` | 手工维护的文件／图库工作区、侧栏、原生设置页及旧管理工具桥接。`vendor/` 是生成依赖，不能手改。 |
 | `frontend-dist/discover/` | 公开图库发现页。 |
 | `frontend-dist/theme.css` | 共享明暗主题与主色；账户页通过 `account/unified.css` 使用同一组变量。 |
-| `frontend-dist/charinfo/index.html`、`frontend-dist/charinfo/editor.css` | 手工维护的 CharInfo 编辑器入口与页面样式，可以直接编辑；编辑器复用 `theme.css` 明暗主题，完整角色卡预览的深色变量只限定在 `#previewModal`。 |
-| `frontend-src/charinfo/` | CharInfo 的 `profile-core.js`、`source-document.js`、`hosted-workflow.js` 模块源码。修改这里，再运行对应构建生成或复制到 `frontend-dist/charinfo/`，不手改对应生成文件；保留上游许可证和来源说明。 |
+| `frontend-dist/charinfo/index.html`、`retired.js`、`retired.css` | 手工维护的旧编辑器退役说明与只读浏览器草稿下载入口；不重新提供角色／世界书编辑。旧 `editor.css` 和编辑器模块仅为历史兼容保留，不由该页加载。 |
+| `frontend-src/charinfo/` | 历史 CharInfo 核心、原稿及上传模块源码，为兼容与序列化测试保留；需要修改这些模块时再显式构建，不手改对应生成文件，保留上游许可证和来源说明。 |
 | `frontend-dist/js/`、`frontend-dist/css/` | 旧前端的哈希构建产物。可用于追踪旧行为，不直接修改压缩包来实现新功能。 |
 | `frontend-dist/legacy.html`、`frontend-dist/_redirects` | 旧登录和管理页面的承载与路由。不能只改新页面而忽略仍在使用的旧入口。 |
 | `deploy/worker/` | 路由与资源构建、环境配置生成和 Worker 部署配置。 |
@@ -43,7 +43,7 @@
 - 共享站点配置由 `frontend-dist/site-config.js` 读取并应用，`site.js` 启动；动态页面标题和公开文件复制链接使用共享接口，不能重新写死品牌或忽略 URL 前缀。保存后刷新共享缓存与当前页面显示，失败时保留已保存事实并提示刷新。
 - 默认品牌使用 `frontend-dist/brand/charatopia-wordmark.svg` 矢量英文字标，不带中文副标；PNG 仅保留为字形来源，不用于运行时显示。欢迎页、Discover、侧栏及欢迎标题复用 `theme.css` 的主题色遮罩；保留标题语义和无障碍名称。自定义站点名称／Logo 仍通过共享配置生效，不能强制覆盖管理员设置。
 - 欢迎页是访客入口，已登录用户进入文件工作区。壁纸配置请求不能阻塞认证跳转。
-- 欢迎页采用透明顶栏、左下文案和细线分隔，主入口为 Discover 与 CharInfo Creator；登录和上传保留在导航中。欢迎页继续使用共享矢量 Logo、自定义品牌配置和现有独立壁纸播放器。
+- 欢迎页采用透明顶栏、左下文案和细线分隔，主入口为 Discover 与我的图库；登录和上传保留在导航中。欢迎页继续使用共享矢量 Logo、自定义品牌配置和现有独立壁纸播放器。
 - 欢迎页壁纸使用独立的 `welcomeWallpaper` 配置；旧上传页／管理页壁纸不是同一队列。入口为 `/account/?tool=system-wallpaper`。
 - 壁纸保存复用 `/api/manage/sysConfig/page` 的 PATCH；公开读取经 `/api/userConfig`。只更新该配置，保留其他设置及公告状态。
 - 旧“网站设置”使用通用文本控件：管理配置中的壁纸值应提供有效 JSON 字符串；公开接口再解析为对象，不能让旧界面显示 `[object Object]`。
@@ -51,10 +51,11 @@
 - 欢迎页与工作区复用 `frontend-dist/wallpaper-player.js`，但各自配置独立。工作区的旧 `bkInterval` 单位仍是毫秒；工作区内部切换到管理视图时正确更换管理壁纸并清理旧实例。
 - 文件归属、可见性和管理权限由服务端判断，不能只隐藏前端按钮。删除图库或移出图库不能顺带删除原文件。
 - 新上传文件沿用 `users/{owner}/{UUID}.{ext}` 的唯一 ID，并以其末段作为保存的文件名；历史文件不批量改名。文件详情中的标签用于上传者整理与搜索，文件列表及图库详情共用编辑入口。标签写入通过 `PATCH /api/user/files` 核对归属并只增量更新标签；普通搜索包含标签，`#标签` 为精确筛选，不向公开接口添加标签输出。
-- CharInfo 默认按来源、图片、档案、配色、完成的顺序创建；原稿、完整 JSON 和未完成表单只保存在浏览器草稿，不自动写入公开故事或作者说明。有原稿时只更新受管理 EJS，保留其他正文和 JSON 字段；无原稿时只导出 EJS。原稿解析与上传／图库流程源码分别为 `frontend-src/charinfo/source-document.js`、`hosted-workflow.js`，由 CharInfo 构建脚本复制到发布目录，不直接修改对应生成文件。
-- CharInfo 完成保存通过 `POST /api/user/charinfo/complete` 原子写入图库、文件关联和展示配置；浏览器持久草稿 UUID 用于避免重复建立图库。只更新本人图库、关联本人可用文件；明确移出成员时保留原文件及未载入的旧成员。完成按钮必须说明图库公开并显示在发现页，上传前也须说明图片已有直链。上传、保存和载入草稿期间禁止切换角色，每次写入前重新核对当前登录身份。
+- 角色文本、档案、配色、语录、metadata、世界书／EJS 及聊天保存只在 ST 的 CharInfo Manager 编辑。ImgBed 仅管理文件和图库，保留 `charInfoCharacterName` 作为远程图库身份关联字段，不重新提供角色编辑器。`/charinfo/`、旧 worldbook 别名和 album 深链只能打开退役说明，旧 IndexedDB 草稿仅在显式点击后只读下载，不清空或自动上传。
+- `POST /api/user/charinfo/complete` 及旧图库 CharInfo 配置接口仅为历史兼容保留，不因网页退役删除。保持本人归属、原子保存及保留原文件等既有约束，不删除 `charinfo.visual:{albumId}` 数据或为本次退役执行迁移。
 - `/api/public/charinfo/{albumId}` 默认仍返回编辑器使用的视觉资料包；`?view=gallery` 返回 EJS 查看器要求的远程图库协议，使用稳定图库 ID，保留主图排序和隐藏设置。两个视图分别验证缓存；只在远程图库协议输出处过滤不支持的媒体后缀，不删除原图库文件。
 - 新的 NPC 远程引用使用 `/api/public/album-gallery/{albumId}`，返回 `char-info-gallery-pack` v1；`packId`、`profileId` 均为相册 UUID，按相册成员顺序输出并保留隐藏设置，不依赖公开用户名或 slug。该路由自行校验 ETag，不能交给通用页面缓存绕过校验；旧 CharInfo 视图与 slug 分享接口继续保留。接入与兼容边界见 `docs/charinfo-album-integration.md`。
+- CharInfo Manager 的弹窗连接复用 `/account/`，v1 协议见 `docs/charinfo-popup-bridge.md`。允许任意规范 HTTP／HTTPS ST 来源，无逐人白名单；查询来源仅作为声明，握手必须匹配真实 opener、事件来源、nonce 和版本，后续只向绑定来源发送公开 UUID 链接。导航、刷新和 Discord 登录返回保留连接上下文，刷新后重新握手；短期记录绑定来源与账号，成功／取消／过期后不能重放。选择前核对本人归属及有效公开图库包，不交换认证信息或新增跨来源特权操作。
 
 ## 数据与认证边界
 
@@ -100,8 +101,8 @@ npm start
 ```
 
 - `npm start` 使用 `deploy/worker/wrangler.local.toml`，默认端口 8787，数据保存在 `data/`，绑定使用本地模拟。
-- `npm run build:worker` 会生成 `deploy/worker/index.js`，并构建 CharInfo 核心与复制视频依赖。它不是通用前端编译器。
-- CharInfo 单独构建：`node deploy/worker/build-charinfo-editor.js`；视频依赖复制：`node deploy/worker/build-video-compression.js`。
+- `npm run build:worker` 会生成 `deploy/worker/index.js` 并复制视频依赖，不再构建退役的 CharInfo 编辑器；它不是通用前端编译器。
+- 历史 CharInfo 模块可显式构建：`node deploy/worker/build-charinfo-editor.js`，不会恢复编辑器入口；视频依赖复制：`node deploy/worker/build-video-compression.js`。
 - `deploy/worker/index.js`、`frontend-dist/charinfo/profile-core.js` 及账户页 `vendor/` 依赖应由相应脚本生成。测试也可能触发部分构建，运行后检查差异，不盲目回退。
 - 相关测试可用 `npx mocha test/accountUi.test.js --reporter dot` 等明确文件命令；新增测试要能捕捉实际行为，避免只复制实现。
 - 无完整运行环境时，可做本地静态预览或隔离接口测试，但必须说明模拟范围。静态服务器不能验证真实登录、权限、数据库保存或 Worker 路由。

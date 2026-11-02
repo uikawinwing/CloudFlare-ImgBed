@@ -16,7 +16,6 @@ import { readdirSync, statSync, readFileSync, writeFileSync } from 'fs';
 import { join, relative, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import './build-video-compression.js';
-import './build-charinfo-editor.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '../..');

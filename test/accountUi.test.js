@@ -6,7 +6,6 @@ const source = readFileSync(new URL('../frontend-dist/account/account.js', impor
 const styles = readFileSync(new URL('../frontend-dist/account/account.css', import.meta.url), 'utf8');
 const shellSource = readFileSync(new URL('../frontend-dist/account/shell.js', import.meta.url), 'utf8');
 const uploadSource = readFileSync(new URL('../frontend-dist/account/upload-in-files.js', import.meta.url), 'utf8');
-const creatorSource = readFileSync(new URL('../frontend-dist/charinfo/index.html', import.meta.url), 'utf8');
 const discoverSource = readFileSync(new URL('../frontend-dist/discover/discover.js', import.meta.url), 'utf8');
 const welcomeSource = readFileSync(new URL('../frontend-dist/welcome/welcome.js', import.meta.url), 'utf8');
 const welcomePage = readFileSync(new URL('../frontend-dist/index.html', import.meta.url), 'utf8');
@@ -15,10 +14,11 @@ const accountPage = readFileSync(new URL('../frontend-dist/account/index.html', 
 const previewStyles = readFileSync(new URL('../frontend-dist/preview-style.css', import.meta.url), 'utf8');
 
 describe('account media and album UI', () => {
-  it('provides clear Creator entry points from the workspace and each configured Album', () => {
-    assert.match(shellSource, /key: 'charinfo', label: 'CharInfo Creator', href: '\/charinfo\/'/);
-    assert.match(source, /class="button primary" href="\/charinfo\/\?album=\$\{encodeURIComponent\(album\.id\)\}">打开 Creator/);
-    assert.match(creatorSource, /href="\/account\/\?view=albums">返回我的图库/);
+  it('keeps character editing in ST and only exposes album management and remote gallery links', () => {
+    assert.doesNotMatch(shellSource, /key: 'charinfo'|href: '\/charinfo\/'/);
+    assert.doesNotMatch(source, /href="\/charinfo\/|打开 Creator|CharInfo Creator/);
+    assert.match(source, /角色资料请在 ST 的 CharInfo Manager 中编辑/);
+    assert.match(source, /复制远程图库链接/);
   });
 
   it('uses a compact upload entry and hides internal thumbnail actions', () => {
@@ -109,9 +109,9 @@ describe('account media and album UI', () => {
 
   it('keeps the root welcome page simple and the full feed in Discover', () => {
     assert.match(welcomePage, /href="\/discover\/"/);
-    assert.match(welcomePage, /href="\/charinfo\/"/);
+    assert.doesNotMatch(welcomePage, /href="\/charinfo\/"|CharInfo Creator/);
     assert.match(welcomePage, /class="primary-button welcome-primary"[^>]*href="\/discover\/"[^>]*>Discover<\/a>/);
-    assert.match(welcomePage, /class="text-button welcome-secondary"[^>]*href="\/charinfo\/"[^>]*>CharInfo Creator<\/a>/);
+    assert.match(welcomePage, /class="text-button welcome-secondary"[^>]*href="\/account\/\?view=albums"[^>]*>/);
     assert.match(welcomePage, /data-account-action[^>]*href="\/api\/auth\/discord[^>]*>登录<\/a>/);
     assert.doesNotMatch(welcomePage, /id="albumGrid"|welcomeFeature|welcome-shortcut|Featured|精选作品/);
     assert.doesNotMatch(welcomeSource, /loadFeed|featured|localStorage/);

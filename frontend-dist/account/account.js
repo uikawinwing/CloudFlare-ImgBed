@@ -1,6 +1,7 @@
 import { mountLegacyShell } from './shell.js';
 import { getSiteConfig, publicFileUrl, setSitePageTitle } from '../site-config.js';
 import { initializeWorkspaceWallpaper } from '../wallpaper-player.js';
+import { parseBridgeQuery, createCharInfoBridge } from './charinfo-bridge.js';
 
 const MEMBER_QUOTA_BYTES = 200 * 1024 * 1024;
 const VIEW_CACHE_TTL = 30000;
@@ -41,6 +42,10 @@ let wallpaperAdminScope = null;
 let stopWorkspaceWallpaper = null;
 let pendingWorkspaceWallpaper = null;
 let wallpaperInitialization = 0;
+const bridgeSession = new URLSearchParams(location.search).has('bridge') ? parseBridgeQuery(location.href) : null;
+const charInfoBridge = bridgeSession ? createCharInfoBridge({ window, session: bridgeSession, api, onChange: updateCharInfoBridge }) : null;
+let bridgeBusy = false;
+let bridgeError = '';
 
 const icons = {
   upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>',
@@ -201,7 +206,72 @@ function buildWorkspaceUrl(view = state.view, section = state.adminSection) {
   url.searchParams.set('view', view);
   if (view === 'admin') url.searchParams.set('section', section);
   if (view === 'albums' && state.albumId) url.searchParams.set('album', state.albumId);
-  return url;
+  return charInfoBridge?.appendToUrl(url) || url;
+}
+
+function bridgeMarkup() {
+  if (!charInfoBridge) return '';
+  return `<section class="charinfo-bridge notice-panel" aria-label="连接 CharInfo"><div><h2>选择要连接到 CharInfo 的图库</h2><p data-bridge-status role="status"></p><p>连接后提供公开图库链接；请回到 ST 预览并保存角色。</p><p data-bridge-error role="alert"></p></div><button class="button" type="button" data-bridge-cancel>取消连接</button></section>`;
+}
+
+function bridgeAlbumAction(album, detail = false) {
+  if (!charInfoBridge) return '';
+  return `<button class="button primary" type="button" data-bridge-select="${escapeHtml(album.id)}" data-bridge-detail="${detail}">使用此图库${detail ? ' / 返回 ST' : ''}</button>`;
+}
+
+function updateCharInfoBridge() {
+  if (!charInfoBridge) return;
+  const status = charInfoBridge.status;
+  const messages = {
+    waiting: '正在等待 ST 连接。也可选择图库后手动复制链接。',
+    ready: '已连接 ST。选择图库前可以继续编辑和整理文件。',
+    manual: charInfoBridge.reason,
+    invalid: '连接参数无效。请从 ST 重新打开连接窗口。',
+    completed: '链接已发送。请回到 ST 预览并保存角色。',
+    cancelled: '已取消连接。可以关闭此窗口，或继续管理图库。',
+    expired: charInfoBridge.reason,
+  };
+  document.querySelectorAll('[data-bridge-status]').forEach(node => { node.textContent = messages[status] || messages.waiting; });
+  document.querySelectorAll('[data-bridge-error]').forEach(node => { node.textContent = bridgeError; node.hidden = !bridgeError; });
+  const finished = ['completed', 'cancelled', 'expired', 'invalid'].includes(status);
+  document.querySelectorAll('[data-bridge-select]').forEach(button => {
+    button.hidden = finished;
+    button.disabled = bridgeBusy;
+    button.setAttribute('aria-busy', String(bridgeBusy));
+    button.textContent = status === 'ready' || status === 'waiting' ? `使用此图库${button.dataset.bridgeDetail === 'true' ? ' / 返回 ST' : ''}` : '获取图库链接';
+  });
+  document.querySelectorAll('[data-bridge-cancel]').forEach(button => { button.hidden = finished; });
+  if (state.user) history.replaceState(null, '', buildWorkspaceUrl());
+}
+
+function bindCharInfoBridge() {
+  if (!charInfoBridge) return;
+  document.querySelector('[data-bridge-cancel]')?.addEventListener('click', () => { bridgeError = ''; charInfoBridge.cancel(); });
+  document.querySelectorAll('[data-bridge-select]').forEach(button => button.addEventListener('click', () => selectBridgeAlbum(button.dataset.bridgeSelect)));
+  updateCharInfoBridge();
+}
+
+async function selectBridgeAlbum(albumId) {
+  if (bridgeBusy) return;
+  bridgeBusy = true;
+  bridgeError = '';
+  updateCharInfoBridge();
+  try {
+    const result = await charInfoBridge.select(albumId, { manual: charInfoBridge.status !== 'ready' });
+    if (!result.sent) {
+      const close = openDialog(`<div class="dialog-head"><h2>手动连接图库</h2><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div><div class="dialog-body"><p>复制下方链接，粘贴到 ST 的“远程图库 URL”，预览后保存角色。</p><div class="field"><label for="bridgeGalleryUrl">远程图库 URL</label><input type="url" id="bridgeGalleryUrl" readonly value="${escapeHtml(result.remoteGalleryUrl)}"></div><p data-bridge-copy-status role="status"></p></div><div class="dialog-actions"><button class="button" type="button" data-close-dialog>关闭</button><button class="button primary" type="button" id="copyBridgeGallery">复制链接</button></div>`, { label: '手动连接图库', className: 'charinfo-bridge-dialog' });
+      if (close) dialogRoot.querySelector('#copyBridgeGallery').addEventListener('click', async () => {
+        const feedback = dialogRoot.querySelector('[data-bridge-copy-status]');
+        try { await navigator.clipboard.writeText(result.remoteGalleryUrl); feedback.textContent = '链接已复制。'; }
+        catch { feedback.textContent = '复制失败，请选中上方完整链接后手动复制。'; dialogRoot.querySelector('#bridgeGalleryUrl').select(); }
+      });
+    }
+  } catch (error) {
+    bridgeError = error.code === 'character-name-required' ? '请先在该图库的“编辑信息”中填写关联角色全名，再选择图库。' : error.status === 401 ? '登录已过期。请从 ST 重新打开窗口并登录。' : error.message;
+  } finally {
+    bridgeBusy = false;
+    updateCharInfoBridge();
+  }
 }
 
 function renderCurrentView() {
@@ -298,7 +368,7 @@ function workspaceHeader() {
   <nav class="workspace-tabs" aria-label="文件与图库">
     <a href="/account/?view=files"${state.view === 'files' ? ' aria-current="page"' : ''}>${icons.image}全部文件</a>
     <a href="/account/?view=albums"${state.view === 'albums' ? ' aria-current="page"' : ''}>${icons.folder}我的图库 <span>${state.albums.length}</span></a>
-  </nav>`;
+  </nav>${bridgeMarkup()}`;
 }
 
 function renderFiles({ focusSearch = false } = {}) {
@@ -325,6 +395,7 @@ function renderFiles({ focusSearch = false } = {}) {
     ${state.filesNextCursor ? `<div class="load-more"><button class="button" id="loadMoreFiles" type="button">加载更多</button></div>` : ''}
   </section>`;
   bindFileEvents();
+  bindCharInfoBridge();
   observeVideos();
   if (focusSearch) {
     const search = document.querySelector('#fileSearch');
@@ -350,14 +421,14 @@ function albumRow(album) {
     <div class="album-body">
       <h2><a href="/account/?view=albums&album=${encodeURIComponent(album.id)}">${escapeHtml(album.name)}</a></h2>
       <div class="album-meta"><span>${items.length} 个项目</span><span>最近更新：${formatDate(album.updated_at)}</span></div>
-      <div class="album-card-actions"><button class="button" type="button" data-manage-album>打开图库</button><button class="button ghost" type="button" data-edit-album>编辑信息</button></div>
+      <div class="album-card-actions"><button class="button" type="button" data-manage-album>打开图库</button><button class="button ghost" type="button" data-edit-album>编辑信息</button>${bridgeAlbumAction(album)}</div>
       <details class="album-actions-menu">
         <summary>分享与更多</summary>
         <div class="album-actions">
           <p class="album-visibility">${state.user.publicHandle ? `会显示在发现页 · 可通过分享链接访问${album.charInfoCharacterName ? ` · CharInfo：${escapeHtml(album.charInfoCharacterName)}` : ' · CharInfo 未配置角色全名'}` : '设置公开名称后，图库会显示在发现页并可分享'}</p>
           ${canShare ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : ''}
           ${canShareCharInfo ? `<button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制远程图库链接</button>` : ''}
-          ${album.charInfoCharacterName ? `<a class="button primary" href="/charinfo/?album=${encodeURIComponent(album.id)}">打开 Creator</a>` : '<button class="button primary" type="button" data-edit-album>配置 CharInfo</button>'}
+          ${album.charInfoCharacterName ? '' : '<button class="button" type="button" data-edit-album>填写关联角色全名</button>'}
           <button class="button danger" type="button" data-delete-album>删除图库</button>
         </div>
       </details>
@@ -370,6 +441,7 @@ function renderAlbums() {
   const album = state.albums.find(item => item.id === state.albumId);
   main.innerHTML = `<section class="page-section">
     ${workspaceHeader()}
+    ${charInfoBridge && state.albumId && !album ? '<div class="notice-panel"><p role="alert">该图库不可用或不属于当前账号。请选择下方其他图库，或新建图库。</p></div>' : ''}
     ${album ? albumDetailMarkup(album) : `<div class="workspace-section-head">
       <h2>我的图库</h2>
       <button class="button primary" id="createAlbum" type="button">${icons.plus}新建图库</button>
@@ -378,6 +450,7 @@ function renderAlbums() {
     ${state.albums.length ? `<div class="album-list">${state.albums.map(albumRow).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.folder}</span><h2>还没有图库</h2><p>创建图库后，可以直接选择已有文件加入。</p><button class="button primary" id="emptyCreateAlbum" type="button">新建第一个图库</button></div>`}`}
   </section>`;
   bindAlbumEvents();
+  bindCharInfoBridge();
   if (album) bindAlbumItemEvents(album);
   observeVideos();
 }
@@ -817,7 +890,7 @@ function albumDialog(album = null, { onCreated = null } = {}) {
       <div class="field"><label for="albumName">图库名称</label><input id="albumName" name="name" maxlength="80" value="${escapeHtml(album?.name || '')}" required></div>
       <div class="field"><label for="albumSlug">分享链接名称</label><input id="albumSlug" name="slug" maxlength="80" value="${escapeHtml(album?.slug || '')}" pattern="[a-z0-9][a-z0-9\\-]*"><small>用于分享链接，只能使用小写英文字母、数字和短横线；留空会根据图库名称生成。</small></div>
       <div class="field"><label for="albumDescription">说明</label><textarea id="albumDescription" name="description" maxlength="200">${escapeHtml(album?.description || '')}</textarea></div>
-      <div class="field"><label for="albumCharInfoCharacterName">CharInfo 角色全名（可选）</label><input id="albumCharInfoCharacterName" name="charInfoCharacterName" maxlength="80" value="${escapeHtml(album?.charInfoCharacterName || '')}"><small>需要生成 CharInfo 链接时填写角色完整姓名；不要填写 Discord 用户名或角色简称。</small></div>
+      <div class="field"><label for="albumCharInfoCharacterName">关联角色全名（可选）</label><input id="albumCharInfoCharacterName" name="charInfoCharacterName" maxlength="80" value="${escapeHtml(album?.charInfoCharacterName || '')}"><small>连接 ST 远程图库时填写角色完整姓名，仅用于关联图库。角色资料请在 ST 的 CharInfo Manager 中编辑。</small></div>
       <p>设置公开名称后，图库会显示在发现页；每个图库只展示一张封面。</p>
       <small class="field-error" id="albumError"></small>
     </div>
@@ -891,7 +964,8 @@ function albumDetailMarkup(album) {
   return `<div class="album-detail" data-album-id="${escapeHtml(album.id)}">
     <a class="album-back" href="/account/?view=albums">← 所有图库</a>
     <div class="workspace-section-head"><div><h2>${escapeHtml(album.name)}</h2><p>${items.length} 个文件${album.description ? ` · ${escapeHtml(album.description)}` : ''}</p></div><div class="album-detail-actions"><button class="button" type="button" data-edit-album>编辑信息</button><button class="button primary" id="addAlbumFiles" type="button">${icons.plus}添加已有文件</button></div></div>
-    <div class="album-detail-tools">${shareUrl ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : '<button class="button" id="setPublicHandle" type="button">设置公开名称以分享</button>'}${album.charInfoCharacterName ? `<button class="button" type="button" data-copy="${escapeHtml(`${location.origin}/api/public/album-gallery/${encodeURIComponent(album.id)}`)}">复制远程图库链接</button>` : ''}${album.charInfoCharacterName ? `<a class="button primary" href="/charinfo/?album=${encodeURIComponent(album.id)}">打开 Creator</a>` : ''}${coverFileId ? '<button class="button ghost" type="button" data-clear-cover>恢复自动封面</button>' : ''}<button class="button ghost album-delete" type="button" data-delete-album>删除图库</button></div>
+    <div class="album-detail-tools">${shareUrl ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : '<button class="button" id="setPublicHandle" type="button">设置公开名称以分享</button>'}${album.charInfoCharacterName ? `<button class="button" type="button" data-copy="${escapeHtml(`${location.origin}/api/public/album-gallery/${encodeURIComponent(album.id)}`)}">复制远程图库链接</button>` : ''}${coverFileId ? '<button class="button ghost" type="button" data-clear-cover>恢复自动封面</button>' : ''}<button class="button ghost album-delete" type="button" data-delete-album>删除图库</button></div>
+    ${bridgeAlbumAction(album, true)}
     <p class="album-content-hint">使用上下箭头调整文件顺序；移出图库会保留原文件。</p>
     <div class="album-items">${rows || '<div class="empty-state compact"><span class="empty-icon">' + icons.folder + '</span><h3>图库里还没有文件</h3><p>点击“添加已有文件”，直接选择要加入的图片或视频。</p></div>'}</div>
   </div>`;
@@ -1283,6 +1357,7 @@ async function init() {
     if (state.view === 'admin' && state.adminSection === 'users' && state.user.role !== 'owner') state.adminSection = 'content';
     syncWorkspaceWallpaper();
     await showView({ initial: true });
+    charInfoBridge?.start(state.user.id);
   } catch (error) {
     if (error.status === 401) showLogin();
     else main.innerHTML = `<div class="error-state"><h2>账户暂时不可用</h2><p>${escapeHtml(error.message)}</p></div>`;

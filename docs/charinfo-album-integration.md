@@ -1,6 +1,6 @@
 # CharInfo Album 接入契约
 
-本文面向后续 CharInfo Manager 接入开发。ImgBed 管理文件、相册成员、顺序和权限；CharInfo Manager／SillyTavern 世界书管理 NPC 文本、档案、配色、台词、metadata 和当前图片来源。一个 NPC 最多引用一个远程相册 URL。本文未实现跨站编辑桥，也不要求第二套角色数据库、令牌或同步服务。
+本文面向 CharInfo Manager 接入开发。ImgBed 管理文件、相册成员、顺序和权限；SillyTavern 中的 CharInfo Manager 是角色文本、档案、配色、台词、metadata 和世界书／聊天保存的唯一编辑入口。一个 NPC 最多引用一个远程相册 URL。弹窗连接协议见 [CharInfo 图库弹窗接入 v1](charinfo-popup-bridge.md)，不需要第二套角色数据库、令牌或同步服务。
 
 ## 稳定只读接口
 
@@ -55,25 +55,25 @@
 
 账户相册详情 GET：未登录 401、普通非所有者 403、不存在 404。成员写接口及旧 CharInfo 配置接口对不存在／非所有者均返回 404；前端不能仅凭 404 就认定相册已被删除。跨站修改为 403；客户端须同时处理配额不足、审核中、上传渠道不可用和服务器错误，优先展示接口返回的错误说明。
 
-## 部分成功与未来弹窗桥
+## 部分成功与弹窗连接
 
 上传成功但入相册失败时保留 `fileId` 和原文件，让用户重试关联；相册创建成功而上传失败时保留 `albumId`，不要反复创建相册。审核中／隔离的文件即使上传完成，也不保证马上出现在公共 Gallery Pack。任何后续步骤失败都不得覆盖原 ST 世界书或偷偷删除存储文件；仅在拿到有效完整结果后，由用户确认更新引用。
 
-未来若增加同源编辑弹窗桥，必须定义可配置、明确的允许来源；严格核对发起方 origin、`postMessage` 的准确 `targetOrigin`、单次 nonce、`event.source` 和消息结构。不要使用通配目标域，不向 ST 发送 HttpOnly Cookie 或 OAuth token。每次写入仍由 ImgBed 服务器验权。本次只规定契约，不实现消息通道。
+弹窗接受玩家实际使用的标准 HTTP／HTTPS ST 来源，不要求逐人登记域名、启用浏览器安全例外或为 ST 安装证书。查询中的 origin 只是会话声明；握手还须核对浏览器提供的 `event.origin`、准确 opener／`event.source`、单次 nonce 和消息结构，后续只向绑定的精确来源发送用户明确选择的公开图库引用。私有操作始终留在 ImgBed 同源登录页面，不向 ST 发送 HttpOnly Cookie 或 OAuth token，也不允许 ST 跨域写入。
 
 ## 旧系统兼容审计
 
 | 分类 | 实际证据与影响面 |
 | --- | --- |
-| 仍在使用 | `frontend-dist/charinfo/index.html` 的 `loadAlbumProfileFromQuery` 先读 `/api/user/albums/{id}/charinfo`，只读回退再读 `/api/public/charinfo/{id}`；账户页 `account/account.js` 仍生成视觉包链接和 Creator 编辑入口。删除任一路由会破坏当前网页载入。 |
-| 仍在使用 | `/api/user/charinfo/complete` 写 `other_data` 的 `charinfo.visual:{albumId}`（type 为 `charinfo_visual`），返回新 `/api/public/album-gallery/{albumId}` URL；`frontend-src/charinfo/hosted-workflow.js` 消费完成接口。`charInfoVisualConfig.js` 负责校验、规范化、存储键；`charInfoVisualPack.js` 被旧公开视觉包和两个 Gallery 视图复用。 |
+| 已退役的网页编辑器 | `/charinfo/`（包括 `?album=`）仅显示只读迁移说明和旧浏览器草稿下载；`/charinfo/worldbook`、尾斜杠及其子路径转向该页。欢迎页、Discover、侧栏和账户图库不再提供角色编辑入口。账户页继续管理图库和最小角色全名关联字段。 |
+| 仅为兼容保留 | `/api/user/charinfo/complete` 仍可原子维护 `other_data` 的 `charinfo.visual:{albumId}`（type 为 `charinfo_visual`）及图库关联；旧 `/api/user/albums/{id}/charinfo` GET／PUT／DELETE 继续维护历史展示配置。外部调用者未知，本次不删除接口或数据。`charInfoVisualConfig.js` 和 `charInfoVisualPack.js` 仍被公开 feed 使用，不能随编辑器退役删除。 |
 | 仍在使用 | 默认 `/api/public/charinfo/{id}` 继续返回 `char-info-visual-pack`；`?view=gallery` 保持现有 owner handle 的 `packId`、UUID 的 `profileId`、主图置前和隐藏设置。新引用统一使用独立 `/api/public/album-gallery/{id}`，不向 ST 覆盖文本或 metadata。 |
-| 仍在使用 | `/api/public/gallery/{ownerSlug}/{albumSlug}` 继续支持 CharInfo 与普通 `imgbed-gallery` 相册，输出形状不变。欢迎页、侧栏仍链接 `/charinfo/`；`worldbookUi`、`charInfoStableUrl`、`charInfoVisualConfig`、`charInfoCompletion` 和 `gallerySharing` 测试覆盖现有路径。 |
-| 仅为兼容保留 | `frontend-dist/_redirects` 将 `/charinfo/worldbook` 和尾斜杠形式重定向到现 Creator。旧 CharInfo 配置 PUT／DELETE 路由仍可维护历史展示配置；当前网页读取它们，保存则走原子完成接口。外部调用者数量未知，不能据此删除写接口。 |
-| 确认无引用且可后续移除 | 本次检查未确认可安全删除的相关代码或历史键。无删除建议。 |
+| 仍在使用 | `/api/public/gallery/{ownerSlug}/{albumSlug}` 继续支持 CharInfo 与普通 `imgbed-gallery` 相册，输出形状不变。`albumGallery`、`charInfoStableUrl`、`charInfoVisualConfig`、`charInfoCompletion` 和 `gallerySharing` 测试继续覆盖协议、权限和历史配置。 |
+| 不再由生产构建执行 | `build:worker` 不再导入 `build-charinfo-editor.js`。旧源码、显式构建脚本及已生成的惰性模块保留供历史核心／原稿处理测试和可逆迁移使用；退役页不加载这些模块或 `editor.css`，也不提供编辑控件。仅保留模块文件不会重新开放编辑器。 |
+| 浏览器草稿保留 | 原 IndexedDB `charinfo-creator-editor` 的 `workspace` store、`current` key 完整保留。退役页只读下载包含原稿、世界书、未完成角色内容及上传关联的完整 JSON 备份，不清空存储、不上传、不自动转换或导入 ST。草稿限定原浏览器与原域名，下载前不要清除站点数据。 |
 | 未知（需线上证据） | 外部保存的 Visual Pack／旧 Gallery URL 数量、配置 PUT／DELETE 的外部使用情况、线上 `other_data` 历史值分布。本次没有读取远端 D1 或访问日志，不据本地代码推断线上无人使用。 |
 
-保留旧 API、Creator、数据库表／字段、历史键值和测试；不增加角色文本编辑能力。CharInfo Manager 后续需完成同源编辑入口、可选弹窗桥及世界书引用更新，均不在本仓库这次实现范围内。
+保留旧 API、数据库表／字段、历史键值和共享序列化测试；不进行数据库迁移或数据删除，不在账户页重建角色编辑器。用户在 ST 内编辑并保存角色，ImgBed 只返回图库引用；浏览器备份供保留及人工迁移资料使用，不能声称可直接由 ST 导入。
 
 ## 验证边界
 

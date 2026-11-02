@@ -42,13 +42,13 @@ The Charatopia brand uses the serif English vector wordmark at `frontend-dist/br
 
 The account sidebar owns navigation on large screens. Content uses the existing `.page-section` width and becomes a single column below 720px. Settings sections are grouped by external service or operational purpose, rather than by implementation details.
 
-CharInfo uses one adjoining workbench: an editing surface occupies roughly two-thirds of the desktop width, with a sage-tinted character canvas beside it. The horizontal five-step navigation sits above the active editing area; section spacing and hairline dividers establish hierarchy. At 600px and below, the canvas becomes a compact portrait-and-name strip between the steps and the editing area, with the quote hidden. Actions stay in document flow.
+The retired CharInfo route uses a single reading column, with a primary path to album management and a separate legacy-draft recovery section below a hairline divider. Keep it readable on phones and let the document scroll naturally.
 
 ## Shapes
 
 Reuse `--radius-sm`, `--radius-md`, and `--radius-lg` from `frontend-dist/account/account.css`. New controls follow the existing button, form field, toast, and dialog patterns.
 
-CharInfo's workbench and section divisions are flat, with square outer regions and modestly rounded fields and buttons. Keep this editor free of nested cards and ornamental pills; do not replace its adjoining editing surface and canvas with a centered paper-like form.
+The CharInfo retirement notice uses flat sections and shared public buttons, without recreating editor controls, previews or nested panels.
 
 ## Components
 
@@ -56,7 +56,7 @@ Sensitive values are masked by default and use a local reveal control. Save uses
 
 On narrow screens, ordinary action buttons keep their content width and wrap as a group instead of expanding to fill spare space. Keep the established touch height. Equal-width navigation segments and paired dialog confirmation actions retain their existing layout.
 
-The welcome page uses a full-viewport wallpaper, a transparent 64px fixed header, and copy anchored at the lower left. Its greeting and four-stanza welcome text use the reading face defined under Typography, with a hairline rule beside the text. Discover is the contrasting square primary link; CharInfo Creator is an underlined secondary link, while sign-in and upload stay in the header. `welcome/welcome.css` owns this page-specific composition and typography, using the shared theme colors and original vector wordmark. Phone layouts remain left-aligned, retain space above the copy for the wallpaper, and scroll naturally. Existing wallpaper queues, crop positions, opacity, and custom site branding keep their existing owners.
+The welcome page uses a full-viewport wallpaper, a transparent 64px fixed header, and copy anchored at the lower left. Its greeting and four-stanza welcome text use the reading face defined under Typography, with a hairline rule beside the text. Discover is the contrasting square primary link; My Albums is an underlined secondary link, while sign-in and upload stay in the header. `welcome/welcome.css` owns this page-specific composition and typography, using the shared theme colors and original vector wordmark. Phone layouts remain left-aligned, retain space above the copy for the wallpaper, and scroll naturally. Existing wallpaper queues, crop positions, opacity, and custom site branding keep their existing owners.
 
 Welcome-page wallpapers use the existing native settings shell, fields, save feedback, and unsaved-change dialog. Their ordered queue is independent of workspace wallpaper settings. Administrators can adjust desktop and phone crop positions separately; the welcome page retains its theme-aware text overlay and pauses automatic changes when the page is hidden or reduced motion is requested.
 
@@ -64,9 +64,9 @@ Website settings use that same native shell and only expose controls consumed by
 
 Security settings reuse the native shell for active moderation, upload location records, file access, and management API tokens. The interface explains Discord sign-in and excludes legacy password and session controls. Review service credentials stay masked; only the selected service's credential is shown. Token creation is optional, displays the complete token only after successful creation, and keeps creation and revocation separate from saving site policies. Whitelist wording makes clear that it affects public access to all files.
 
-CharInfo opens directly into a single creation flow: optional original text or JSON, uploaded or existing images, display information, optional colors, then completion. `frontend-dist/charinfo/editor.css` owns the editor styling and consumes the existing `theme.css` tokens for both light and dark themes. The character canvas reflects the actual browser draft's image, name, identity and quote; its empty image control opens image selection. The separate full character-card preview retains its own dark presentation, with local variables scoped to `#previewModal` rather than the editor as a whole.
+Character profiles are authored and saved only in SillyTavern's CharInfo Manager. ImgBed's `/charinfo/` is a read-only transition page using shared public navigation and theme tokens; `frontend-dist/charinfo/retired.css` owns its narrow reading layout. It links to album management and offers an explicit download of the original browser-local draft without editing, uploading or deleting it. Legacy worldbook URLs lead to the same page. The old editor stylesheet and profile modules are not loaded by this page.
 
-Keep native selects; the image picker uses a native dialog with focus restoration and paged results. Ordinary action buttons retain their content width on mobile. Use concise task labels and necessary privacy or public-access explanations, without tutorial or implementation prose. Original character text and JSON remain in the browser draft and are not automatically copied into public story or author-note fields. Explain direct-link access beside upload and public-gallery visibility beside completion. Completion explicitly creates or updates a public album, then offers the preserved original format with managed EJS, or EJS alone when no original was supplied; technical export content is collapsed until requested at completion. `frontend-src/charinfo/hosted-workflow.js` owns upload, account checks, picker states, and completion feedback; the editor owns form values and browser persistence, while the server retains file-ownership and publication permission checks.
+Album management and popup selection reuse the account workspace's existing controls, dialogs and feedback. Ordinary action buttons retain their content width on mobile. The album identity field remains minimal association metadata required by the gallery feed, not a profile form. Explain that connecting returns a public gallery reference and that the user must preview and save in ST. Preserve the private same-origin account operations and server ownership checks; manual URL copy remains available when a browser cannot retain the opener.
 
 ## Do's and Don'ts
 
