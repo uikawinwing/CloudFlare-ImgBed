@@ -3,9 +3,7 @@
 /charinfo/worldbook /charinfo/ 302
 /charinfo/worldbook/ /charinfo/ 302
 /charinfo/worldbook/* /charinfo/ 302
-/login /login/index.html 200
-/login/ /login 302
-/adminLogin /login 302
+/adminLogin /login/ 302
 /dashboard /legacy 200
 /customerConfig /legacy 200
 /systemConfig /legacy 200

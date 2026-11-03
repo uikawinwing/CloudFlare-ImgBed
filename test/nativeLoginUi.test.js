@@ -9,9 +9,8 @@ describe('Charatopia native Discord login', () => {
   const script = read('../frontend-dist/login/login.js');
 
   it('replaces only the legacy login route with a native branded page', () => {
-    assert.match(redirects, /^\/login \/login\/index\.html 200$/m);
-    assert.match(redirects, /^\/login\/ \/login 302$/m);
-    assert.match(redirects, /^\/adminLogin \/login 302$/m);
+    assert.doesNotMatch(redirects, /^\/login(?:\/)?\s/m, 'let Worker assets canonicalize /login and serve /login/ without a loop');
+    assert.match(redirects, /^\/adminLogin \/login\/ 302$/m);
     assert.match(page, /data-site-name/);
     assert.match(page, /\/site\.js/);
     assert.match(page, /\/theme\.css/);
