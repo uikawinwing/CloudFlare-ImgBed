@@ -54,7 +54,12 @@ export async function onRequest(context) {
     const currentVersion = thumbnailContentVersion(metadata);
     const requestedVersion = requestUrl.searchParams.get('v') || '';
     if (requestedVersion && requestedVersion !== currentVersion) {
-        return new Response('Thumbnail version not found', { status: 404, headers: noStoreHeaders() });
+        // Older ST/worldbook entries may retain a thumbnail version from before
+        // regeneration. Access controls above still apply before redirecting to
+        // the current rendition; never cache this stale-version redirect.
+        return currentVersion
+            ? thumbnailVersionRedirect(request.url, fileId, variantName, currentVersion, true)
+            : new Response('Thumbnail version not found', { status: 404, headers: noStoreHeaders() });
     }
     if (!requestedVersion && currentVersion) {
         return thumbnailVersionRedirect(request.url, fileId, variantName, currentVersion);
@@ -202,13 +207,13 @@ function thumbnailCacheKey(requestUrl, variantName, version) {
     return new Request(url.toString(), { method: 'GET' });
 }
 
-function thumbnailVersionRedirect(requestUrl, fileId, variantName, version) {
+function thumbnailVersionRedirect(requestUrl, fileId, variantName, version, isStale = false) {
     const location = absoluteThumbnailUrl(requestUrl, fileId, variantName, version);
     return new Response(null, {
         status: 302,
         headers: {
             ...corsHeaders(),
-            'Cache-Control': LEGACY_THUMBNAIL_CACHE_CONTROL,
+            'Cache-Control': isStale ? 'no-store' : LEGACY_THUMBNAIL_CACHE_CONTROL,
             'Location': location,
         },
     });

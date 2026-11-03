@@ -93,7 +93,9 @@ describe('thumbnail route visibility and cache contract', () => {
             assert.equal(originalRequests, 1);
             const missingVersion = await serveThumbnail({ env, params: { path: 'portrait.png' },
                 request: new Request('https://example.test/thumb/portrait.png?variant=portrait&v=123') });
-            assert.equal(missingVersion.status, 404);
+            assert.equal(missingVersion.status, 302);
+            assert.equal(missingVersion.headers.get('location'), url);
+            assert.equal(missingVersion.headers.get('cache-control'), 'no-store');
         } finally {
             globalThis.fetch = previousFetch;
             if (previousCaches === undefined) delete globalThis.caches;
@@ -255,7 +257,7 @@ describe('thumbnail route visibility and cache contract', () => {
         }
     });
 
-    it('redirects a legacy URL to the current version and rejects stale versions', async () => {
+    it('redirects legacy and stale public image URLs to the current version without caching obsolete redirects', async () => {
         const metadata = {
             ModerationStatus: 'active',
             FileType: 'image/png',
@@ -282,8 +284,27 @@ describe('thumbnail route visibility and cache contract', () => {
             env,
             params: { path: 'users,master,private.png' },
         });
-        assert.strictEqual(stale.status, 404);
-        assert.match(await stale.text(), /version not found/);
+        assert.strictEqual(stale.status, 302);
+        assert.strictEqual(stale.headers.get('location'), 'https://example.test/thumb/users/master/private.png?variant=library&v=456');
+        assert.strictEqual(stale.headers.get('cache-control'), 'no-store');
+        assert.strictEqual(stale.headers.get('access-control-allow-origin'), '*');
+        assert.strictEqual(await stale.text(), '');
+
+        const rejected = await serveThumbnail({
+            request: new Request('https://example.test/thumb/users/master/private.png?variant=library&v=455'),
+            env: {
+                ...env,
+                img_url: {
+                    get: async () => null,
+                    getWithMetadata: async () => ({
+                        value: '', metadata: { ...metadata, ModerationStatus: 'quarantined' },
+                    }),
+                },
+            },
+            params: { path: 'users,master,private.png' },
+        });
+        assert.strictEqual(rejected.status, 404, 'unavailable images must not redirect');
+        assert.strictEqual(rejected.headers.get('cache-control'), 'private, no-store, max-age=0');
     });
 
     it('derives compact variants from an existing permanent 720px WebP', async () => {
