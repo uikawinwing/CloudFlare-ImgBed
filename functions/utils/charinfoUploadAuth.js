@@ -6,8 +6,10 @@ const PROOF = /^[a-f0-9]{64}$/;
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const SESSION_MS = 12 * 60 * 1000;
 const GRANT_MS = 24 * 60 * 60 * 1000;
+const LAUNCH_MS = 10 * 60 * 1000;
 const pairKey = id => `charinfo-upload:pair:${id}`;
 const grantKey = hash => `charinfo-upload:grant:${hash}`;
+const launchCookieName = id => `__Host-charinfo-upload-${id}`;
 
 export function uploadError(code, status = 400) {
     return Object.assign(new Error(code), { code, status });
@@ -101,6 +103,62 @@ async function paired(context, connectionId) {
     return { ...found, proof };
 }
 
+async function launched(context, connectionId) {
+    checkConnection(connectionId);
+    const name = launchCookieName(connectionId);
+    const cookies = (context.request.headers.get('Cookie') || '').split(';').map(value => value.trim()).filter(value => value.startsWith(`${name}=`));
+    if (cookies.length !== 1) throw uploadError('LAUNCH_REQUIRED', 403);
+    const secret = cookies[0].slice(name.length + 1);
+    const found = await row(context.env, pairKey(connectionId));
+    if (!PROOF.test(secret) || !found || !sameDigest(found.value.launchHash, await digest(secret))) throw uploadError('LAUNCH_REQUIRED', 403);
+    if (found.value.launchExpiresAt <= Date.now() || found.value.expiresAt <= Date.now()) throw uploadError('PAIR_EXPIRED', 410);
+    return found;
+}
+
+export async function launchUploadAuthorization(context) {
+    const { request, env } = context;
+    checkUploadOrigin(request);
+    if (request.method !== 'POST' || request.headers.get('Sec-Fetch-Site') !== 'same-origin'
+        || request.headers.get('Sec-Fetch-Mode') !== 'navigate' || request.headers.get('Sec-Fetch-Dest') !== 'document'
+        || new URL(request.url).search) throw uploadError('CROSS_SITE_REJECTED', 403);
+    if ((request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase() !== 'application/x-www-form-urlencoded') throw uploadError('BAD_REQUEST');
+    const reader = request.body?.getReader();
+    if (!reader) throw uploadError('BAD_REQUEST');
+    const chunks = [];
+    let size = 0;
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > 1024) { await reader.cancel(); throw uploadError('BAD_REQUEST', 413); }
+        chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    let form;
+    try { form = new URLSearchParams(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
+    catch { throw uploadError('BAD_REQUEST'); }
+    if ([...form.keys()].sort().join(',') !== 'connectionId,proof') throw uploadError('INPUT_REJECTED');
+    const connectionId = form.get('connectionId');
+    const proof = form.get('proof');
+    checkConnection(connectionId);
+    if (!PROOF.test(proof || '')) throw uploadError('AUTH_REQUIRED', 401);
+    const pair = await row(env, pairKey(connectionId));
+    if (!pair || !sameDigest(pair.value.proofHash, await digest(proof))) throw uploadError('AUTH_REQUIRED', 401);
+    const now = Date.now();
+    if (pair.value.expiresAt <= now) throw uploadError('PAIR_EXPIRED', 410);
+    const secret = [...crypto.getRandomValues(new Uint8Array(32))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+    const next = { ...pair.value, status: 'pending', sessionId: null, sessionExpiresAt: 0,
+        launchHash: await digest(secret), launchExpiresAt: Math.min(now + LAUNCH_MS, pair.value.expiresAt), launchInspectedUserId: null };
+    await replace(env, pairKey(connectionId), pair.raw, next);
+    const query = new URLSearchParams({ connection_id: connectionId, parent_origin: pair.value.parentOrigin });
+    return new Response(null, { status: 303, headers: {
+        Location: `/charinfo-upload/connect?${query}`, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
+        'Set-Cookie': `${launchCookieName(connectionId)}=${secret}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${Math.floor((next.launchExpiresAt - now) / 1000)}`,
+    } });
+}
+
 async function activeUser(env, id) {
     const user = await env.img_d1.prepare('SELECT discord_id, username, role, status, public_handle FROM users WHERE discord_id = ?').bind(id).first();
     if (!user || user.status !== 'active') throw uploadError('AUTH_REQUIRED', 401);
@@ -126,7 +184,7 @@ async function connected(env, pair, proof) {
     if (!pair.sessionId || pair.sessionExpiresAt <= Date.now()) throw uploadError('AUTH_REQUIRED', 401);
     const result = { connected: true, sessionId: pair.sessionId, accountId: grant.value.accountId,
         accountName: String(grant.identity.username || '').slice(0, 100), expiresAt: pair.sessionExpiresAt, grantExpiresAt: grant.value.expiresAt };
-    if (pair.resumeSalt) result.resumeProof = await digest(`charinfo-upload-resume-v1:${proof}:${pair.userId}:${pair.resumeSalt}`);
+    if (pair.resumeSalt) result.resumeProof = await digest(`charinfo-upload-resume-v1:${pair.resumeVersion === 2 ? pair.proofHash : proof}:${pair.userId}:${pair.resumeSalt}`);
     return result;
 }
 
@@ -182,28 +240,44 @@ export function uploadAuthorizationGuard(identity) {
 export async function uploadAuthAction(context, body) {
     checkUploadOrigin(context.request);
     const fields = {
-        inspect: ['action', 'connectionId'], approve: ['action', 'connectionId'],
+        inspect: ['action', 'connectionId'], approve: ['action', 'connectionId', 'accountId'], deny: ['action', 'connectionId'],
         status: ['action', 'connectionId', 'sessionId'], resume: ['action', 'connectionId', 'resumeProof'],
         renew: ['action', 'connectionId', 'sessionId'], disconnect: ['action', 'connectionId', 'sessionId'],
     }[body.action];
     if (!fields || Object.keys(body).some(key => !fields.includes(key))) throw uploadError('INPUT_REJECTED');
     const { env, request } = context;
-    const pair = await paired(context, body.connectionId);
+    const consent = ['inspect', 'approve', 'deny'].includes(body.action);
+    const pair = await (consent ? launched(context, body.connectionId) : paired(context, body.connectionId));
     const key = pairKey(body.connectionId);
     const now = Date.now();
-    if (body.action === 'inspect' || body.action === 'approve') {
+    if (body.action === 'deny') {
+        const next = { ...pair.value, status: 'denied', sessionId: null, sessionExpiresAt: 0,
+            launchHash: null, launchExpiresAt: 0, launchInspectedUserId: null };
+        const statements = [env.img_d1.prepare('UPDATE other_data SET value = CASE WHEN value = ? THEN ? ELSE NULL END WHERE key = ?')
+            .bind(pair.raw, JSON.stringify(next), key)];
+        if (pair.value.grantHash) statements.push(env.img_d1.prepare("UPDATE other_data SET value = json_set(value, '$.revoked', json('true')) WHERE key = ?").bind(grantKey(pair.value.grantHash)));
+        try { await env.img_d1.batch(statements); } catch { throw uploadError('AUTH_CONFLICT', 409); }
+        return { connected: false };
+    }
+    if (consent) {
         const identity = await getDiscordIdentity(env, request);
         if (!identity) throw uploadError('SIGN_IN_REQUIRED', 401);
         await activeUser(env, identity.id);
         if (pair.value.expiresAt <= now) throw uploadError('PAIR_EXPIRED', 410);
         const accountId = await publicAccountId(env, identity.id);
-        if (body.action === 'inspect') return { parentOrigin: pair.value.parentOrigin, accountId,
-            accountName: String(identity.username || '').slice(0, 100), approved: pair.value.status === 'approved' && pair.value.userId === identity.id };
+        if (body.action === 'inspect') {
+            await replace(env, key, pair.raw, { ...pair.value, launchInspectedUserId: identity.id });
+            return { parentOrigin: pair.value.parentOrigin, accountId,
+                accountName: String(identity.username || '').slice(0, 100), approved: false };
+        }
+        if (!pair.value.launchInspectedUserId) throw uploadError('CONSENT_REQUIRED', 403);
+        if (pair.value.launchInspectedUserId !== identity.id || body.accountId !== accountId) throw uploadError('ACCOUNT_CHANGED', 409);
         const resumeSalt = crypto.randomUUID();
-        const resumeProof = await digest(`charinfo-upload-resume-v1:${pair.proof}:${identity.id}:${resumeSalt}`);
+        const resumeProof = await digest(`charinfo-upload-resume-v1:${pair.value.proofHash}:${identity.id}:${resumeSalt}`);
         const grantHash = await digest(resumeProof);
         const grant = { parentOrigin: pair.value.parentOrigin, userId: identity.id, accountId, approvedAt: now, expiresAt: now + GRANT_MS, revoked: false };
-        const next = { ...pair.value, userId: identity.id, grantHash, resumeSalt, status: 'approved',
+        const next = { ...pair.value, userId: identity.id, grantHash, resumeSalt, resumeVersion: 2, status: 'approved',
+            launchHash: null, launchExpiresAt: 0, launchInspectedUserId: null,
             expiresAt: grant.expiresAt, sessionId: crypto.randomUUID(), sessionExpiresAt: now + SESSION_MS };
         const statements = [env.img_d1.prepare(`INSERT INTO other_data (key, value, type)
             VALUES (?, CASE WHEN EXISTS (SELECT 1 FROM other_data WHERE key = ? AND value = ?) THEN ? ELSE NULL END, 'charinfo_upload_grant')`)
@@ -235,7 +309,8 @@ export async function uploadAuthAction(context, body) {
     }
     if (body.action === 'disconnect') {
         if (body.sessionId && body.sessionId !== pair.value.sessionId) throw uploadError('AUTH_REQUIRED', 401);
-        const next = { ...pair.value, status: 'revoked', sessionId: null, sessionExpiresAt: 0 };
+        const next = { ...pair.value, status: 'revoked', sessionId: null, sessionExpiresAt: 0,
+            launchHash: null, launchExpiresAt: 0, launchInspectedUserId: null };
         const statements = [env.img_d1.prepare(`UPDATE other_data SET value = CASE WHEN value = ? THEN ? ELSE NULL END WHERE key = ?`)
             .bind(pair.raw, JSON.stringify(next), key)];
         if (pair.value.grantHash) statements.push(env.img_d1.prepare("UPDATE other_data SET value = json_set(value, '$.revoked', json('true')) WHERE key = ?").bind(grantKey(pair.value.grantHash)));
@@ -243,6 +318,7 @@ export async function uploadAuthAction(context, body) {
         return { connected: false };
     }
     if (body.action === 'status') {
+        if (pair.value.status === 'denied') throw uploadError('AUTH_DENIED', 403);
         try { return await connected(env, pair.value, pair.proof); }
         catch (error) { if (error.code === 'AUTH_REQUIRED') return { connected: false }; throw error; }
     }

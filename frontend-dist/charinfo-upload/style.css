@@ -10,3 +10,10 @@
 .authorization-actions button { cursor: pointer; min-height: 44px; }
 .authorization-actions button:disabled { opacity: .5; cursor: not-allowed; }
 .authorization-note { margin-top: 28px; font-size: 13px; }
+.upload-launcher { margin: 0; padding: 6px; background: var(--app-surface); color: var(--app-text); font-family: system-ui, sans-serif; }
+.upload-launcher button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface); color: inherit; cursor: pointer; }
+.upload-launcher button:hover:not(:disabled) { border-color: var(--app-accent); }
+.upload-launcher button:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 2px; }
+.upload-launcher button:active:not(:disabled) { opacity: .8; }
+.upload-launcher button:disabled { opacity: .5; cursor: not-allowed; }
+.upload-launcher p { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--app-muted); }

@@ -1,13 +1,13 @@
 import { PROTOCOL, INTERNAL_PROTOCOL, OPERATION_LIMIT, canonicalOrigin, parseConnectionQuery, parseUploadMessage, exactFields, validId, validAlbumId, validItems, randomHex } from './protocol.js';
 import { createGrantStore } from './grant-store.js';
 
-const INTERNAL_BASE = ['protocol', 'version', 'type', 'connectionId', 'challenge'];
+const INTERNAL_BASE = ['protocol', 'version', 'type', 'connectionId', 'challenge', 'parentOrigin'];
 const safeCode = value => typeof value === 'string' && /^[A-Z0-9_]{1,64}$/.test(value) ? value : 'SERVER_ERROR';
 
 export function createUploadReceiver({ window: frame, request = frame.fetch.bind(frame), grants = createGrantStore(frame.indexedDB) }) {
   const session = parseConnectionQuery(frame.location.href);
   const ownOrigin = frame.location.origin;
-  let parentOrigin = null, proof, pairing, current = null, authorized = null, stopped = false, resumeAttempted = false;
+  let parentOrigin = null, proof, pairing, pairExpiresAt = 0, current = null, authorized = null, stopped = false, resumeAttempted = false;
 
   function send(type, fields = {}) {
     if (stopped || !parentOrigin) return;
@@ -16,6 +16,7 @@ export function createUploadReceiver({ window: frame, request = frame.fetch.bind
   }
   async function json(path, body, signal) {
     const response = await request(path, { method: 'POST', credentials: 'omit', cache: 'no-store', signal,
+      ...(body.action === 'disconnect' ? { keepalive: true } : {}),
       headers: { 'Content-Type': 'application/json', ...(proof ? { 'X-CharInfo-Pair-Proof': proof } : {}) }, body: JSON.stringify(body) });
     let data;
     try { data = await response.json(); } catch { throw Object.assign(new Error('Invalid response'), { code: 'SERVER_ERROR' }); }
@@ -24,9 +25,11 @@ export function createUploadReceiver({ window: frame, request = frame.fetch.bind
   }
   function ensurePair() {
     if (!parentOrigin || stopped) return Promise.reject(new Error('No parent'));
+    if (pairing && pairExpiresAt && pairExpiresAt <= Date.now()) pairing = null;
     pairing ||= (async () => {
       proof ||= randomHex(frame.crypto, 32);
-      await json('/api/charinfo-upload/pair', { connectionId: session.connectionId, parentOrigin, proof });
+      const data = await json('/api/charinfo-upload/pair', { connectionId: session.connectionId, parentOrigin, proof });
+      pairExpiresAt = data.expiresAt;
     })().catch(error => { pairing = null; throw error; });
     return pairing;
   }
@@ -34,7 +37,7 @@ export function createUploadReceiver({ window: frame, request = frame.fetch.bind
   function gallery(action, message, fields = {}, signal) {
     return json('/api/charinfo-upload/gallery', { action, connectionId: session.connectionId, sessionId: message.sessionId, requestId: message.requestId, ...fields }, signal);
   }
-  function active(operation) { return !stopped && current === operation && !operation.controller.signal.aborted; }
+  function active(operation) { return !stopped && current === operation && !operation.controller.signal.aborted && !operation.cancelling; }
   function finish(operation) {
     if (current !== operation) return;
     frame.clearTimeout(operation.timer);
@@ -52,6 +55,20 @@ export function createUploadReceiver({ window: frame, request = frame.fetch.bind
   }
   function cancel(operation, notify = false) {
     if (!operation || current !== operation) return;
+    if (operation.message.type === 'auth.connect') {
+      if (operation.cancelling) return;
+      operation.cancelling = true;
+      frame.clearTimeout(operation.timer); frame.clearTimeout(operation.pollTimer);
+      operation.controller.abort();
+      void (pairing || Promise.resolve()).then(() => auth('disconnect')).then(() => {
+        if (current !== operation || stopped) return;
+        send('auth.cancelled', { requestId: operation.message.requestId }); finish(operation);
+      }).catch(() => {
+        if (current !== operation || stopped) return;
+        send('auth.failed', { requestId: operation.message.requestId, code: 'REVOCATION_FAILED' }); finish(operation);
+      });
+      return;
+    }
     if (notify) fail(operation, 'TIMEOUT'); else finish(operation);
     operation.controller.abort();
     if (operation.message.type.startsWith('gallery.')) void gallery('cancel', operation.message).catch(() => {});
@@ -167,11 +184,12 @@ export function createUploadReceiver({ window: frame, request = frame.fetch.bind
     if (stopped || !session || frame.parent === frame) return;
     const data = event.data;
     if (event.origin === ownOrigin && exactFields(data, INTERNAL_BASE) && data.protocol === INTERNAL_PROTOCOL && data.version === 1
-        && data.type === 'pair.challenge' && data.connectionId === session.connectionId && /^[0-9a-f]{48}$/.test(data.challenge || '') && parentOrigin) {
+        && data.type === 'launch.request' && data.connectionId === session.connectionId && /^[0-9a-f]{48}$/.test(data.challenge || '')
+        && parentOrigin && data.parentOrigin === parentOrigin) {
       try {
-        if (!event.source || event.source === frame || event.source.opener !== frame.parent || event.source.closed) return;
+        if (!event.source || event.source === frame || event.source.top !== frame.top || event.source.closed) return;
         await ensurePair();
-        if (!stopped && event.source.opener === frame.parent && !event.source.closed) event.source.postMessage({ ...data, type: 'pair.proof', proof }, ownOrigin);
+        if (!stopped && event.source.top === frame.top && !event.source.closed) event.source.postMessage({ ...data, type: 'launch.proof', proof }, ownOrigin);
       } catch {}
       return;
     }

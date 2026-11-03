@@ -58,6 +58,7 @@ import * as apiBingWallpaper_index from '../../functions/api/bing/wallpaper/inde
 import * as apiCharinfoUploadAuth from '../../functions/api/charinfo-upload/auth.js';
 import * as apiCharinfoUploadFile from '../../functions/api/charinfo-upload/file.js';
 import * as apiCharinfoUploadGallery from '../../functions/api/charinfo-upload/gallery.js';
+import * as apiCharinfoUploadLaunch from '../../functions/api/charinfo-upload/launch.js';
 import * as apiCharinfoUploadPair from '../../functions/api/charinfo-upload/pair.js';
 import * as apiManageApiTokens from '../../functions/api/manage/apiTokens.js';
 import * as apiManageList from '../../functions/api/manage/list.js';
@@ -145,6 +146,7 @@ const routes = [
     { path: '/api/charinfo-upload/auth', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"auth"}], module: apiCharinfoUploadAuth, middlewares: [mw_api] },
     { path: '/api/charinfo-upload/file', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"file"}], module: apiCharinfoUploadFile, middlewares: [mw_api] },
     { path: '/api/charinfo-upload/gallery', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"gallery"}], module: apiCharinfoUploadGallery, middlewares: [mw_api] },
+    { path: '/api/charinfo-upload/launch', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"launch"}], module: apiCharinfoUploadLaunch, middlewares: [mw_api] },
     { path: '/api/charinfo-upload/pair', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"pair"}], module: apiCharinfoUploadPair, middlewares: [mw_api] },
     { path: '/api/manage/apiTokens', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"apiTokens"}], module: apiManageApiTokens, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/list', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"list"}], module: apiManageList, middlewares: [mw_api, mw_api_manage] },

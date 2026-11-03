@@ -12,12 +12,13 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 
 describe('upload HTTP routes with native Worker D1, R2 and streaming crypto', function () {
     this.timeout(60000);
-    let runtime, db, sessionId;
+    let runtime, db, sessionId, launchCookie;
     before(async () => {
         const bundle = await build({ bundle: true, write: false, format: 'esm', platform: 'browser', stdin: {
             resolveDir: fileURLToPath(new URL('..', import.meta.url)),
             contents: `import { onRequestPost as pair } from './functions/api/charinfo-upload/pair.js';
                 import { onRequestPost as auth } from './functions/api/charinfo-upload/auth.js';
+                import { onRequestPost as launch } from './functions/api/charinfo-upload/launch.js';
                 import { onRequestPost as gallery } from './functions/api/charinfo-upload/gallery.js';
                 import { onRequestPost as file } from './functions/api/charinfo-upload/file.js';
                 import { onRequestGet as pack } from './functions/api/public/album-gallery/[albumId].js';
@@ -25,7 +26,7 @@ describe('upload HTTP routes with native Worker D1, R2 and streaming crypto', fu
                     const path=new URL(request.url).pathname;
                     const context={request,env,waitUntil:ctx.waitUntil.bind(ctx)};
                     if(path.startsWith('/api/public/album-gallery/')) return pack({...context,params:{albumId:path.split('/').pop()}});
-                    const handler={pair,auth,gallery,file}[path.split('/').pop()];
+                    const handler={pair,auth,launch,gallery,file}[path.split('/').pop()];
                     return request.method==='POST'&&handler?handler(context):new Response('Not found',{status:404});
                 } };`,
         } });
@@ -44,7 +45,7 @@ describe('upload HTTP routes with native Worker D1, R2 and streaming crypto', fu
     async function post(path, body, { login = false, secret = proof, suppliedOrigin = origin } = {}) {
         return runtime.dispatchFetch(origin + path, { method: 'POST', headers: { Origin: suppliedOrigin,
             'Sec-Fetch-Site': 'same-origin', 'Content-Type': 'application/json', ...(secret ? { 'X-CharInfo-Pair-Proof': secret } : {}),
-            ...(login ? { Cookie: 'user_session=test-session' } : {}) }, body: JSON.stringify(body) });
+            ...((login || launchCookie) ? { Cookie: [login ? 'user_session=test-session' : '', launchCookie || ''].filter(Boolean).join('; ') } : {}) }, body: JSON.stringify(body) });
     }
     const auth = (action, fields = {}, options) => post('/api/charinfo-upload/auth', { action, connectionId, ...fields }, options);
     const gallery = (action, requestId, fields = {}) => post('/api/charinfo-upload/gallery', { action, requestId, connectionId, sessionId, ...fields });
@@ -52,9 +53,17 @@ describe('upload HTTP routes with native Worker D1, R2 and streaming crypto', fu
     it('requires actual consent and a private proof before any upload route can run', async () => {
         assert.equal((await post('/api/charinfo-upload/pair', { connectionId, parentOrigin, proof })).status, 200);
         assert.deepEqual(await (await auth('status')).json(), { connected: false });
-        assert.equal((await auth('approve', {}, { login: true, secret: null })).status, 401);
-        assert.equal((await auth('approve')).status, 401);
-        assert.equal((await auth('approve', {}, { login: true })).status, 200);
+        assert.equal((await auth('approve', {}, { login: true, secret: null })).status, 403);
+        assert.equal((await auth('approve')).status, 403);
+        const launched = await runtime.dispatchFetch(origin + '/api/charinfo-upload/launch', { method: 'POST', redirect: 'manual',
+            headers: { Origin: origin, 'Sec-Fetch-Site': 'same-origin', 'Sec-Fetch-Mode': 'navigate', 'MF-Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document',
+                'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ connectionId, proof }).toString() });
+        assert.equal(launched.status, 303, await launched.clone().text());
+        launchCookie = launched.headers.get('Set-Cookie').split(';')[0];
+        const inspection = await auth('inspect', {}, { login: true, secret: null });
+        assert.equal(inspection.status, 200);
+        const inspectedAccountId = (await inspection.json()).accountId;
+        assert.equal((await auth('approve', { accountId: inspectedAccountId }, { login: true })).status, 200);
         sessionId = (await (await auth('status')).json()).sessionId;
         assert.ok(sessionId);
     });

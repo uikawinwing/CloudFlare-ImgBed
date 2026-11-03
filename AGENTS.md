@@ -57,7 +57,7 @@
 - `/api/public/charinfo/{albumId}` 默认仍返回编辑器使用的视觉资料包；`?view=gallery` 返回 EJS 查看器要求的远程图库协议，使用稳定图库 ID，保留主图排序和隐藏设置。两个视图分别验证缓存；只在远程图库协议输出处过滤不支持的媒体后缀，不删除原图库文件。
 - 新的 NPC 远程引用使用 `/api/public/album-gallery/{albumId}`，返回 `char-info-gallery-pack` v1；`packId`、`profileId` 均为相册 UUID，按相册成员顺序输出并保留隐藏设置，不依赖公开用户名或 slug。该路由自行校验 ETag，不能交给通用页面缓存绕过校验；旧 CharInfo 视图与 slug 分享接口继续保留。接入与兼容边界见 `docs/charinfo-album-integration.md`。
 - CharInfo Manager 的弹窗连接复用 `/account/`，v1 协议见 `docs/charinfo-popup-bridge.md`。允许任意规范 HTTP／HTTPS ST 来源，无逐人白名单；查询来源仅作为声明，握手必须匹配真实 opener、事件来源、nonce 和版本，后续只向绑定来源发送公开 UUID 链接。导航、刷新和 Discord 登录返回保留连接上下文，刷新后重新握手；短期记录绑定来源与账号，成功／取消／过期后不能重放。选择前核对本人归属及有效公开图库包，不交换认证信息或新增跨来源特权操作。
-- 新编辑器内上传使用独立 `charinfo-imgbed-upload` v1 协议，不自动回退旧窗口。iframe 验证真实父窗口／来源，授权页通过同源内部挑战匹配实际 iframe，并在用户明确同意后取得最小媒体权限。公开连接／请求／会话／账号 ID 都不是凭证；私有证明仅留在 ImgBed。Cookie、普通 API 的 CSRF/CORS 均不放宽。
+- 新编辑器内上传使用独立 `charinfo-imgbed-upload` v1 协议，不自动回退旧窗口。隐藏上传 iframe 与可见 launcher 分别验证真实父窗口／来源，通过同顶层、同源挑战配对；launcher 真实点击发起严格同源表单 POST，签发短期 HttpOnly 授权上下文，再由顶层页明确同意，不能依赖 popup.opener。公开连接／请求／会话／账号 ID 都不是凭证；私有证明仅留在 ImgBed。Cookie、普通 API 的 CSRF/CORS 均不放宽。
 - 上传私有配对、24 小时绝对授权、12 分钟内部会话及 `(真实账号,requestId)` 不可变操作账本，直接在 D1 `other_data` 保存并条件更新。`functions/utils/charinfoUploadAuth.js` 与 `charinfoUploadOperations.js` 是实现入口；正式文件仍走既有渠道。完整暂存预检后才预留一次配额，最终成员与结果须同事务检查授权和完整旧快照。Telegram／Discord 上游结果不确定时禁止自动重传；取消不删除原文件。
 
 ## 数据与认证边界

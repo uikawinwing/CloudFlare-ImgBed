@@ -3,7 +3,7 @@ import { webcrypto } from 'node:crypto';
 import { File } from 'node:buffer';
 import { parseConnectionQuery, parseUploadMessage, canonicalOrigin, PROTOCOL, INTERNAL_PROTOCOL, OPERATION_LIMIT } from '../frontend-dist/charinfo-upload/protocol.js';
 import { createUploadReceiver } from '../frontend-dist/charinfo-upload/bridge.js';
-import { pairWithDirectFrame, mountConnectPage } from '../frontend-dist/charinfo-upload/connect.js';
+import { mountConnectPage } from '../frontend-dist/charinfo-upload/connect.js';
 
 const connectionId = 'a'.repeat(48);
 const albumId = '12345678-1234-4234-8234-123456789abc';
@@ -31,6 +31,7 @@ function browserWindow(url) {
 function receiver({ connected = false, storage = true, override } = {}) {
   const frame = browserWindow(entry), replies = [], calls = [], savedGrants = new Map();
   frame.parent = { postMessage: (data, origin) => replies.push({ data, origin }) };
+  frame.top = {};
   const server = { connected };
   const result = { albumId, characterName: '角色', remoteGalleryUrl: `${ownOrigin}/api/public/album-gallery/${albumId}`, items: [{ id: 'member_1', title: '立绘', url: `${ownOrigin}/file/users/account/portrait.png`, kind: 'image' }] };
   const request = async (url, options) => {
@@ -85,13 +86,14 @@ describe('ImgBed editor upload message contract', () => {
     app.bridge.dispose();
   });
 
-  it('sends private pairing proof only to the same-origin popup opened by this parent', async () => {
+  it('sends private pairing proof only to the same-origin launcher in this top-level context', async () => {
     const app = receiver(); const pairing = [];
-    const popup = { opener: app.frame.parent, closed: false, postMessage: (data, origin) => pairing.push({ data, origin }) };
-    const challenge = { protocol: INTERNAL_PROTOCOL, version: 1, type: 'pair.challenge', connectionId, challenge: 'b'.repeat(48) };
+    const popup = { top: app.frame.top, closed: false, postMessage: (data, origin) => pairing.push({ data, origin }) };
+    const challenge = { protocol: INTERNAL_PROTOCOL, version: 1, type: 'launch.request', connectionId, challenge: 'b'.repeat(48), parentOrigin };
     await app.send(challenge, popup, ownOrigin); assert.equal(pairing.length, 0);
     await app.send(envelope('bridge.hello'));
-    await app.send(challenge, { ...popup, opener: {} }, ownOrigin); assert.equal(pairing.length, 0);
+    await app.send(challenge, { ...popup, top: {} }, ownOrigin); assert.equal(pairing.length, 0);
+    await app.send({ ...challenge, parentOrigin: 'https://evil.example' }, popup, ownOrigin); assert.equal(pairing.length, 0);
     await app.send(challenge, popup, parentOrigin); assert.equal(pairing.length, 0);
     await app.send(challenge, popup, ownOrigin);
     assert.equal(pairing.length, 1); assert.equal(pairing[0].origin, ownOrigin); assert.match(pairing[0].data.proof, /^[0-9a-f]{64}$/);
@@ -195,11 +197,29 @@ describe('ImgBed editor upload message contract', () => {
     assert.equal(app.replies.at(-1).data.code, 'BUSY');
     assert.equal(app.frame.timers.get(timerId), deadline);
     deadline.callback();
-    assert.equal(app.replies.at(-1).data.code, 'TIMEOUT');
+    await tick();
+    assert.equal(app.replies.at(-1).data.type, 'auth.cancelled');
     assert.equal(app.frame.timers.size, 0);
     app.server.connected = true;
     await app.send(envelope('auth.resume', { requestId: 'connect_1' }));
-    assert.equal(app.replies.at(-1).data.code, 'TIMEOUT'); app.bridge.dispose();
+    assert.equal(app.replies.at(-1).data.type, 'auth.cancelled'); app.bridge.dispose();
+  });
+
+  it('acknowledges connection cancellation only after server revocation, and reports failure explicitly', async () => {
+    let resolveRevocation;
+    const app = receiver({ override: (url, options, body) => body.action === 'disconnect' ? new Promise(resolve => { resolveRevocation = resolve; }) : null });
+    await app.send(envelope('bridge.hello'));
+    await app.send(envelope('auth.connect', { requestId: 'cancel_auth' }));
+    await app.send(envelope('bridge.cancel', { requestId: 'cancel_auth' }));
+    assert.equal(app.replies.some(reply => reply.data.type === 'auth.cancelled'), false);
+    resolveRevocation(Response.json({ connected: false })); await tick();
+    assert.equal(app.replies.at(-1).data.type, 'auth.cancelled'); app.bridge.dispose();
+    const failed = receiver({ override: (url, options, body) => body.action === 'disconnect' ? Response.json({ code: 'AUTH_CONFLICT' }, { status: 409 }) : null });
+    await failed.send(envelope('bridge.hello'));
+    await failed.send(envelope('auth.connect', { requestId: 'cancel_auth' }));
+    await failed.send(envelope('bridge.cancel', { requestId: 'cancel_auth' }));
+    assert.equal(failed.replies.at(-1).data.code, 'REVOCATION_FAILED');
+    assert.equal(failed.replies.some(reply => reply.data.type === 'auth.cancelled'), false); failed.bridge.dispose();
   });
 
   it('validates progress IDs/counts and never accepts malformed pending results', async () => {
@@ -213,44 +233,41 @@ describe('ImgBed editor upload message contract', () => {
 describe('ImgBed top-level upload consent pairing', () => {
   function popupFixture() {
     const popup = browserWindow(`${ownOrigin}/charinfo-upload/connect?${new URLSearchParams({ parent_origin: parentOrigin, connection_id: connectionId })}`);
-    const challenges = [];
-    const child = { postMessage: (data, origin) => challenges.push({ data, origin }) };
-    popup.opener = { closed: false, frames: [child] };
-    return { popup, challenges, child };
+    popup.opener = null;
+    return { popup };
   }
-  it('accepts private proof only from a direct opener frame and the exact internal challenge', () => {
-    const { popup, challenges, child } = popupFixture(); const proofs = [];
-    pairWithDirectFrame({ window: popup, session: { connectionId, parentOrigin }, onProof: proof => proofs.push(proof), onFailure: assert.fail });
-    const answer = { ...challenges[0].data, type: 'pair.proof', proof: 'c'.repeat(64) };
-    const receive = popup.listeners.get('message');
-    receive({ source: {}, origin: ownOrigin, data: answer });
-    receive({ source: child, origin: parentOrigin, data: answer });
-    receive({ source: child, origin: ownOrigin, data: { ...answer, challenge: 'd'.repeat(48) } });
-    assert.equal(proofs.length, 0);
-    receive({ source: child, origin: ownOrigin, data: answer });
-    assert.deepEqual(proofs, ['c'.repeat(64)]); assert.equal(challenges[0].origin, ownOrigin);
-    assert.equal(popup.listeners.has('message'), false); assert.equal(popup.timers.size, 0);
-  });
-
-  it('fails closed when OAuth/browser isolation has removed the opener', () => {
-    const { popup } = popupFixture(); popup.opener = null; const failures = [];
-    pairWithDirectFrame({ window: popup, session: { connectionId, parentOrigin }, onProof: assert.fail, onFailure: value => failures.push(value) });
-    assert.equal(failures.length, 1); assert.match(failures[0], /无法保留 ST 窗口连接/); assert.equal(popup.listeners.has('message'), false);
+  it('opens Discord automatically once, and keeps a retry link if login returns without a session', async () => {
+    for (const attempted of [false, true]) {
+      const { popup } = popupFixture();
+      if (attempted) popup.location.search += '&login_attempted=1';
+      const redirected = [];
+      popup.location.replace = value => redirected.push(value);
+      const nodes = new Map(['connectionStatus', 'connectionOrigin', 'connectionAccount', 'connectionDetails', 'approveConnection', 'discordLogin', 'cancelConnection', 'authorizationExpiry'].map(id => [id, { hidden: true, disabled: true, textContent: '', addEventListener() {} }]));
+      mountConnectPage({ window: popup, document: { querySelector: selector => nodes.get(selector.slice(1)) }, request: async () => Response.json({ code: 'SIGN_IN_REQUIRED' }, { status: 401 }) });
+      await tick();
+      assert.equal(redirected.length, attempted ? 0 : 1);
+      const login = new URL(nodes.get('discordLogin').href, ownOrigin);
+      assert.equal(login.pathname, '/api/auth/discord');
+      const returnUrl = new URL(login.searchParams.get('returnTo'), ownOrigin);
+      assert.equal(returnUrl.searchParams.get('login_attempted'), '1');
+      assert.equal(returnUrl.searchParams.get('connection_id'), connectionId);
+      assert.equal(nodes.get('approveConnection').disabled, true);
+    }
   });
 
   it('shows only the server-confirmed origin/account and waits for an explicit approval click', async () => {
-    const { popup, child, challenges } = popupFixture(); const calls = [];
+    const { popup } = popupFixture(); const calls = [];
     const nodes = new Map(['connectionStatus', 'connectionOrigin', 'connectionAccount', 'connectionDetails', 'approveConnection', 'discordLogin', 'cancelConnection', 'authorizationExpiry'].map(id => [id, { hidden: true, disabled: id === 'approveConnection', textContent: '', events: {}, addEventListener(type, callback) { this.events[type] = callback; }, setAttribute() {}, removeAttribute() {} }]));
     const page = { querySelector: selector => nodes.get(selector.slice(1)) };
-    mountConnectPage({ window: popup, document: page, request: async (url, options) => { const body = JSON.parse(options.body); calls.push({ body, headers: options.headers, credentials: options.credentials }); return Response.json(body.action === 'inspect' ? { parentOrigin, accountName: '真实登录账号' } : { connected: true, grantExpiresAt: account.grantExpiresAt }); } });
-    popup.listeners.get('message')({ source: child, origin: ownOrigin, data: { ...challenges[0].data, type: 'pair.proof', proof: 'e'.repeat(64) } });
+    mountConnectPage({ window: popup, document: page, request: async (url, options) => { const body = JSON.parse(options.body); calls.push({ body, headers: options.headers, credentials: options.credentials }); return Response.json(body.action === 'inspect' ? { parentOrigin, accountId: 'shown-account', accountName: '真实登录账号' } : { connected: true, grantExpiresAt: account.grantExpiresAt }); } });
     await tick();
     assert.deepEqual(calls.map(call => call.body.action), ['inspect']);
     assert.equal(nodes.get('connectionOrigin').textContent, parentOrigin); assert.equal(nodes.get('connectionAccount').textContent, '真实登录账号');
     assert.equal(nodes.get('approveConnection').disabled, false);
     await nodes.get('approveConnection').events.click();
     assert.deepEqual(calls.map(call => call.body.action), ['inspect', 'approve']);
-    assert.equal(calls[1].headers['X-CharInfo-Pair-Proof'], 'e'.repeat(64));
+    assert.equal(calls[1].headers['X-CharInfo-Pair-Proof'], undefined);
+    assert.equal(calls[1].body.accountId, 'shown-account');
     assert.equal(calls.every(call => call.credentials === 'same-origin'), true);
     assert.match(nodes.get('authorizationExpiry').textContent, /授权截止：.*不会随使用自动延长/);
     assert.equal(popup.location.search.includes('proof'), false);
