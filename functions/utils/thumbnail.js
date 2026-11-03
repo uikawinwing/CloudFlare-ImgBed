@@ -11,9 +11,17 @@ export const THUMBNAIL_VARIANTS = Object.freeze({
     library: Object.freeze({ width: 256, outputFormat: THUMBNAIL_CONTENT_TYPE }),
     gallery: Object.freeze({ width: THUMBNAIL_WIDTH, outputFormat: THUMBNAIL_CONTENT_TYPE }),
 });
+// ST main portrait is an on-demand, edge-cached WebP. Existing permanent
+// thumbnail metadata requires only the original three variants above.
+export const PORTRAIT_DISPLAY_VARIANT = Object.freeze({
+    width: 1440,
+    outputFormat: THUMBNAIL_CONTENT_TYPE,
+    outputQuality: 88,
+});
 
 export function getThumbnailVariant(name) {
     if (!name || name === 'gallery') return THUMBNAIL_VARIANTS.gallery;
+    if (name === 'portrait') return PORTRAIT_DISPLAY_VARIANT;
     return THUMBNAIL_VARIANTS[name] || null;
 }
 
@@ -58,7 +66,7 @@ export function createThumbnailTransform(metadata = {}, variantName) {
             fit: 'scale-down',
         },
         outputFormat: variant.outputFormat,
-        outputQuality: 85,
+        outputQuality: variant.outputQuality ?? 85,
         fallback: null,
     };
 }

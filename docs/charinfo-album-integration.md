@@ -26,7 +26,10 @@
 ```json
 {
   "title": "立绘.png",
-  "sources": ["https://imgbed.example/file/users/owner/uuid.png?v=1"],
+  "sources": [
+    "https://imgbed.example/thumb/users/owner/uuid.png?variant=portrait&v=1",
+    "https://imgbed.example/thumb/users/owner/uuid.png?v=1"
+  ],
   "thumbnail": "https://imgbed.example/thumb/users/owner/uuid.png?v=1",
   "viewerVisible": false
 }
@@ -35,6 +38,7 @@
 - `characterName` 来自 `albums.char_info_character_name`；缺失、超过 80 个字符或含控制字符时返回 409，不用相册名称补全。
 - `packId` 与 `profileId` 均为相册 UUID，满足 `[a-z0-9][a-z0-9._-]{0,63}`。不包含 Discord ID、用户名、Cookie、令牌或角色 metadata。
 - 只输出审核状态为 `active` 且文件所有者账号有效的媒体；支持 PNG/JPG/JPEG/GIF/APNG/WebP/AVIF/MP4/WebM HTTPS 直链。历史不支持的格式只在协议出口过滤，原文件不变。历史文件标题中的控制字符在新接口展示时换成空格；数据库名称与旧接口不变。
+- 静态 PNG／JPEG／WebP／AVIF 的 `sources[0]` 是 `variant=portrait`（**最长宽 1440px、WebP Q88**），`sources[1]` 是现有 720px WebP（Q85）备用；两者只用在 ST 展示。原始 `/file/` 保留在 ImgBed 网站供管理和下载，不放入这些图片的 ST 展示 sources。`/thumb/?variant=portrait` 首次从原图按需转换，使用版本化 URL 和边缘缓存；不修改已上传图片或旧版三档永久缩略图元数据。GIF／APNG／视频仍使用原链接以保留动画。
 - 顺序以 `album_items.position, created_at` 为准。旧展示设置中的隐藏标记仍有效；`mainFileId` 不覆盖这个新接口的成员顺序。头像和列表预览沿用有效的旧图片选择，失效时取第一张支持的图片，并分别返回现有 `avatar`（160px）与 `library`（256px）缩略图变体及内容版本；空相册或纯视频相册为 null。图片条目使用现有缩略图，视频条目的 `thumbnail` 为 null，v1 解析器将其视为缺省。
 - GET 和 OPTIONS 提供只读 CORS，不允许跨域带 Cookie 写入。OPTIONS 返回 204；其他方法由 Worker 返回 405。
 - 成功和 304 响应提供 `Cache-Control: public, max-age=60`、ETag 和跨域可读的 ETag 响应头。ETag 使用实际 JSON 的 SHA-256，涵盖增删、顺序、文件名、缩略图版本和展示选择；`If-None-Match` 支持单个／多个标识、弱标识和 `*`。相册名称或用户名变化而 JSON 不变时 ETag 可以不变。客户端仍受自身刷新周期及最多 60 秒 HTTP 缓存影响。

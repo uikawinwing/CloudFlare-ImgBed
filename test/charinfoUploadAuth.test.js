@@ -6,6 +6,7 @@ import { onRequestPost as pairRoute } from '../functions/api/charinfo-upload/pai
 import { onRequestPost as authRoute } from '../functions/api/charinfo-upload/auth.js';
 import { onRequestPost as launchRoute } from '../functions/api/charinfo-upload/launch.js';
 import { authorizeUploadRequest } from '../functions/utils/charinfoUploadAuth.js';
+import { createDiscordSession } from '../functions/utils/auth/discordIdentity.js';
 
 const origin = 'https://imgbed-staging.uika.cc.cd';
 const connectionId = 'a'.repeat(48);
@@ -14,13 +15,14 @@ const parentOrigin = 'http://192.168.1.41:8000';
 
 function fixture() {
     let launchCookie, inspectedAccountId;
+    const kvWrites = { put: 0, delete: 0 };
     const db = new TestD1();
     db.exec(readFileSync(new URL('../database/init.sql', import.meta.url), 'utf8'));
     db.exec("INSERT INTO users(discord_id,username,role,status,created_at,updated_at) VALUES ('a','Player A','member','active',1,1),('b','Player B','member','active',1,1)");
     const env = { img_d1: db, img_url: { get: async key => {
         const id = { 'manage@session@a-token': 'a', 'manage@session@b-token': 'b' }[key];
         return id ? JSON.stringify({ authType: 'user', expiresAt: Date.now() + 600000, identity: { id, username: `Player ${id.toUpperCase()}` } }) : null;
-    } } };
+    }, put: async () => { kvWrites.put++; }, delete: async () => { kvWrites.delete++; } } };
     function context(body, { user, secret = proof, suppliedOrigin = origin, fetchSite = 'same-origin', cookie = launchCookie } = {}) {
         const cookies = [user ? `user_session=${user}-token` : '', cookie || ''].filter(Boolean).join('; ');
         return { env, request: new Request(`${origin}/api/charinfo-upload/auth`, { method: 'POST',
@@ -48,7 +50,7 @@ function fixture() {
         assert.equal((await call('approve', {}, { user: 'a' })).status, 200);
         return (await call('status')).json();
     }
-    return { db, env, context, call, register, launch, approve };
+    return { db, env, context, call, register, launch, approve, kvWrites };
 }
 
 describe('private CharInfo upload authorization', () => {
@@ -123,6 +125,56 @@ describe('private CharInfo upload authorization', () => {
         f.db.exec("UPDATE other_data SET value=json_set(value,'$.expiresAt',0) WHERE type='charinfo_upload_grant'");
         assert.deepEqual(await (await f.call('status')).json(), { connected: false });
         assert.equal((await f.call('renew', { sessionId: renewed.sessionId })).status, 401);
+    });
+
+    it('issues a fixed 30-day media grant and keeps daily pair/status/resume/renew/disconnect out of KV writes', async () => {
+        const initial = await f.approve();
+        const grant = JSON.parse((await f.db.prepare("SELECT value FROM other_data WHERE type='charinfo_upload_grant'").first()).value);
+        assert.equal(grant.expiresAt - grant.approvedAt, 30 * 24 * 60 * 60 * 1000);
+        assert.equal(initial.grantExpiresAt, grant.expiresAt);
+        assert.ok(initial.expiresAt <= grant.approvedAt + 12 * 60 * 1000);
+        for (let index = 0; index < 50; index++) assert.equal((await f.call('status')).status, 200);
+        const second = 'd'.repeat(48);
+        assert.equal((await f.register({ connectionId: second })).status, 200);
+        const secondCall = (action, fields = {}) => authRoute(f.context({ action, connectionId: second, ...fields }));
+        let resumed = await (await secondCall('resume', { resumeProof: initial.resumeProof })).json();
+        assert.equal(resumed.grantExpiresAt, initial.grantExpiresAt);
+        assert.equal(resumed.connected, true);
+        for (let index = 0; index < 3; index++) {
+            resumed = await (await secondCall('renew', { sessionId: resumed.sessionId })).json();
+            assert.equal(resumed.grantExpiresAt, initial.grantExpiresAt);
+            assert.ok(resumed.expiresAt <= Date.now() + 12 * 60 * 1000);
+        }
+        assert.equal((await secondCall('disconnect', { sessionId: resumed.sessionId })).status, 200);
+        assert.deepEqual(await (await f.call('status')).json(), { connected: false });
+        assert.equal((await f.call('resume', { resumeProof: initial.resumeProof })).status, 401);
+        assert.deepEqual(f.kvWrites, { put: 0, delete: 0 });
+    });
+
+    it('does not extend an existing shorter grant when resuming or renewing its internal session', async () => {
+        const initial = await f.approve();
+        const existingDeadline = Date.now() + 24 * 60 * 60 * 1000;
+        await f.db.prepare("UPDATE other_data SET value=json_set(value,'$.expiresAt',?) WHERE type='charinfo_upload_grant'").bind(existingDeadline).run();
+        const second = 'd'.repeat(48);
+        await f.register({ connectionId: second });
+        const secondCall = (action, fields = {}) => authRoute(f.context({ action, connectionId: second, ...fields }));
+        const resumed = await (await secondCall('resume', { resumeProof: initial.resumeProof })).json();
+        assert.equal(resumed.grantExpiresAt, existingDeadline);
+        const renewed = await (await secondCall('renew', { sessionId: resumed.sessionId })).json();
+        assert.equal(renewed.grantExpiresAt, existingDeadline);
+        const nearDeadline = Date.now() + 30000;
+        await f.db.prepare("UPDATE other_data SET value=json_set(value,'$.expiresAt',?) WHERE type='charinfo_upload_grant'").bind(nearDeadline).run();
+        const limited = await (await secondCall('renew', { sessionId: renewed.sessionId })).json();
+        assert.equal(limited.expiresAt, nearDeadline);
+        assert.equal(limited.grantExpiresAt, nearDeadline);
+        assert.deepEqual(f.kvWrites, { put: 0, delete: 0 });
+    });
+
+    it('retains the existing single KV session write and 24-hour cookie for a Discord login', async () => {
+        const session = await createDiscordSession(f.env, { id: 'a', username: 'Player A' });
+        assert.match(session.cookie, /Max-Age=86400(?:;|$)/);
+        assert.match(session.cookie, /; Secure(?:;|$)/);
+        assert.deepEqual(f.kvWrites, { put: 1, delete: 0 });
     });
 
     it('revokes the server grant before confirming disconnect, including other resumed connections', async () => {

@@ -1,7 +1,7 @@
 const defaultConfig = Object.freeze({
   siteTitle: 'Charatopia',
   ownerName: 'Charatopia',
-  siteIcon: '/static/media/logo.png',
+  siteIcon: '/brand/charatopia-wordmark.svg',
   logoUrl: '',
   logoLink: '/',
   urlPrefix: '',

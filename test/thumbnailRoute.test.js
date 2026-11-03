@@ -45,6 +45,62 @@ describe('thumbnail route visibility and cache contract', () => {
         }
     });
 
+
+    it('serves an old album portrait at 1440px Q88 from original pixels and caches WebP separately', async () => {
+        const previousFetch = globalThis.fetch;
+        const previousCaches = globalThis.caches;
+        const stored = new Map();
+        let originalRequests = 0;
+        let transformed = 0;
+        const metadata = {
+            FileType: 'image/png', ModerationStatus: 'active', Width: 2160, TimeStamp: 123,
+            Thumbnail: { Version: 2, Channel: 'CloudflareR2', CreatedAt: 456,
+                Variants: Object.fromEntries(['avatar', 'library', 'gallery'].map(name => [name, { Key: 'old/' + name }])) },
+        };
+        globalThis.fetch = async url => {
+            originalRequests += 1;
+            assert.equal(String(url), 'https://example.test/file/portrait.png');
+            return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'image/png' } });
+        };
+        globalThis.caches = { default: {
+            match: async key => stored.get(key.url)?.clone(),
+            put: async (key, response) => stored.set(key.url, response.clone()),
+        } };
+        const env = {
+            img_url: { get: async () => null, getWithMetadata: async () => ({ value: '', metadata }) },
+            THUMBNAILS: { get: async () => { throw new Error('Do not upscale permanent 720px'); } },
+            IMAGE_PROCESSOR: { transform: async (stream, options) => {
+                transformed += 1;
+                assert.equal(options.width, 1440);
+                assert.equal(options.quality, 88);
+                assert.equal(options.outputFormat, 'image/webp');
+                assert.equal(options.fit, 'scale-down');
+                await new Response(stream).arrayBuffer();
+                return new Response(new Uint8Array([9, 8, 7]), { headers: { 'Content-Type': 'image/webp' } });
+            } },
+        };
+        const url = 'https://example.test/thumb/portrait.png?variant=portrait&v=456';
+        try {
+            const request = () => serveThumbnail({ env, params: { path: 'portrait.png' }, request: new Request(url) });
+            const first = await request();
+            assert.equal(first.status, 200);
+            assert.equal(first.headers.get('content-type'), 'image/webp');
+            assert.equal(first.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+            assert.deepEqual([...new Uint8Array(await first.arrayBuffer())], [9, 8, 7]);
+            const second = await request();
+            assert.equal(second.status, 200);
+            assert.equal(transformed, 1);
+            assert.equal(originalRequests, 1);
+            const missingVersion = await serveThumbnail({ env, params: { path: 'portrait.png' },
+                request: new Request('https://example.test/thumb/portrait.png?variant=portrait&v=123') });
+            assert.equal(missingVersion.status, 404);
+        } finally {
+            globalThis.fetch = previousFetch;
+            if (previousCaches === undefined) delete globalThis.caches;
+            else globalThis.caches = previousCaches;
+        }
+    });
+
     it('fails closed when a permanent R2 object is unavailable', async () => {
         const originalFetch = globalThis.fetch;
         globalThis.fetch = async () => { throw new Error('Must not replace versioned R2 bytes with an original'); };

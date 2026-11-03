@@ -64,7 +64,7 @@ describe('shared site configuration', () => {
     const config = app.normalizeSiteConfig({ logoLink: 'javascript:alert(1)', logoUrl: '//example.test/logo.svg', siteIcon: 'bad', ownerName: '' });
     assert.equal(config.logoLink, '/');
     assert.equal(config.logoUrl, '');
-    assert.equal(config.siteIcon, '/static/media/logo.png');
+    assert.equal(config.siteIcon, '/brand/charatopia-wordmark.svg');
     assert.equal(config.ownerName, 'Charatopia');
   });
 

@@ -110,7 +110,13 @@ describe('stable Album Gallery Pack', () => {
         assertGalleryV1(pack);
         assert.equal(pack.avatarThumbnail, 'https://example.test/thumb/image5.png?variant=avatar&v=30');
         assert.equal(pack.libraryThumbnail, 'https://example.test/thumb/foreign.png?variant=library&v=40');
-        assert.equal(pack.gallery[0].sources[0], 'https://example.test/file/image1.png?v=1');
+        assert.deepEqual(pack.gallery[0].sources, [
+            'https://example.test/thumb/image1.png?variant=portrait&v=1',
+            'https://example.test/thumb/image1.png?v=1',
+        ]);
+        assert.deepEqual(pack.gallery[1].sources, ['https://example.test/file/clip.webm?v=2']);
+        assert.equal(pack.gallery[0].thumbnail, 'https://example.test/thumb/image1.png?v=1');
+        assert.ok(pack.gallery[0].sources.every(source => !source.includes('/file/')), 'ST must never download PNG originals');
         f.db.exec(`UPDATE files SET metadata = '{"Thumbnail":{"CreatedAt":31}}' WHERE id = 'image5.png'`);
         const changed = await f.read({ 'If-None-Match': first.headers.get('etag') });
         assert.equal(changed.status, 200);

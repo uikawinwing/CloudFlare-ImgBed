@@ -5,7 +5,7 @@ const CONNECTION = /^[a-f0-9]{48}$/;
 const PROOF = /^[a-f0-9]{64}$/;
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const SESSION_MS = 12 * 60 * 1000;
-const GRANT_MS = 24 * 60 * 60 * 1000;
+const GRANT_MS = 30 * 24 * 60 * 60 * 1000;
 const LAUNCH_MS = 10 * 60 * 1000;
 const pairKey = id => `charinfo-upload:pair:${id}`;
 const grantKey = hash => `charinfo-upload:grant:${hash}`;

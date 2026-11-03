@@ -5,6 +5,8 @@ import {
     absoluteThumbnailUrl,
     createThumbnailTransform,
     ensurePermanentThumbnail,
+    getPermanentThumbnail,
+    getThumbnailVariant,
     thumbnailContentVersion,
     thumbnailVariantUrls,
 } from '../functions/utils/thumbnail.js';
@@ -21,6 +23,28 @@ describe('thumbnail variants', () => {
                 library: { width: 256, outputFormat: THUMBNAIL_CONTENT_TYPE },
                 gallery: { width: 720, outputFormat: THUMBNAIL_CONTENT_TYPE },
             }
+        );
+    });
+
+    it('offers 1440px Q88 WebP portrait while preserving old permanent variants', () => {
+        assert.deepStrictEqual(getThumbnailVariant('portrait'), {
+            width: 1440, outputFormat: THUMBNAIL_CONTENT_TYPE, outputQuality: 88,
+        });
+        const fullSize = createThumbnailTransform({ Width: 2160 }, 'portrait');
+        assert.equal(fullSize.options.width, 1440);
+        assert.equal(fullSize.options.fit, 'scale-down');
+        assert.equal(fullSize.outputQuality, 88);
+        assert.equal(createThumbnailTransform({ Width: 700 }, 'portrait').options.width, 700);
+        assert.equal(createThumbnailTransform({ Width: 2160 }, 'gallery').outputQuality, 85);
+        const existing = {
+            Version: 2, Channel: 'CloudflareR2',
+            Variants: Object.fromEntries(['avatar', 'library', 'gallery'].map(name => [name, { Key: name }])),
+        };
+        assert.strictEqual(getPermanentThumbnail({ Thumbnail: existing }), existing);
+        assert.equal(Object.keys(THUMBNAIL_VARIANTS).length, 3);
+        assert.strictEqual(
+            absoluteThumbnailUrl('https://example.test/x', 'test.png', 'portrait', 456),
+            'https://example.test/thumb/test.png?variant=portrait&v=456',
         );
     });
 

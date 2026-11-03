@@ -18,8 +18,8 @@ describe('stable CharInfo visual URL', () => {
             requestUrl: 'https://example.test/api/public/charinfo/album-id',
         });
 
-        assert.strictEqual(pack.visual.avatarUrl, 'https://example.test/file/portrait.png');
-        assert.strictEqual(pack.visual.coverUrl, 'https://example.test/file/portrait.png');
+        assert.strictEqual(pack.visual.avatarUrl, 'https://example.test/thumb/portrait.png?variant=portrait');
+        assert.strictEqual(pack.visual.coverUrl, 'https://example.test/thumb/portrait.png?variant=portrait');
     });
 
     it('keeps one album UUID URL while visual settings and gallery contents update', async () => {
@@ -103,8 +103,8 @@ describe('stable CharInfo visual URL', () => {
         assert.strictEqual(firstPack.profileId, 'album-id');
         assert.strictEqual(firstPack.galleryUrl, 'https://example.test/api/public/gallery/master/summer-gallery');
         assert.strictEqual(firstPack.visual.entranceQuote, 'Hello');
-        assert.strictEqual(firstPack.visual.avatarUrl, 'https://example.test/file/first.png?v=1');
-        assert.strictEqual(firstPack.visual.coverUrl, 'https://example.test/file/first.png?v=1', 'an unavailable cover selection falls back to the first album image');
+        assert.strictEqual(firstPack.visual.avatarUrl, 'https://example.test/thumb/first.png?variant=portrait&v=1');
+        assert.strictEqual(firstPack.visual.coverUrl, 'https://example.test/thumb/first.png?variant=portrait&v=1', 'an unavailable cover selection falls back to the first album image');
         assert.strictEqual('skills' in firstPack.visual, false);
         assert.strictEqual('mvu' in firstPack.visual, false);
         assert.deepStrictEqual(firstPack.gallery.map((item) => item.title), ['First.png', 'Second.webm']);
@@ -120,8 +120,8 @@ describe('stable CharInfo visual URL', () => {
         assert.deepStrictEqual(galleryPack, {
             format: 'char-info-gallery-pack', version: 1, packId: 'master', profileId: 'album-id',
             characterName: album.char_info_character_name,
-            avatarThumbnail: 'https://example.test/file/first.png?v=1',
-            libraryThumbnail: 'https://example.test/file/first.png?v=1',
+            avatarThumbnail: 'https://example.test/thumb/first.png?variant=portrait&v=1',
+            libraryThumbnail: 'https://example.test/thumb/first.png?variant=portrait&v=1',
             gallery: firstPack.gallery,
         });
         assert.strictEqual(galleryResponse.headers.get('Access-Control-Allow-Origin'), '*');
@@ -195,8 +195,8 @@ describe('stable CharInfo visual URL', () => {
         assert.deepStrictEqual(brokenPack.gallery.map((item) => item.title), ['First.png', 'Second.webm', 'Third.png']);
         const brokenGalleryResponse = await stableCharInfoGet({ request: new Request(galleryUrl), env, params: { albumId: 'album-id' } });
         const brokenGalleryPack = await brokenGalleryResponse.json();
-        assert.strictEqual(brokenGalleryPack.avatarThumbnail, 'https://example.test/file/first.png?v=1');
-        assert.strictEqual(brokenGalleryPack.libraryThumbnail, 'https://example.test/file/first.png?v=1');
+        assert.strictEqual(brokenGalleryPack.avatarThumbnail, 'https://example.test/thumb/first.png?variant=portrait&v=1');
+        assert.strictEqual(brokenGalleryPack.libraryThumbnail, 'https://example.test/thumb/first.png?variant=portrait&v=1');
     });
 
     it('rejects unknown views without reading album contents', async () => {
@@ -231,10 +231,10 @@ describe('stable CharInfo visual URL', () => {
         assert.strictEqual(visualPack.gallery.length, 5, 'legacy files remain in the editor view and in their album');
         const galleryPack = await read('?view=gallery');
         assert.deepStrictEqual(galleryPack.gallery.map(item => item.sources[0]), [
-            'https://example.test/file/clip.webm', 'https://example.test/file/portrait.PNG',
+            'https://example.test/file/clip.webm', 'https://example.test/thumb/portrait.PNG?variant=portrait',
         ]);
-        assert.strictEqual(galleryPack.avatarThumbnail, 'https://example.test/file/portrait.PNG');
-        assert.strictEqual(galleryPack.libraryThumbnail, 'https://example.test/file/portrait.PNG');
+        assert.strictEqual(galleryPack.avatarThumbnail, 'https://example.test/thumb/portrait.PNG?variant=portrait');
+        assert.strictEqual(galleryPack.libraryThumbnail, 'https://example.test/thumb/portrait.PNG?variant=portrait');
         files = files.slice(0, 4);
         const allVideoPack = await read('?view=gallery');
         assert.strictEqual(allVideoPack.avatarThumbnail, null);

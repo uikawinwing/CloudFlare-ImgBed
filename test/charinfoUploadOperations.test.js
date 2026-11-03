@@ -59,6 +59,7 @@ function bucket() {
 }
 
 function fixture(channel = 'cfr2') {
+    const kvWrites = { put: 0, delete: 0 };
     const db = new TestD1();
     const originalPrepare = db.prepare.bind(db);
     db.prepare = sql => {
@@ -84,7 +85,9 @@ function fixture(channel = 'cfr2') {
     const staging = bucket();
     const originals = bucket();
     const env = { img_d1: db, img_r2: originals, CHARINFO_UPLOAD_STAGING: staging,
-        img_url: { get: async key => config.get(key) ?? null, put: async (key, value) => config.set(key, value), delete: async key => config.delete(key) } };
+        img_url: { get: async key => config.get(key) ?? null,
+            put: async (key, value) => { kvWrites.put++; return config.set(key, value); },
+            delete: async key => { kvWrites.delete++; return config.delete(key); } } };
     let authorized = true;
     const authorize = async () => {
         if (!authorized) throw Object.assign(new Error('Authorization required'), { code: 'AUTH_REQUIRED' });
@@ -108,7 +111,7 @@ function fixture(channel = 'cfr2') {
     };
     const addAlbum = (owner = 'a') => db.db.prepare(`INSERT INTO albums (id,owner_id,slug,name,char_info_character_name,created_at,updated_at)
         VALUES (?,?,'traveler','旅行者','旅行者',1,1)`).run(knownAlbum, owner);
-    return { ...base, db, staging, originals, config, input, prepare, stage, commit, ledger, count, used, addAlbum, addFile,
+    return { ...base, db, staging, originals, config, kvWrites, input, prepare, stage, commit, ledger, count, used, addAlbum, addFile,
         revoke: () => { authorized = false; }, grant: () => { authorized = true; } };
 }
 
@@ -263,7 +266,8 @@ describe('durable CharInfo upload operations', function () {
         assert.equal(packResponse.status, 200); const pack = await packResponse.json();
         assert.equal(pack.gallery[0].sources[0], result.items[0].url); assert.equal(pack.gallery[0].title, result.items[0].title);
         const loaded = await operations.readUploadGallery({ env: f.env, identity, authorize: f.authorize, albumId: result.albumId, characterName: '旅行者', requestUrl: origin });
-        assert.deepEqual(loaded.items, result.items); f.db.db.close();
+        assert.deepEqual(loaded.items, result.items);
+        assert.deepEqual(f.kvWrites, { put: 0, delete: 0 }); f.db.db.close();
     });
 
     it('recovers an existing account operation after authorization is replaced, preserving uploaded files and quota', async () => {

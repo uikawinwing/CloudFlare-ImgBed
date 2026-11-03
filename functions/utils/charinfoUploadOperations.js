@@ -2,9 +2,8 @@ import { ALLOWED_UPLOAD_TYPES, canonicalExtensionForMediaType, matchesAllowedFil
 import { MAX_UPLOAD_BYTES, USER_QUOTA_BYTES } from './auth/discordIdentity.js';
 import { validateCharInfoCharacterName } from './charInfoGallery.js';
 import { legacyFileRestriction } from './files/fileAccess.js';
-import { absoluteFileUrl } from './publicCatalog.js';
 import { uploadAuthorizationGuard } from './charinfoUploadAuth.js';
-import { createCharInfoGalleryPack } from './charInfoVisualPack.js';
+import { createCharInfoGalleryPack, displaySourcesFor } from './charInfoVisualPack.js';
 import { charInfoVisualStorageKey } from './charInfoVisualConfig.js';
 import { getImageDimensions } from '../upload/uploadTools.js';
 import { uploadPreparedCharInfoFile } from '../upload/index.js';
@@ -132,7 +131,7 @@ async function visualValue(env, albumId) {
 async function presentItems(albumId, files, requestUrl, characterName, visual) {
     const pack = createCharInfoGalleryPack({ album: { id: albumId, char_info_character_name: characterName },
         files, requestUrl, storedVisualConfig: visual, stableIdentity: true });
-    if (pack.gallery.length !== files.length || pack.gallery.some((item, index) => item.sources[0] !== absoluteFileUrl(requestUrl, files[index].id, files[index].timestamp)
+    if (pack.gallery.length !== files.length || pack.gallery.some((item, index) => item.sources[0] !== displaySourcesFor(files[index], requestUrl)[0]
         || item.title.length > 500) || !pack.gallery.some(item => item.viewerVisible !== false)) fail('PUBLICATION_BLOCKED', 'The complete gallery must contain displayable media');
     return Promise.all(pack.gallery.map(async (item, index) => ({
         id: await sha256(`${albumId}\n${files[index].id}`), title: item.title, url: item.sources[0],

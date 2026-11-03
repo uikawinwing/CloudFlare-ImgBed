@@ -67,7 +67,8 @@ export async function onRequest(context) {
     const cached = await matchEdgeCache(edgeCache, cacheKey);
     if (cached) return request.method === 'HEAD' ? headResponse(cached) : cached;
 
-    const permanent = getPermanentThumbnail(metadata);
+    // Portrait must be generated from the full original, never upscaled from a 720px thumbnail.
+    const permanent = variantName === 'portrait' ? null : getPermanentThumbnail(metadata);
     if (permanent?.Channel === 'CloudflareR2') {
         try {
             const variant = permanent.Variants[variantName];
@@ -101,7 +102,9 @@ export async function onRequest(context) {
 }
 
 async function createThumbnailResponse(context, fileId, metadata, variantName, cacheControl) {
-    const permanent = getPermanentThumbnail(metadata);
+    // Old R2 galleries have only 160/256/720px variants. Avoid a missing R2
+    // variant lookup and do not use any stored 720px thumbnail as the source.
+    const permanent = variantName === 'portrait' ? null : getPermanentThumbnail(metadata);
     let source = permanent ? await fetchPermanentThumbnail(context.env, metadata) : null;
     if (permanent && !source) {
         return new Response('Permanent thumbnail source unavailable', { status: 502, headers: noStoreHeaders() });

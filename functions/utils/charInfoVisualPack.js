@@ -59,8 +59,8 @@ export function createCharInfoGalleryPack({ album, files, storedVisualConfig, re
     let avatarThumbnail = isViewerMediaUrl(visual?.avatarUrl, true) ? visual.avatarUrl : fallbackImage;
     let libraryThumbnail = isViewerMediaUrl(visual?.coverUrl, true) ? visual.coverUrl : fallbackImage;
     if (stableIdentity) {
-        const avatarFile = sharedFiles.find(file => absoluteFileUrl(requestUrl, file.id, file.timestamp) === avatarThumbnail);
-        const libraryFile = sharedFiles.find(file => absoluteFileUrl(requestUrl, file.id, file.timestamp) === libraryThumbnail);
+        const avatarFile = sharedFiles.find(file => displaySourcesFor(file, requestUrl)[0] === avatarThumbnail);
+        const libraryFile = sharedFiles.find(file => displaySourcesFor(file, requestUrl)[0] === libraryThumbnail);
         avatarThumbnail = avatarFile ? absoluteThumbnailUrl(requestUrl, avatarFile.id, 'avatar', thumbnailContentVersion(avatarFile)) : null;
         libraryThumbnail = libraryFile ? absoluteThumbnailUrl(requestUrl, libraryFile.id, 'library', thumbnailContentVersion(libraryFile)) : null;
     }
@@ -98,12 +98,28 @@ function buildGalleryItem(file, visualConfig, requestUrl) {
     const hidden = visualConfig?.viewerHiddenFileIds?.includes(id) || false;
     return {
         title: file.file_name || file.id,
-        sources: [absoluteFileUrl(requestUrl, file.id, file.timestamp)],
+        sources: displaySourcesFor(file, requestUrl),
         thumbnail: String(file.file_type || '').startsWith('image/')
             ? absoluteThumbnailUrl(requestUrl, file.id, 'gallery', thumbnailContentVersion(file))
             : null,
         ...(hidden ? { viewerVisible: false } : {}),
     };
+}
+
+// ST receives only WebP display URLs for static raster images; the original
+// /file/ URL remains available in the ImgBed website for archive/download.
+// Animated formats and video keep their original URLs to preserve motion.
+export function displaySourcesFor(file, requestUrl) {
+    const mime = String(file.file_type || '').toLowerCase();
+    const fileId = String(file.id || '').toLowerCase();
+    const isStaticRaster = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/avif'].includes(mime)
+        && !/\.(?:apng|gif)$/iu.test(fileId);
+    if (!isStaticRaster) return [absoluteFileUrl(requestUrl, file.id, file.timestamp)];
+    const version = thumbnailContentVersion(file);
+    return [
+        absoluteThumbnailUrl(requestUrl, file.id, 'portrait', version),
+        absoluteThumbnailUrl(requestUrl, file.id, 'gallery', version),
+    ];
 }
 
 function buildVisualPayload(config, fileById, requestUrl) {
@@ -128,7 +144,7 @@ function buildVisualPayload(config, fileById, requestUrl) {
 
 function firstImageUrl(fileById, requestUrl) {
     for (const file of fileById.values()) {
-        if (String(file.file_type || '').startsWith('image/')) return absoluteFileUrl(requestUrl, file.id, file.timestamp);
+        if (String(file.file_type || '').startsWith('image/')) return displaySourcesFor(file, requestUrl)[0];
     }
     return null;
 }
@@ -137,5 +153,5 @@ function imageUrlFor(fileId, fileById, requestUrl) {
     if (!fileId) return null;
     const file = fileById.get(fileId);
     if (!file || !String(file.file_type || '').startsWith('image/')) return null;
-    return absoluteFileUrl(requestUrl, file.id, file.timestamp);
+    return displaySourcesFor(file, requestUrl)[0];
 }
