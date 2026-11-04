@@ -36,6 +36,22 @@ compatibility_date = "2026-08-25"
 compatibility_flags = ["global_fetch_strictly_public"]
 workers_dev = true
 
+# Keep persisted troubleshooting data enabled on every deployment.
+[observability]
+enabled = true
+redact_query_string = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+persist = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+persist = true
+head_sampling_rate = 0.05
+
 [assets]
 directory = "../../frontend-dist"
 binding = "ASSETS"

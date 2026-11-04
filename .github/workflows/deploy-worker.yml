@@ -119,6 +119,9 @@ jobs:
           DISCORD_CALLBACK_URL: ${{ vars.DISCORD_CALLBACK_URL }}
         run: node deploy/worker/generate-toml.js
 
+      - name: Assert production observability settings (fail closed)
+        run: node deploy/worker/assert-observability.mjs deploy/worker/wrangler.toml production
+
       - name: Validate production Worker bundle
         run: npx wrangler deploy --dry-run --config deploy/worker/wrangler.toml
 
@@ -138,6 +141,13 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           DISCORD_CLIENT_SECRET: ${{ secrets.STAGING_DISCORD_CLIENT_SECRET }}
         run: printf '%s' "$DISCORD_CLIENT_SECRET" | npx wrangler secret put DISCORD_CLIENT_SECRET --config deploy/worker/wrangler.toml
+
+      # Verify the live version after syncing secrets to catch settings regressions.
+      - name: Verify deployed production observability (fail closed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node deploy/worker/assert-observability.mjs deploy/worker/wrangler.toml production --remote
 
       - name: Publish production URL
         id: production_url
