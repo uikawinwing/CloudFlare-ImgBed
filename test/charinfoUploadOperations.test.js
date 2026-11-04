@@ -270,6 +270,46 @@ describe('durable CharInfo upload operations', function () {
         assert.deepEqual(f.kvWrites, { put: 0, delete: 0 }); f.db.db.close();
     });
 
+    it('uses the same thumbnail version as public Gallery Pack and repairs a completed retry without reuploading', async () => {
+        const f = fixture();
+        f.addAlbum();
+        const existingFileId = 'users/a/existing.png';
+        f.addFile(existingFileId);
+        // Existing album media can have a newer thumbnail version than its
+        // original upload timestamp when the next upload is committed.
+        f.db.db.prepare("UPDATE files SET metadata = json_set(metadata, '$.Thumbnail.CreatedAt', 987654321) WHERE id = ?")
+            .run(existingFileId);
+        const body = f.input();
+        body.albumId = knownAlbum;
+        body.order.unshift({ itemId: createHash('sha256').update(`${knownAlbum}\n${existingFileId}`).digest('hex') });
+        await f.prepare(body);
+        await f.stage();
+        const progress = await f.commit();
+        assert.equal(progress.pending, true);
+        const saved = await f.commit();
+        assert.equal(saved.items.length, 2);
+        assert.match(saved.items[0].url, /[?&]v=987654321$/u);
+        const publicResponse = await publicGallery({
+            env: f.env, params: { albumId: saved.albumId },
+            request: new Request(saved.remoteGalleryUrl),
+        });
+        assert.equal(publicResponse.status, 200);
+        const publicPack = await publicResponse.json();
+        assert.equal(saved.items[0].url, publicPack.gallery[0].sources[0]);
+
+        // Existing persisted operation results may still carry an older version.
+        f.db.db.prepare("UPDATE files SET metadata = json_set(metadata, '$.Thumbnail.CreatedAt', 987654322) WHERE id = ?")
+            .run(existingFileId);
+        const retried = await f.commit();
+        assert.equal(retried.items[0].url, publicPack.gallery[0].sources[0].replace('987654321', '987654322'));
+        assert.equal(retried.albumId, saved.albumId);
+        assert.equal(f.count('albums'), 1);
+        assert.equal(f.count('files'), 2);
+        assert.equal(f.originals.puts, 1, 'retry must not reupload or duplicate files');
+        assert.equal(f.used(), PNG.length, 'retry must not charge quota again');
+        f.db.db.close();
+    });
+
     it('recovers an existing account operation after authorization is replaced, preserving uploaded files and quota', async () => {
         const f = fixture(); await f.prepare(f.input('save_1', 2)); await f.stage();
         await f.stage('save_1', 'upload_1', new File([PNG], 'image1.png', { type: 'image/png' }));

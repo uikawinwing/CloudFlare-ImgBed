@@ -109,7 +109,8 @@ async function ownedAlbum(env, identity, albumId, characterName) {
 }
 
 async function memberFiles(env, albumId) {
-    return (await env.img_d1.prepare(`SELECT f.*, ai.position, ai.created_at AS member_created_at
+    return (await env.img_d1.prepare(`SELECT f.*, ai.position, ai.created_at AS member_created_at,
+        json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS thumbnail_created_at
         FROM album_items ai JOIN files f ON f.id = ai.file_id WHERE ai.album_id = ?
         ORDER BY ai.position, ai.created_at, ai.file_id`).bind(albumId).all()).results || [];
 }
@@ -327,7 +328,10 @@ export async function stageUploadOperationFile(options) {
 }
 
 async function selectedFiles(env, record) {
-    const rows = (await env.img_d1.prepare('SELECT f.* FROM files f JOIN json_each(?) ids ON ids.value = f.id').bind(JSON.stringify(record.finalIds)).all()).results || [];
+    // The public Gallery Pack uses Thumbnail.CreatedAt, not the original
+    // upload timestamp. Return exactly the same rendition version here.
+    const rows = (await env.img_d1.prepare(`SELECT f.*, json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS thumbnail_created_at
+        FROM files f JOIN json_each(?) ids ON ids.value = f.id`).bind(JSON.stringify(record.finalIds)).all()).results || [];
     const byId = new Map(rows.map(file => [file.id, file]));
     const files = record.finalIds.map(id => byId.get(id));
     if (files.some(file => !file || !eligible(file, record.actor))) fail('PUBLICATION_BLOCKED', 'Every final member must be available in the public gallery');
@@ -415,7 +419,21 @@ export async function commitUploadOperation(options) {
         const { env, identity, requestUrl } = options;
         const { record } = state;
         if (publicOrigin(requestUrl) !== record.origin) fail('REQUEST_MISMATCH', 'The service origin changed');
-        if (record.result) return record.result;
+        if (record.result) {
+            // Completed requests are idempotent, but their stored response may
+            // contain thumbnail versions that were regenerated after saving.
+            // Re-present only the same committed album membership; never
+            // silently change the identity of a completed operation.
+            const currentFiles = await memberFiles(env, record.albumId);
+            if (currentFiles.length === record.finalIds.length
+                && currentFiles.every((file, index) =>
+                    file.id === record.finalIds[index] && eligible(file, record.actor))) {
+                const currentItems = await presentItems(record.albumId, currentFiles, requestUrl,
+                    record.manifest.characterName, await visualValue(env, record.albumId));
+                return { ...record.result, items: currentItems };
+            }
+            return record.result;
+        }
         await reserveQuota(options, state);
         const pending = record.files.find(file => file.state !== 'uploaded');
         if (pending) return promoteFile(options, state, pending);
