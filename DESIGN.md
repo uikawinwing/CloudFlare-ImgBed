@@ -4,10 +4,10 @@ colors:
   background: "#ffffff"
   surface: "rgba(255, 255, 255, .94)"
   text: "#111111"
-  muted: "#767676"
+  muted: "#636363"
   accent: "#587463"
-  success: "#2ca875"
-  danger: "#d92d3d"
+  success: "#206f4c"
+  danger: "#bd2534"
 typography:
   body:
     fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif"
@@ -29,6 +29,8 @@ CloudFlare ImgBed is a Chinese administration workspace for managing files and s
 Use a muted sage accent for primary actions, green for confirmed success, and the danger token for destructive operations. Light mode uses #587463 for the accent, #465e50 on hover, and white text on accent fills. Dark mode uses #a3bfa9 for the accent, #b9d0be on hover, and #18271e text on accent fills. Light mode uses white surfaces and dark text; dark mode uses a #121212 background, #1a1a1a surfaces, and #f5f5f5 text. Keep explanatory text muted and form labels readable. Use theme variables rather than fixed dark backgrounds on shared controls.
 
 `frontend-dist/theme.css` owns the runtime palette through `--app-accent`, `--app-accent-hover`, `--app-accent-soft`, and `--app-on-accent`. Public pages consume these directly; `frontend-dist/account/unified.css` maps the same palette to the workspace controls. This document records the accepted palette; it does not generate CSS.
+
+Use `--app-on-accent` for text and icons on accent fills, including hover states. Keep normal-size helper and status text at 4.5:1 or higher on its surface. Use the opaque accent for keyboard focus outlines.
 
 ## Typography
 
