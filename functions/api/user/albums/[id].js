@@ -16,11 +16,11 @@ export async function onRequest(context) {
     if (context.request.method === 'GET') {
         const items = await context.env.img_d1.prepare('SELECT f.id, f.file_name, f.file_type, f.file_size_bytes, f.timestamp, f.visibility, f.moderation_status, f.metadata, ai.position FROM album_items ai JOIN files f ON f.id = ai.file_id WHERE ai.album_id = ? ORDER BY ai.position, ai.created_at').bind(id).all();
         return json({ album: presentAlbum(album), items: (items.results || []).map(({ metadata, ...file }) => {
-            let tags = [];
+            let fileMetadata;
             try {
-                tags = normalizeTags(JSON.parse(metadata || '{}')?.Tags);
+                fileMetadata = JSON.parse(metadata || '{}');
             } catch {}
-            return { ...file, tags };
+            return { ...file, tags: normalizeTags(fileMetadata?.Tags), nsfw: fileMetadata?.NSFW === true };
         }) });
     }
     if (context.request.method === 'DELETE') {

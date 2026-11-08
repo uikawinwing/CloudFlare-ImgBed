@@ -200,7 +200,7 @@ for (const stOrigin of ['http://localhost:8000', 'http://192.168.1.41:8000', 'ht
       await scriptFrame.waitForFunction(() => window.upload.getState().status === 'connected');
       const result = await scriptFrame.evaluate(async bytes => {
         const file = new File([new Uint8Array(bytes)], 'portrait.png', { type: 'image/png' });
-        window.input = { requestId: 'browser_save', albumId: null, characterName: '测试角色', files: [{ id: 'one', title: '主立绘', file }], order: [{ uploadId: 'one' }] };
+        window.input = { requestId: 'browser_save', albumId: null, characterName: '测试角色', files: [{ id: 'one', title: '主立绘', file, nsfw: true }], order: [{ uploadId: 'one' }] };
         return window.upload.save(window.input);
       }, [...png]);
       assert.equal(result.items.length, 1);
@@ -210,6 +210,7 @@ for (const stOrigin of ['http://localhost:8000', 'http://192.168.1.41:8000', 'ht
         characterName: '测试角色', files: [], order: [{ itemId: album.items[0].id }] }), result);
       assert.equal(reordered.albumId, result.albumId);
       assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM files').first()).count, 1);
+      assert.equal((await db.prepare("SELECT json_type(metadata, '$.NSFW') AS nsfw FROM files").first()).nsfw, 'true');
       assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM albums').first()).count, 1);
       const pack = await (await runtime.dispatchFetch(result.remoteGalleryUrl)).json();
       assert.equal(pack.packId, result.albumId); assert.equal(pack.profileId, result.albumId);

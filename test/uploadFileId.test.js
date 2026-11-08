@@ -6,6 +6,9 @@ import { onRequest as userMiddleware } from '../functions/api/user/_middleware.j
 import { onRequest as createAlbum } from '../functions/api/user/albums/index.js';
 import { onRequestPost as addAlbumItem } from '../functions/api/user/albums/[[id]]/items.js';
 import { onRequestPost as completeCharInfo } from '../functions/api/user/charinfo/complete.js';
+import { onRequestGet as listUserFiles } from '../functions/api/user/files/index.js';
+import { onRequestGet as sharedGallery } from '../functions/api/public/gallery/[ownerSlug]/[albumSlug].js';
+import { listDiscoverAlbums } from '../functions/utils/publicCatalog.js';
 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
 let upload;
@@ -76,10 +79,11 @@ describe('upload file ID contract', () => {
         else globalThis.caches = previousCaches;
     });
 
-    async function send(env, file = new File([PNG], 'image.png', { type: 'image/png' }), onResponse) {
+    async function send(env, file = new File([PNG], 'image.png', { type: 'image/png' }), onResponse, nsfw = false) {
         const pending = [];
         const form = new FormData();
         form.append('file', file);
+        if (nsfw) form.append('nsfw', 'true');
         try {
             const response = await upload({ env, request: new Request('https://example.test/upload?returnFormat=full', {
                 method: 'POST', headers: { Cookie: 'user_session=owner', Origin: 'https://example.test' }, body: form,
@@ -164,20 +168,50 @@ describe('upload file ID contract', () => {
         });
     }
 
-    it('returns the final file ID for a Telegram upload split on the server', async () => {
+    it('exposes the uploaded NSFW flag to files, shared galleries and the matching Discover cover', async () => {
+        const { env, d1 } = fixture('cfr2');
+        try {
+            const sensitive = await send(env, undefined, undefined, true);
+            const ordinary = await send(env);
+            assert.equal(sensitive.status, 200);
+            assert.equal(ordinary.status, 200);
+            const [{ fileId: sensitiveId }] = await sensitive.json();
+            const [{ fileId: ordinaryId }] = await ordinary.json();
+            d1.exec("UPDATE users SET public_handle = 'owner'; INSERT INTO albums (id, owner_id, slug, name, created_at, updated_at) VALUES ('album', 'owner-id', 'summer', 'Summer', 1, 1)");
+            const add = d1.db.prepare("INSERT INTO album_items (album_id, file_id, position, created_at) VALUES ('album', ?, ?, 1)");
+            add.run(sensitiveId, 0);
+            add.run(ordinaryId, 1);
+            const response = await listUserFiles({ env, request: new Request('https://example.test/api/user/files', { headers: { Cookie: 'user_session=owner' } }) });
+            const { files } = await response.json();
+            assert.equal(files.find(file => file.id === sensitiveId).nsfw, true);
+            assert.equal(files.find(file => file.id === ordinaryId).nsfw, false);
+            const share = await sharedGallery({ env, request: new Request('https://example.test/api/public/gallery/owner/summer') });
+            const { gallery } = await share.json();
+            assert.deepEqual(gallery.map(item => item.nsfw), [true, undefined]);
+            const discover = () => listDiscoverAlbums(env, { limit: 24 }, 'https://example.test/api/public/discover');
+            assert.equal((await discover()).albums[0].coverNsfw, true);
+            d1.db.prepare("INSERT INTO album_covers (album_id, file_id, position_x, position_y, updated_at) VALUES ('album', ?, 50, 50, 1)").run(ordinaryId);
+            assert.equal((await discover()).albums[0].coverNsfw, false);
+        } finally {
+            d1.db.close();
+        }
+    });
+
+    it('returns the final file ID for a marked Telegram video upload split on the server', async () => {
         const { env, d1 } = fixture('telegram');
         const bytes = Buffer.alloc(16 * 1024 * 1024 + 8);
         bytes.set([0x1a, 0x45, 0xdf, 0xa3]);
         bytes.set(Buffer.from('webm'), 8);
         try {
-            const response = await send(env, new File([bytes], 'clip.webm', { type: 'video/webm' }));
+            const response = await send(env, new File([bytes], 'clip.webm', { type: 'video/webm' }), undefined, true);
             assert.equal(response.status, 200, await response.clone().text());
             const [result] = await response.json();
-            const row = d1.db.prepare('SELECT id, value FROM files').get();
+            const row = d1.db.prepare('SELECT id, value, metadata FROM files').get();
             assert.equal(result.fileId, row.id);
             assert.equal(result.src, `https://example.test/file/${row.id}`);
             assert.equal(result.publicUrl, `https://media.example.test/file/${row.id}`);
             assert.equal(JSON.parse(row.value).length, 2);
+            assert.equal(JSON.parse(row.metadata).NSFW, true);
             assert.equal(result.thumbnailReady, undefined);
         } finally {
             d1.db.close();

@@ -15,6 +15,8 @@
 
 ID 为 1–128 位 ASCII 字母、数字、下划线或短横线；连接编号为 24 字节随机值的 48 位小写 hex。图库 UUID 必须小写。姓名 trim 后 1–80 字符，每次最多 100 个新文件、500 个最终成员；仅接受现有七种图片／视频 MIME、文件签名及 95 MiB 单文件限制。文件保存名仍为 `users/{owner}/{UUID}.{ext}` 的末段。`FileInput.title` 用于不可变请求摘要，不改写系统文件名；返回标题使用实际公开图库包的标题。
 
+新文件可带布尔值 `nsfw`。省略与 `false` 等价，`true` 计入不可变请求摘要并写入文件元数据，供 ImgBed 网页预览默认模糊。此标记独立于审核与访问权限。
+
 ## 私有配对与明确同意
 
 普通 Discord 会话仍是 `HttpOnly; SameSite=Strict; Secure`；不改 Cookie、普通用户接口的 CSRF 或 CORS。iframe 内所有授权／上传请求使用 `credentials:'omit'`，只携带留在 ImgBed 的私有配对证明。顶层授权页才使用现有 Discord 登录 Cookie。

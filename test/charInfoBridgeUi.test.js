@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { parseBridgeQuery, createCharInfoBridge } from '../frontend-dist/account/charinfo-bridge.js';
+import { spoilerAction, spoilerBadge } from '../frontend-dist/media-spoiler.js';
 import { onRequestGet as discordLogin } from '../functions/api/auth/discord/index.js';
 import { buildCookie, getCookie, sanitizeReturnTo } from '../functions/utils/auth/discordIdentity.js';
 
@@ -30,6 +31,7 @@ function workspace(url = entry, { authenticated = true, albums = true, storage =
   const app = runInNewContext(`${source.replace(/^import .*;\r?\n/gm, '').replace(/\ninit\(\);\s*$/, '')}\nsyncWorkspaceWallpaper = async () => {}; ({ state, init, syncNavigation, navigateWorkspace, buildWorkspaceUrl, workspaceTargetFromUrl, albumDetailMarkup, albumRow, bridgeMarkup, charInfoBridge })`, {
     location, window: popup, history, URL, URLSearchParams, Headers, FormData,
     parseBridgeQuery, createCharInfoBridge, mountLegacyShell() {}, setSitePageTitle() {}, requestAnimationFrame() {},
+    spoilerAction, spoilerBadge, enableSpoilerPreviews() {},
     IntersectionObserver: class { observe() {} },
     document: { querySelector: selector => ['#mainContent', '#dialogRoot'].includes(selector) ? main : null, querySelectorAll: () => [], addEventListener() {}, documentElement: {} },
     fetch: async path => {

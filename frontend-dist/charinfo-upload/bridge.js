@@ -154,7 +154,8 @@ export function createUploadReceiver({ window: frame, request = frame.fetch.bind
         finish(operation); return;
       }
       const prepared = await gallery('prepare', message, { albumId: message.albumId, characterName: message.characterName.trim(),
-        files: message.files.map(item => ({ id: item.id, title: item.title, name: item.file.name, type: item.file.type, size: item.file.size })), order: message.order }, operation.controller.signal);
+        files: message.files.map(item => ({ id: item.id, title: item.title, name: item.file.name, type: item.file.type,
+          size: item.file.size, ...(item.nsfw ? { nsfw: true } : {}) })), order: message.order }, operation.controller.signal);
       if (!active(operation)) return;
       if (prepared.remoteGalleryUrl && prepared.items) { saved(operation, prepared); return; }
       for (const item of message.files) {

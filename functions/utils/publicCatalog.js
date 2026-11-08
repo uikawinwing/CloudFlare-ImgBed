@@ -63,6 +63,7 @@ export async function listDiscoverAlbums(env, query, requestUrl) {
         SELECT ai.album_id, f.id AS fallback_cover_id, f.file_type AS fallback_cover_type,
             f.timestamp AS fallback_cover_timestamp,
             json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS fallback_cover_thumbnail_created_at,
+            json_type(f.metadata, '$.NSFW') = 'true' AS fallback_cover_nsfw,
             ROW_NUMBER() OVER (PARTITION BY ai.album_id ORDER BY ai.position, ai.created_at) AS item_rank
         FROM selected_albums selected
         CROSS JOIN album_items ai ON ai.album_id = selected.id
@@ -71,6 +72,7 @@ export async function listDiscoverAlbums(env, query, requestUrl) {
     ), explicit_covers AS (
         SELECT ac.album_id, f.id AS cover_id, f.file_type AS cover_type, f.timestamp AS cover_timestamp,
             json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS cover_thumbnail_created_at,
+            json_type(f.metadata, '$.NSFW') = 'true' AS cover_nsfw,
             ac.position_x AS cover_position_x, ac.position_y AS cover_position_y
         FROM selected_albums selected
         CROSS JOIN album_covers ac ON ac.album_id = selected.id
@@ -90,6 +92,7 @@ export async function listDiscoverAlbums(env, query, requestUrl) {
         COALESCE(explicit.cover_type, fallback.fallback_cover_type) AS cover_type,
         COALESCE(explicit.cover_timestamp, fallback.fallback_cover_timestamp) AS cover_timestamp,
         COALESCE(explicit.cover_thumbnail_created_at, fallback.fallback_cover_thumbnail_created_at) AS cover_thumbnail_created_at,
+        CASE WHEN explicit.cover_id IS NOT NULL THEN explicit.cover_nsfw ELSE fallback.fallback_cover_nsfw END AS cover_nsfw,
         COALESCE(explicit.cover_position_x, 50) AS cover_position_x,
         COALESCE(explicit.cover_position_y, 50) AS cover_position_y,
         COALESCE(counts.item_count, 0) AS item_count
@@ -133,7 +136,8 @@ export async function listFeaturedFiles(env, query, requestUrl) {
 
 export async function listSharedAlbumFiles(env, albumId) {
     const result = await env.img_d1.prepare(`SELECT f.id, f.file_name, f.file_type, f.timestamp, f.visibility,
-        json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS thumbnail_created_at
+        json_extract(f.metadata, '$.Thumbnail.CreatedAt') AS thumbnail_created_at,
+        json_type(f.metadata, '$.NSFW') = 'true' AS nsfw
         FROM album_items ai
         JOIN files f ON f.id = ai.file_id
         JOIN users u ON u.discord_id = f.owner_id
@@ -192,6 +196,7 @@ export function presentDiscoverAlbum(album, requestUrl) {
         coverUrl,
         coverThumbnailUrl,
         coverType: hasDiscoverableCover ? album.cover_type : null,
+        coverNsfw: hasDiscoverableCover && album.cover_nsfw === 1,
         coverPositionX: normalizeCoverPosition(album.cover_position_x),
         coverPositionY: normalizeCoverPosition(album.cover_position_y),
     };

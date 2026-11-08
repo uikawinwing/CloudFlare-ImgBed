@@ -8,6 +8,7 @@ const uploadState = {
   recent: readRecentUploads(),
   dragDepth: 0,
   compressVideos: false,
+  nsfw: false,
   compressionController: null,
   videoDecision: null,
 };
@@ -149,10 +150,13 @@ function patchFilesView() {
   if (!options) {
     options = document.createElement('div');
     options.className = 'integrated-upload-options';
-    options.innerHTML = '<label><input type="checkbox" id="compressVideos" aria-describedby="compressVideosHint">上传前压缩视频</label><small id="compressVideosHint">在本机压缩并移除音轨，预览后上传。图片不受影响。</small>';
+    options.innerHTML = '<div><label><input type="checkbox" id="uploadNsfw" aria-describedby="uploadNsfwHint">标记为 NSFW</label><small id="uploadNsfwHint">本批文件在网站预览中默认模糊，点击后显示。</small></div><div><label><input type="checkbox" id="compressVideos" aria-describedby="compressVideosHint">上传前压缩视频</label><small id="compressVideosHint">在本机压缩并移除音轨，预览后上传。图片不受影响。</small></div>';
     anchor.insertAdjacentElement('afterend', options);
   }
-  const compressOption = options.querySelector('input');
+  const nsfwOption = options.querySelector('#uploadNsfw');
+  nsfwOption.checked = uploadState.nsfw;
+  nsfwOption.disabled = uploadState.busy;
+  const compressOption = options.querySelector('#compressVideos');
   compressOption.checked = uploadState.compressVideos;
   compressOption.disabled = uploadState.busy;
 
@@ -224,6 +228,7 @@ function uploadOne(file, item) {
     xhr.addEventListener('abort', () => reject(new Error('上传已取消。')));
     const form = new FormData();
     form.append('file', file, file.name);
+    if (uploadState.nsfw) form.append('nsfw', 'true');
     xhr.send(form);
   });
 }
@@ -269,6 +274,7 @@ async function uploadFiles(files) {
   }
 
   uploadState.busy = false;
+  uploadState.nsfw = false;
   const results = uploadState.queue.filter(item => item.status !== 'skipped').map(({ name, size, url, error, notice }) => ({ name, size, url, error, notice }));
   const succeeded = results.filter(item => item.url).length;
   if (succeeded) {
@@ -385,6 +391,7 @@ document.addEventListener('click', event => {
 
 document.addEventListener('change', event => {
   if (event.target.id === 'compressVideos' && !uploadState.busy) uploadState.compressVideos = event.target.checked;
+  if (event.target.id === 'uploadNsfw' && !uploadState.busy) uploadState.nsfw = event.target.checked;
 });
 
 window.addEventListener('beforeunload', event => {

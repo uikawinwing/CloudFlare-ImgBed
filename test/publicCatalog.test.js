@@ -110,7 +110,7 @@ describe('public catalog policy', () => {
             const response = await getPublicDiscover({ request, env });
             assert.deepStrictEqual(await response.json(), { albums: [], nextCursor: null });
             assert.strictEqual(response.headers.get('Cache-Control'), 'public, max-age=60, s-maxage=300');
-            assert.ok(entries.has(request.url + '&catalog=albums-v2'));
+            assert.ok(entries.has(request.url + '&catalog=albums-v3'));
             const cached = await getPublicDiscover({ request, env });
             assert.deepStrictEqual(await cached.json(), { albums: [], nextCursor: null });
             assert.strictEqual(queries, 1);

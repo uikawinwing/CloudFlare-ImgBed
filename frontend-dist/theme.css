@@ -73,3 +73,37 @@ button, input, select, textarea { font-family: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+[data-media-spoiler] {
+  position: relative;
+  overflow: hidden;
+}
+
+[data-media-spoiler] > :is(img, video),
+[data-media-spoiler] > label > :is(img, video) {
+  filter: blur(32px) brightness(.65);
+  transform: scale(1.16);
+}
+
+.media-spoiler-badge {
+  position: absolute;
+  z-index: 1;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #171719;
+  color: #fff;
+  font: 700 11px/1.25 system-ui, sans-serif;
+}
+
+button.media-spoiler-badge {
+  min-height: 36px;
+  min-width: 48px;
+  cursor: pointer;
+}
+
+button.media-spoiler-badge:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}

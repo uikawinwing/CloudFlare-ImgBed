@@ -70,6 +70,7 @@ describe('upload HTTP routes with native Worker D1, R2 and streaming crypto', fu
 
     it('streams two files, returns the real public pack, resumes without duplication and preserves removed originals', async () => {
         const files = ['one', 'two'].map(id => ({ id, title: id, name: `${id}.png`, type: 'image/png', size: png.length }));
+        files[1].nsfw = true;
         const order = [{ uploadId: 'two' }, { uploadId: 'one' }];
         let response = await gallery('prepare', 'native_save', { albumId: null, characterName: '测试角色', files, order });
         assert.equal(response.status, 200, await response.clone().text());
@@ -93,7 +94,13 @@ describe('upload HTTP routes with native Worker D1, R2 and streaming crypto', fu
         assert.equal(packResponse.status, 200);
         const pack = await packResponse.json();
         assert.deepEqual(result.items.map(item => item.url), pack.gallery.map(item => item.sources[0]));
+        const stored = await db.prepare("SELECT id, json_type(metadata, '$.NSFW') AS nsfw FROM files").all();
+        const flagged = stored.results.filter(file => file.nsfw === 'true');
+        assert.equal(flagged.length, 1);
+        assert.ok(new URL(result.items[0].url).pathname.endsWith(`/${flagged[0].id}`));
         assert.deepEqual(await (await gallery('prepare', 'native_save', { albumId: null, characterName: '测试角色', files, order })).json(), result);
+        const changed = await gallery('prepare', 'native_save', { albumId: null, characterName: '测试角色', files: [files[0], { ...files[1], nsfw: false }], order });
+        assert.equal((await changed.json()).code, 'REQUEST_MISMATCH');
         assert.equal((await db.prepare("SELECT used_bytes FROM users WHERE discord_id='a'").first()).used_bytes, png.length * 2);
         assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM files').first()).count, 2);
         const read = await (await gallery('read', 'native_read', { albumId: result.albumId, characterName: '测试角色' })).json();

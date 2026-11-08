@@ -1,3 +1,5 @@
+import { enableSpoilerPreviews, spoilerAction, spoilerBadge } from '../media-spoiler.js';
+
 const state = { albums: [], cursor: null, loading: false, done: false, failed: false, retryReset: false };
 const albumGrid = document.querySelector('#albumGrid');
 const feedStatus = document.querySelector('#feedStatus');
@@ -43,8 +45,8 @@ function albumCardMarkup(album) {
     : album.coverThumbnailUrl
     ? `<img src="${escapeHtml(album.coverThumbnailUrl)}" alt="" loading="lazy" decoding="async" style="object-position:${objectPosition}">`
     : '<span class="album-cover-empty">暂无封面</span>';
-  return `<a class="album-card" href="${escapeHtml(album.url)}">
-    <span class="album-cover">${coverMarkup}</span>
+  return `<a class="album-card" href="${escapeHtml(album.url)}"${album.coverNsfw ? spoilerAction : ''}>
+    <span class="album-cover"${album.coverNsfw ? ' data-media-spoiler' : ''}>${coverMarkup}${spoilerBadge(album.coverNsfw)}</span>
     <span class="album-card-info"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(album.creator?.name || album.creator?.handle || '创作者')} · ${Number(album.itemCount) || 0} 项</small></span>
   </a>`;
 }
@@ -155,6 +157,7 @@ async function refreshDiscover() {
   await loadFeed({ reset: true });
 }
 
+enableSpoilerPreviews();
 document.querySelector('#searchInput').addEventListener('input', render);
 loadMore.addEventListener('click', () => loadFeed({ reset: state.retryReset }));
 window.addEventListener('focus', refreshDiscover);

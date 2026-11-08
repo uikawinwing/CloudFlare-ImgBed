@@ -50,6 +50,7 @@ export function createGalleryPack(album, albumSlug, files, requestUrl) {
         gallery: files.map((file) => ({
             title: file.file_name || file.id,
             sources: [absoluteFileUrl(requestUrl, file.id, file.timestamp)],
+            ...(file.nsfw === 1 ? { nsfw: true } : {}),
             thumbnail: isThumbnailImage(file)
                 ? absoluteThumbnailUrl(requestUrl, file.id, 'gallery', thumbnailContentVersion(file))
                 : null,
@@ -82,7 +83,7 @@ function gallerySlugsFromRequest(requestUrl, prefix) {
 }
 
 function makeEtag(album, files, lastModifiedAt) {
-    const signature = files.map((file) => `${file.id}:${file.file_name || ''}:${file.file_type || ''}:${file.timestamp || ''}:${file.thumbnail_created_at || ''}`).join('|');
+    const signature = files.map((file) => `${file.id}:${file.file_name || ''}:${file.file_type || ''}:${file.timestamp || ''}:${file.thumbnail_created_at || ''}${file.nsfw === 1 ? ':nsfw' : ''}`).join('|');
     return `W/"${album.id}:${lastModifiedAt}:${hashString(signature)}"`;
 }
 

@@ -31,7 +31,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid color-mix(in srgb, va
 .gallery-item { width: 100%; break-inside: avoid; min-width: 0; display: block; margin: 0 0 16px; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .item-media { position: relative; overflow: hidden; border-radius: var(--app-radius-md); background: #050910; box-shadow: var(--app-shadow-sm); }
 .item-media img, .item-media video { width: 100%; height: auto; min-height: 160px; max-height: 520px; display: block; object-fit: cover; pointer-events: none; transition: transform .22s ease, filter .22s ease; }
-.gallery-item:hover .item-media img, .gallery-item:hover .item-media video { transform: scale(1.015); filter: brightness(.97); }
+.gallery-item:hover .item-media:not([data-media-spoiler]) :is(img, video) { transform: scale(1.015); filter: brightness(.97); }
 .item-title { overflow: hidden; margin: 0; padding: 9px 3px 0; color: var(--app-text); font-size: 12px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .type-label { position: absolute; top: 9px; right: 9px; padding: 4px 7px; border-radius: 999px; background: rgba(5,9,16,.68); color: white; font-size: 9px; font-weight: 760; }
 .gallery-note { margin: 30px 0 0; color: var(--app-muted); font-size: 12px; text-align: center; }

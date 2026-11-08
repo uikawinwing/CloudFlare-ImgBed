@@ -73,13 +73,14 @@ function normalizeManifest(body) {
     const ids = new Set();
     const files = body.files.map(file => {
         if (!file || typeof file !== 'object' || Array.isArray(file)
-            || Object.keys(file).sort().join(',') !== 'id,name,size,title,type'
+            || Object.keys(file).some(key => !['id', 'name', 'size', 'title', 'type', 'nsfw'].includes(key))
+            || (Object.hasOwn(file, 'nsfw') && typeof file.nsfw !== 'boolean')
             || typeof file.id !== 'string' || !ID.test(file.id) || ids.has(file.id)
             || typeof file.title !== 'string' || file.title.length > 500 || /[\x00-\x1f\x7f]/.test(file.title)
             || typeof file.name !== 'string' || !file.name || file.name.length > 512 || /[\x00-\x1f\x7f]/.test(file.name)
             || !ALLOWED_UPLOAD_TYPES.has(file.type) || !Number.isSafeInteger(file.size) || file.size <= 0 || file.size > MAX_UPLOAD_BYTES) fail('INPUT_REJECTED', 'Invalid new file', file?.id);
         ids.add(file.id);
-        return { id: file.id, title: file.title, name: file.name, type: file.type, size: file.size };
+        return { id: file.id, title: file.title, name: file.name, type: file.type, size: file.size, ...(file.nsfw ? { nsfw: true } : {}) };
     });
     const seen = new Set();
     const uploads = new Set();
@@ -387,7 +388,7 @@ async function promoteFile(options, state, entry) {
         await authorizeAccount(options);
         try {
             const response = await uploadPreparedCharInfoFile({ env, identity, file, fileId: entry.fileId, requestUrl: record.origin,
-                target: entry.target, timestamp: entry.timestamp, authorize: () => authorizeAccount(options),
+                target: entry.target, timestamp: entry.timestamp, nsfw: entry.nsfw, authorize: () => authorizeAccount(options),
                 beforeUpload: async target => {
                     await authorizeAccount(options);
                     entry.target = { channel: target.channel, channelName: target.channelName };

@@ -210,6 +210,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .album-file-option.included { opacity: .58; cursor: default; }
 .album-file-option input { position: absolute; z-index: 1; top: 14px; left: 14px; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); cursor: inherit; }
 .album-file-preview { display: block; overflow: hidden; aspect-ratio: 4 / 3; border-radius: 6px; background: var(--surface-hover); }
+.album-file-option label { display: block; cursor: inherit; }
+.album-file-preview label { height: 100%; }
 .album-file-preview img, .album-file-preview video { width: 100%; height: 100%; object-fit: cover; }
 .album-file-option strong { display: block; overflow: hidden; margin-top: 9px; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .album-file-option small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; }

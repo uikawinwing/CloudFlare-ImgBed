@@ -70,6 +70,8 @@ Album management and popup selection reuse the account workspace's existing cont
 
 The editor upload authorization page at `/charinfo-upload/connect` reuses public navigation, theme tokens and a single reading column. It displays the server-verified ST origin and current account before enabling explicit consent. Explain upload/gallery public-link access, the limited media permissions, the fixed 24-hour deadline and revocation without deleting files. Keep long origins wrapping and all actions keyboard accessible. The companion iframe is hidden transport, not another profile editor; errors keep the user's draft in ST and never silently switch upload methods.
 
+Marked NSFW previews share a strong blur and a centered, high-contrast NSFW label in both themes. Activating a marked preview reveals it in place before it can open a media viewer or gallery.
+
 ## Do's and Don'ts
 
 Do explain what an administrator controls in plain Chinese. Do preserve clear loading, error, and empty states. Do not add a second design-token system, store sensitive settings in browser storage, or expose retired storage providers as configurable options.

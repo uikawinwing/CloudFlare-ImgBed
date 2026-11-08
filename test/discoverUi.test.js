@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { spoilerAction, spoilerBadge } from '../frontend-dist/media-spoiler.js';
 
 const source = readFileSync(new URL('../frontend-dist/discover/discover.js', import.meta.url), 'utf8');
 
@@ -19,7 +20,7 @@ async function discoverHarness(responses) {
   const documentListeners = {};
   const motion = { matches: false, addEventListener(name, callback) { this.onChange = callback; } };
   const context = vm.createContext({
-    URLSearchParams, Date, Set,
+    URLSearchParams, Date, Set, spoilerAction, spoilerBadge, enableSpoilerPreviews() {},
     document: {
       querySelector(selector) {
         if (!elements.has(selector)) elements.set(selector, element());
@@ -38,7 +39,7 @@ async function discoverHarness(responses) {
       return { ok: response.ok !== false, json: async () => response.body };
     },
   });
-  vm.runInContext(source, context);
+  vm.runInContext(source.replace(/^import .*;\r?\n/gm, ''), context);
   await new Promise(resolve => setImmediate(resolve));
   return { elements, requests, context, motion, documentListeners };
 }
@@ -53,7 +54,7 @@ const iris = {
 describe('Discover character album feed', () => {
   it('renders image thumbnails and defers video sources until their covers are visible', async () => {
     const { elements, requests } = await discoverHarness([{ body: {
-      albums: [iris, { id: 'video-album', name: '视频', url: '/gallery/master/video', coverUrl: '/file/video.mp4', coverType: 'video/mp4', itemCount: 2 }],
+      albums: [iris, { id: 'video-album', name: '视频', url: '/gallery/master/video', coverUrl: '/file/video.mp4', coverType: 'video/mp4', coverNsfw: true, itemCount: 2 }],
       files: Array.from({ length: 10 }, (_, index) => ({ id: `image-${index}`, url: `/file/${index}.png` })),
       nextCursor: null,
     } }]);
@@ -65,6 +66,8 @@ describe('Discover character album feed', () => {
     assert.match(markup, /object-position:25% 75%/);
     assert.match(markup, /Iris[\s\S]*10 项/);
     assert.match(markup, /<video[^>]*data-video-src="\/file\/video.mp4"[^>]*muted[^>]*loop[^>]*playsinline[^>]*preload="none"/);
+    assert.match(markup, /href="\/gallery\/master\/video" data-reveal-media[^>]*>\s*<span class="album-cover" data-media-spoiler>/);
+    assert.equal((markup.match(/data-media-spoiler/g) || []).length, 1);
     assert.doesNotMatch(markup, /<video[^>]*\ssrc=/);
     assert.doesNotMatch(markup, /iris-original/);
     assert.deepEqual(requests, ['/api/public/discover?limit=24']);

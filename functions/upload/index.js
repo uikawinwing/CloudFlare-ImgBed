@@ -115,7 +115,7 @@ export async function onRequest(context) {  // Contents of context object
 
 // Internal only: the caller owns durable quota reservation and a fixed file identity.
 // No HTTP parameter can enable this path.
-export async function uploadPreparedCharInfoFile({ env, identity, file, fileId, requestUrl, target, timestamp, authorize, beforeUpload }) {
+export async function uploadPreparedCharInfoFile({ env, identity, file, fileId, requestUrl, target, timestamp, nsfw, authorize, beforeUpload }) {
     if (!isOwnedCanonicalFileId(identity, fileId)) throw new Error('Owned canonical file id is required');
     const pending = [];
     const context = {
@@ -128,6 +128,7 @@ export async function uploadPreparedCharInfoFile({ env, identity, file, fileId, 
     };
     const form = new FormData();
     form.set('file', file, fileId.split('/').pop());
+    if (nsfw) form.set('nsfw', 'true');
     try {
         await authorize();
         const response = await processFileUpload(context, form);
@@ -248,7 +249,8 @@ async function processFileUpload(context, formdata = null) {
         TimeStamp: time,
         Label: "None",
         Directory: '',
-        Tags: []
+        Tags: [],
+        ...(formdata.get('nsfw') === 'true' ? { NSFW: true } : {}),
     };
     if (context.discordIdentity) {
         metadata.OwnerId = context.discordIdentity.id;

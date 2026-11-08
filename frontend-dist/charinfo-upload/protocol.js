@@ -55,7 +55,8 @@ export function parseUploadMessage(value, connectionId, FileType = globalThis.Fi
       || !Array.isArray(value.files) || value.files.length > 100 || !Array.isArray(value.order) || value.order.length > 500) return null;
   const uploads = new Set();
   for (const item of value.files) {
-    if (!exactFields(item, ['id', 'title', 'file']) || !validId(item.id) || uploads.has(item.id)
+    if (!exactFields(item, ['id', 'title', 'file'], ['nsfw']) || !validId(item.id) || uploads.has(item.id)
+        || (Object.hasOwn(item, 'nsfw') && typeof item.nsfw !== 'boolean')
         || typeof item.title !== 'string' || item.title.length > 500 || typeof FileType !== 'function' || !(item.file instanceof FileType)
         || !MEDIA_TYPES.has(item.file.type) || item.file.size <= 0 || item.file.size > 95 * 1024 * 1024) return null;
     uploads.add(item.id);

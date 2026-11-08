@@ -53,6 +53,7 @@ export async function onRequestGet({ request, env }) {
         return {
             ...file,
             tags: normalizeTags(metadata?.Tags),
+            nsfw: metadata?.NSFW === true,
             thumbnail_url: isImage ? absoluteThumbnailUrl(request.url, row.id, 'gallery', thumbnailContentVersion({
                 ...metadata,
                 timestamp: row.timestamp,
