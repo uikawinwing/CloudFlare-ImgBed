@@ -58,6 +58,7 @@ ID 为 1–128 位 ASCII 字母、数字、下划线或短横线；连接编号�
 
 - 本地 Wrangler 仅配置模拟桶，不访问远端资源。
 - staging 工作流／配置生成器要求 `STAGING_CHARINFO_UPLOAD_STAGING_BUCKET_NAME`。部署前需先创建私有桶并设置该仓库变量；暂存桶采用 7 天对象清理、1 天未完成分片清理，不影响正式文件与操作账本。
+- 生产工作流使用 `CHARINFO_UPLOAD_STAGING_BUCKET_NAME` 绑定生产专用私有暂存桶，采用同样的暂存清理规则。
 - 本协议当前 ST 固定接受 `https://imgbed-staging.uika.cc.cd`，不能由导入档案或页面查询改写；返回 URL 必须是该部署自身的规范 UUID 图库地址。
 
 ## 验证边界与手动联调
