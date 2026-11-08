@@ -1,12 +1,8 @@
-import { S3Client, CopyObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { purgeCFCache, purgeRandomFileListCache, purgePublicFileListCache } from "../../../utils/purgeCache";
 import { moveFileInIndex, batchMoveFilesInIndex } from "../../../utils/indexManager.js";
 import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { sanitizeUploadFolder } from "../../../upload/uploadTools.js";
-import { WebDAVAPI } from "../../../utils/storage/webdavAPI.js";
 import {
-    resolveS3Credentials,
-    resolveWebDAVCredentials,
 } from "../../../utils/metadata/channelCredentials.js";
 import { cleanPersistedMetadata } from "../../../utils/metadata/metadataSecurity.js";
 
@@ -107,7 +103,7 @@ export async function onRequest(context) {
         const newFileId = dist === '' ? fileKey : `${dist}/${fileKey}`;
         const cdnUrl = `https://${url.hostname}/file/${fileId}`;
 
-        const success = await moveFile(env, fileId, newFileId, cdnUrl, url);
+        const success = await moveFile(env, fileId, newFileId, cdnUrl, url, true);
         if (!success) {
             throw new Error('Move file failed');
         } else {
@@ -124,17 +120,26 @@ export async function onRequest(context) {
         return new Response(JSON.stringify({
             success: false,
             error: e.message
-        }), { status: 400 });
+        }), { status: e.status || 400 });
     }
 }
-
 // 移动单个文件的核心函数
-async function moveFile(env, fileId, newFileId, cdnUrl, url) {
+async function moveFile(env, fileId, newFileId, cdnUrl, url, propagateError = false) {
     try {
         const db = getDatabase(env);
 
         // 读取图片信息
         const img = await db.getWithMetadata(fileId);
+        if (!img) throw new Error('File not found');
+        if (fileId === newFileId) return true;
+        const existing = await db.getWithMetadata(newFileId);
+        if (existing) throw new Error('Target file already exists');
+        const originalMetadata = JSON.stringify(img.metadata);
+        let copiedR2 = false;
+
+        if (img?.metadata?.Channel === 'S3' || img?.metadata?.Channel === 'WebDAV') {
+            throw new Error('This storage backend is no longer available');
+        }
 
         // 如果是R2渠道的图片，需要移动R2中对应的图片
         if (img.metadata?.Channel === 'CloudflareR2') {
@@ -147,28 +152,9 @@ async function moveFile(env, fileId, newFileId, cdnUrl, url) {
             }
 
             // 复制到新位置
-            await R2DataBase.put(newFileId, object.body);
-
-            // 删除旧文件
-            await R2DataBase.delete(fileId);
-        }
-
-        // S3 渠道的图片，需要移动S3中对应的图片
-        if (img.metadata?.Channel === 'S3') {
-            const { success, newKey, error } = await moveS3File(env, img, newFileId);
-            if (!success) {
-                throw new Error(error || 'S3 Move Failed');
-            }
-            img.metadata.S3FileKey = newKey;
-        }
-
-        // WebDAV 渠道的图片，需要移动 WebDAV 中对应的文件
-        if (img.metadata?.Channel === 'WebDAV') {
-            const { success, error } = await moveWebDAVFile(env, img, newFileId);
-            if (!success) {
-                throw new Error(error || 'WebDAV Move Failed');
-            }
-            img.metadata.WebDAVFilePath = newFileId;
+            const copied = await R2DataBase.put(newFileId, object.body, { onlyIf: { etagDoesNotMatch: '*' }, httpMetadata: object.httpMetadata });
+            if (copied === null) throw new Error('Target object already exists');
+            copiedR2 = true;
         }
 
         // 旧版 Telegram 渠道和 Telegraph 渠道不支持移动
@@ -181,9 +167,29 @@ async function moveFile(env, fileId, newFileId, cdnUrl, url) {
         img.metadata.Directory = DirectoryPath;
         img.metadata = cleanPersistedMetadata(img.metadata);
 
-        // 更新KV存储
-        await db.put(newFileId, img.value, { metadata: img.metadata });
-        await db.delete(fileId);
+        let rejectedUpdate = false;
+        try {
+            if (env.img_d1?.prepare) {
+                const moved = await env.img_d1.prepare(`UPDATE files SET id = ?, metadata = ?, directory = ?
+                    WHERE id = ? AND json(metadata) = json(?) AND moderation_status = 'active' RETURNING metadata`)
+                    .bind(newFileId, JSON.stringify(img.metadata), DirectoryPath, fileId, originalMetadata).first();
+                if (!moved) {
+                    rejectedUpdate = true;
+                    throw new Error('File state changed; reload before retrying');
+                }
+            } else {
+                await db.put(newFileId, img.value, { metadata: img.metadata });
+                await db.delete(fileId);
+            }
+        } catch (error) {
+            if (copiedR2 && (rejectedUpdate || /constraint failed/i.test(error.message))) {
+                const target = await env.img_d1.prepare('SELECT id FROM files WHERE id = ?').bind(newFileId).first();
+                if (!target) await env.img_r2.delete(newFileId);
+            }
+            throw error;
+        }
+        if (copiedR2) await env.img_r2.delete(fileId);
+        if (env.img_d1?.prepare && env.img_url?.delete) await env.img_url.delete(fileId);
 
         // 清除CDN缓存
         await purgeCFCache(env, cdnUrl);
@@ -197,76 +203,13 @@ async function moveFile(env, fileId, newFileId, cdnUrl, url) {
         return true;
     } catch (e) {
         console.error('Move file failed:', e);
-        return false;
-    }
-}
-
-// 移动 S3 渠道的图片
-async function moveS3File(env, img, newFileId) {
-    const db = getDatabase(env);
-    const s3Credentials = await resolveS3Credentials(db, env, img.metadata);
-    const s3Client = new S3Client({
-        region: s3Credentials.region || "auto",
-        endpoint: s3Credentials.endpoint,
-        credentials: {
-            accessKeyId: s3Credentials.accessKeyId,
-            secretAccessKey: s3Credentials.secretAccessKey
-        },
-        forcePathStyle: s3Credentials.pathStyle || false // 是否启用路径风格
-    });
-
-    const bucketName = s3Credentials.bucketName;
-    const oldKey = s3Credentials.key;
-    const newKey = newFileId;
-
-    try {
-        // 复制文件到新位置
-        await s3Client.send(new CopyObjectCommand({
-            Bucket: bucketName,
-            CopySource: `/${bucketName}/${oldKey}`,
-            Key: newKey,
-        }));
-
-        // 复制成功后，删除旧文件
-        await s3Client.send(new DeleteObjectCommand({
-            Bucket: bucketName,
-            Key: oldKey,
-        }));
-
-        // 返回新的 S3 文件信息
-        return {
-            success: true,
-            newKey,
-            endpoint: s3Credentials.endpoint,
-            bucketName,
-            source: s3Credentials.source
-        };
-    } catch (error) {
-        console.error("S3 Move Failed:", error);
-        return { success: false, error: error.message };
-    }
-}
-
-// 移动 WebDAV 渠道的图片
-async function moveWebDAVFile(env, img, newFileId) {
-    const oldPath = img.metadata?.WebDAVFilePath;
-
-    if (!oldPath) {
-        return { success: false, error: 'WebDAV file missing required metadata for move' };
-    }
-
-    try {
-        const db = getDatabase(env);
-        const webdavConfig = await resolveWebDAVCredentials(db, env, img.metadata);
-        if (!webdavConfig.baseUrl) {
-            return { success: false, error: 'WebDAV channel config not found for move' };
+        if (propagateError) {
+            if (/FOREIGN KEY constraint/i.test(e.message)) {
+                throw Object.assign(new Error('File belongs to an album; remove it from the album before renaming or moving'), { status: 409 });
+            }
+            if (/File state changed/.test(e.message)) e.status = 409;
+            throw e;
         }
-
-        const webdavAPI = new WebDAVAPI(webdavConfig);
-        await webdavAPI.moveFile(oldPath, newFileId, true);
-        return { success: true, newKey: newFileId, webdavConfig };
-    } catch (error) {
-        console.error("WebDAV Move Failed:", error);
-        return { success: false, error: error.message };
+        return false;
     }
 }

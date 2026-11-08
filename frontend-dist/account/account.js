@@ -1,4 +1,8 @@
 import { mountLegacyShell } from './shell.js';
+import { getSiteConfig, publicFileUrl, setSitePageTitle } from '../site-config.js';
+import { initializeWorkspaceWallpaper } from '../wallpaper-player.js';
+import { parseBridgeQuery, createCharInfoBridge } from './charinfo-bridge.js';
+import { enableSpoilerPreviews, spoilerAction, spoilerBadge } from '../media-spoiler.js';
 
 const MEMBER_QUOTA_BYTES = 200 * 1024 * 1024;
 const VIEW_CACHE_TTL = 30000;
@@ -6,7 +10,11 @@ const VIEW_CACHE_TTL = 30000;
 const state = {
   user: null,
   files: [],
+  filesNextCursor: null,
+  filesUsedBytes: 0,
+  filesRequestId: 0,
   albums: [],
+  albumId: new URLSearchParams(location.search).get('album') || null,
   selected: new Set(),
   selectionMode: false,
   filter: 'all',
@@ -31,6 +39,14 @@ const scrollPositions = new Map();
 const main = document.querySelector('#mainContent');
 const dialogRoot = document.querySelector('#dialogRoot');
 let activeDialogClose = null;
+let wallpaperAdminScope = null;
+let stopWorkspaceWallpaper = null;
+let pendingWorkspaceWallpaper = null;
+let wallpaperInitialization = 0;
+const bridgeSession = new URLSearchParams(location.search).has('bridge') ? parseBridgeQuery(location.href) : null;
+const charInfoBridge = bridgeSession ? createCharInfoBridge({ window, session: bridgeSession, api, onChange: updateCharInfoBridge }) : null;
+let bridgeBusy = false;
+let bridgeError = '';
 
 const icons = {
   upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>',
@@ -53,6 +69,10 @@ function encodeFilePath(id) {
 
 function fileUrl(file) {
   return `/file/${encodeFilePath(file.id)}`;
+}
+
+function systemFileName(file) {
+  return String(file.id).split('/').pop();
 }
 
 function thumbnailUrl(file) {
@@ -145,7 +165,7 @@ function currentViewKey() {
 }
 
 function currentScrollKey() {
-  return state.view === 'admin' ? `admin:${state.adminSection}` : state.view;
+  return state.view === 'admin' ? `admin:${state.adminSection}` : state.view === 'albums' && state.albumId ? `album:${state.albumId}` : state.view;
 }
 
 function cacheEntry(key = currentViewKey()) {
@@ -179,14 +199,80 @@ function workspaceTargetFromUrl(value = location.href) {
   if (url.origin !== location.origin || !/^\/account\/?$/.test(url.pathname)) return null;
   const view = ['files', 'albums', 'admin'].includes(url.searchParams.get('view')) ? url.searchParams.get('view') : 'files';
   const section = ['content', 'users', 'audit'].includes(url.searchParams.get('section')) ? url.searchParams.get('section') : 'content';
-  return { view, section };
+  return { view, section, albumId: view === 'albums' ? url.searchParams.get('album') : null };
 }
 
 function buildWorkspaceUrl(view = state.view, section = state.adminSection) {
   const url = new URL('/account/', location.origin);
   url.searchParams.set('view', view);
   if (view === 'admin') url.searchParams.set('section', section);
-  return url;
+  if (view === 'albums' && state.albumId) url.searchParams.set('album', state.albumId);
+  return charInfoBridge?.appendToUrl(url) || url;
+}
+
+function bridgeMarkup() {
+  if (!charInfoBridge) return '';
+  return `<section class="charinfo-bridge notice-panel" aria-label="连接 CharInfo"><div><h2>选择要连接到 CharInfo 的图库</h2><p data-bridge-status role="status"></p><p>连接后提供公开图库链接；请回到 ST 预览并保存角色。</p><p data-bridge-error role="alert"></p></div><button class="button" type="button" data-bridge-cancel>取消连接</button></section>`;
+}
+
+function bridgeAlbumAction(album, detail = false) {
+  if (!charInfoBridge) return '';
+  return `<button class="button primary" type="button" data-bridge-select="${escapeHtml(album.id)}" data-bridge-detail="${detail}">使用此图库${detail ? ' / 返回 ST' : ''}</button>`;
+}
+
+function updateCharInfoBridge() {
+  if (!charInfoBridge) return;
+  const status = charInfoBridge.status;
+  const messages = {
+    waiting: '正在等待 ST 连接。也可选择图库后手动复制链接。',
+    ready: '已连接 ST。选择图库前可以继续编辑和整理文件。',
+    manual: charInfoBridge.reason,
+    invalid: '连接参数无效。请从 ST 重新打开连接窗口。',
+    completed: '链接已发送。请回到 ST 预览并保存角色。',
+    cancelled: '已取消连接。可以关闭此窗口，或继续管理图库。',
+    expired: charInfoBridge.reason,
+  };
+  document.querySelectorAll('[data-bridge-status]').forEach(node => { node.textContent = messages[status] || messages.waiting; });
+  document.querySelectorAll('[data-bridge-error]').forEach(node => { node.textContent = bridgeError; node.hidden = !bridgeError; });
+  const finished = ['completed', 'cancelled', 'expired', 'invalid'].includes(status);
+  document.querySelectorAll('[data-bridge-select]').forEach(button => {
+    button.hidden = finished;
+    button.disabled = bridgeBusy;
+    button.setAttribute('aria-busy', String(bridgeBusy));
+    button.textContent = status === 'ready' || status === 'waiting' ? `使用此图库${button.dataset.bridgeDetail === 'true' ? ' / 返回 ST' : ''}` : '获取图库链接';
+  });
+  document.querySelectorAll('[data-bridge-cancel]').forEach(button => { button.hidden = finished; });
+  if (state.user) history.replaceState(null, '', buildWorkspaceUrl());
+}
+
+function bindCharInfoBridge() {
+  if (!charInfoBridge) return;
+  document.querySelector('[data-bridge-cancel]')?.addEventListener('click', () => { bridgeError = ''; charInfoBridge.cancel(); });
+  document.querySelectorAll('[data-bridge-select]').forEach(button => button.addEventListener('click', () => selectBridgeAlbum(button.dataset.bridgeSelect)));
+  updateCharInfoBridge();
+}
+
+async function selectBridgeAlbum(albumId) {
+  if (bridgeBusy) return;
+  bridgeBusy = true;
+  bridgeError = '';
+  updateCharInfoBridge();
+  try {
+    const result = await charInfoBridge.select(albumId, { manual: charInfoBridge.status !== 'ready' });
+    if (!result.sent) {
+      const close = openDialog(`<div class="dialog-head"><h2>手动连接图库</h2><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div><div class="dialog-body"><p>复制下方链接，粘贴到 ST 的“远程图库 URL”，预览后保存角色。</p><div class="field"><label for="bridgeGalleryUrl">远程图库 URL</label><input type="url" id="bridgeGalleryUrl" readonly value="${escapeHtml(result.remoteGalleryUrl)}"></div><p data-bridge-copy-status role="status"></p></div><div class="dialog-actions"><button class="button" type="button" data-close-dialog>关闭</button><button class="button primary" type="button" id="copyBridgeGallery">复制链接</button></div>`, { label: '手动连接图库', className: 'charinfo-bridge-dialog' });
+      if (close) dialogRoot.querySelector('#copyBridgeGallery').addEventListener('click', async () => {
+        const feedback = dialogRoot.querySelector('[data-bridge-copy-status]');
+        try { await navigator.clipboard.writeText(result.remoteGalleryUrl); feedback.textContent = '链接已复制。'; }
+        catch { feedback.textContent = '复制失败，请选中上方完整链接后手动复制。'; dialogRoot.querySelector('#bridgeGalleryUrl').select(); }
+      });
+    }
+  } catch (error) {
+    bridgeError = error.code === 'character-name-required' ? '请先在该图库的“编辑信息”中填写关联角色全名，再选择图库。' : error.status === 401 ? '登录已过期。请从 ST 重新打开窗口并登录。' : error.message;
+  } finally {
+    bridgeBusy = false;
+    updateCharInfoBridge();
+  }
 }
 
 function renderCurrentView() {
@@ -196,7 +282,7 @@ function renderCurrentView() {
 }
 
 function syncNavigation() {
-  const activeKey = state.view === 'admin' ? state.adminSection : state.view;
+  const activeKey = state.view === 'admin' ? state.adminSection : 'files';
   document.querySelectorAll('[data-shell-key]').forEach(link => {
     const active = link.dataset.shellKey === activeKey;
     link.classList.toggle('is-active', active);
@@ -204,29 +290,33 @@ function syncNavigation() {
     else link.removeAttribute('aria-current');
   });
   history.replaceState(null, '', buildWorkspaceUrl());
-  const titles = { files: '我的文件', albums: '我的图库', admin: state.adminSection === 'users' ? '成员管理' : state.adminSection === 'audit' ? '操作记录' : '内容管理' };
-  document.title = `${titles[state.view] || titles.files} · CloudFlare ImgBed`;
+  const titles = { files: '我的文件', albums: '我的文件', admin: state.adminSection === 'users' ? '成员管理' : state.adminSection === 'audit' ? '操作记录' : '内容管理' };
+  setSitePageTitle(titles[state.view] || titles.files);
 }
 
 function showLogin() {
   location.replace(`/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`);
 }
 
-async function applyConfiguredWallpaper() {
+async function loadFiles({ reset = true } = {}) {
+  if (!reset && !state.filesNextCursor) return;
+  const requestId = ++state.filesRequestId;
+  const params = new URLSearchParams({ limit: '50', sort: state.fileSort, filter: state.filter });
+  if (!reset) params.set('cursor', state.filesNextCursor);
+  if (state.fileQuery.trim()) params.set('query', state.fileQuery.trim());
+  let data;
   try {
-    const config = await api('/api/userConfig');
-    if (config.wallpaperEnabled === false) return;
-    const configured = state.view === 'admin' ? (config.adminBkImg || config.uploadBkImg) : config.uploadBkImg;
-    const candidate = Array.isArray(configured) ? configured[0] : configured;
-    if (typeof candidate !== 'string' || candidate === 'bing' || !candidate.trim()) return;
-    document.body.style.setProperty('--account-wallpaper', `url(${JSON.stringify(candidate.trim())})`);
-  } catch {}
-}
-
-async function loadFiles() {
-  const data = await api('/api/user/files');
-  state.files = Array.isArray(data.files) ? data.files : [];
-  state.selected = new Set([...state.selected].filter(id => state.files.some(file => file.id === id)));
+    data = await api(`/api/user/files?${params}`);
+  } catch (error) {
+    if (requestId !== state.filesRequestId) return;
+    throw error;
+  }
+  if (requestId !== state.filesRequestId) return;
+  const files = Array.isArray(data.files) ? data.files : [];
+  state.files = reset ? files : [...state.files, ...files.filter(file => !state.files.some(existing => existing.id === file.id))];
+  state.filesNextCursor = typeof data.nextCursor === 'string' ? data.nextCursor : null;
+  state.filesUsedBytes = Number(data.usedBytes) || 0;
+  if (reset) state.selected = new Set([...state.selected].filter(id => state.files.some(file => file.id === id)));
   markViewFresh('files');
 }
 
@@ -253,44 +343,43 @@ function fileCard(file) {
   const selected = state.selected.has(file.id);
   const src = fileUrl(file);
   const preview = previewUrl(file);
-  const mediaLabel = file.file_name || file.id;
+  const mediaLabel = systemFileName(file);
   return `<article class="media-card${selected ? ' selected' : ''}" data-file-id="${escapeHtml(file.id)}">
     ${state.selectionMode ? `<input class="media-select" type="checkbox" aria-label="选择 ${escapeHtml(mediaLabel)}" ${selected ? 'checked' : ''}>` : ''}
-    <button class="media-frame" type="button" data-open-media ${isVideo ? 'data-video-frame' : ''} aria-label="${state.selectionMode ? '选择' : '打开'} ${escapeHtml(mediaLabel)}">
-      ${isVideo ? `<video src="${src}" muted loop playsinline preload="metadata"></video><span class="media-type">${videoTypeLabel(file)}</span>` : `<img src="${escapeHtml(preview)}" alt="${escapeHtml(mediaLabel)}" loading="lazy" decoding="async">`}
+    <button class="media-frame" type="button" data-open-media ${isVideo ? 'data-video-frame' : ''} aria-label="${state.selectionMode ? '选择' : '打开'} ${escapeHtml(mediaLabel)}"${file.nsfw ? ` data-media-spoiler${spoilerAction}` : ''}>
+      ${isVideo ? `<video src="${src}" muted loop playsinline disablepictureinpicture preload="metadata"></video><span class="media-type">${videoTypeLabel(file)}</span>` : `<img src="${escapeHtml(preview)}" alt="${escapeHtml(mediaLabel)}" loading="lazy" decoding="async">`}
+      ${spoilerBadge(file.nsfw)}
     </button>
   </article>`;
 }
 
 function visibleFiles() {
-  const query = state.fileQuery.trim().toLocaleLowerCase('zh-CN');
-  return state.files
-    .filter(file => state.filter === 'all' || (state.filter === 'video' ? isVideoFile(file) : !isVideoFile(file)))
-    .filter(file => !query || String(file.file_name || file.id).toLocaleLowerCase('zh-CN').includes(query))
-    .sort((a, b) => {
-      if (state.fileSort === 'oldest') return Number(a.timestamp || 0) - Number(b.timestamp || 0);
-      if (state.fileSort === 'name') return String(a.file_name || a.id).localeCompare(String(b.file_name || b.id), 'zh-CN');
-      return Number(b.timestamp || 0) - Number(a.timestamp || 0);
-    });
+  return state.files;
 }
 
-function renderFiles() {
-  syncNavigation();
-  const used = state.files.reduce((total, file) => total + (Number(file.file_size_bytes) || 0), 0);
+function workspaceHeader() {
+  const used = state.filesUsedBytes;
   const quota = state.user.role === 'owner' ? null : MEMBER_QUOTA_BYTES;
+  return `<header class="page-head">
+    <div class="page-title"><h1>我的文件</h1><p>浏览全部文件，或打开图库整理、编辑和分享。</p></div>
+    <div class="head-actions"><div class="quota" aria-label="个人容量">
+      <div class="quota-copy"><span>${quota ? `已使用 ${formatBytes(used)} / 200 MB` : `已使用 ${formatBytes(used)}`}</span><span>${quota ? `${Math.min(100, Math.round(used / quota * 100))}%` : '所有者不限额'}</span></div>
+      <div class="quota-track"><div class="quota-bar" style="width:${quota ? Math.min(100, used / quota * 100) : 0}%"></div></div>
+    </div></div>
+  </header>
+  <nav class="workspace-tabs" aria-label="文件与图库">
+    <a href="/account/?view=files"${state.view === 'files' ? ' aria-current="page"' : ''}>${icons.image}全部文件</a>
+    <a href="/account/?view=albums"${state.view === 'albums' ? ' aria-current="page"' : ''}>${icons.folder}我的图库 <span>${state.albums.length}</span></a>
+  </nav>${bridgeMarkup()}`;
+}
+
+function renderFiles({ focusSearch = false } = {}) {
+  syncNavigation();
   const filtered = visibleFiles();
   main.innerHTML = `<section class="page-section">
-    <header class="page-head">
-      <div class="page-title"><h1>我的文件</h1><p>集中管理上传的图片、动图、MP4 和 WebM 视频。</p></div>
-      <div class="head-actions">
-        <div class="quota" aria-label="个人容量">
-          <div class="quota-copy"><span>${quota ? `已使用 ${formatBytes(used)} / 200 MB` : `已使用 ${formatBytes(used)}`}</span><span>${quota ? `${Math.min(100, Math.round(used / quota * 100))}%` : '所有者不限额'}</span></div>
-          <div class="quota-track"><div class="quota-bar" style="width:${quota ? Math.min(100, used / quota * 100) : 0}%"></div></div>
-        </div>
-      </div>
-    </header>
+    ${workspaceHeader()}
     <div class="toolbar file-toolbar">
-      <label class="search-control"><span class="sr-only">搜索文件</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg><input id="fileSearch" type="search" value="${escapeHtml(state.fileQuery)}" placeholder="搜索文件名"></label>
+      <div class="search-control"><label class="sr-only" for="fileSearch">搜索标签或文件编号</label><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg><input id="fileSearch" type="search" value="${escapeHtml(state.fileQuery)}" placeholder="搜索标签或编号，#标签 精确搜索"><button class="icon-button" id="clearFileSearch" type="button" aria-label="清除文件搜索"${state.fileQuery ? '' : ' hidden'}>${icons.close}</button></div>
       <div class="segmented" aria-label="文件类型">
         <button type="button" data-filter="all" class="${state.filter === 'all' ? 'active' : ''}">全部</button>
         <button type="button" data-filter="image" class="${state.filter === 'image' ? 'active' : ''}">图片</button>
@@ -304,10 +393,17 @@ function renderFiles() {
       <div class="selection-copy"><strong>已选择 ${state.selected.size} 项</strong><button class="button ghost" id="clearSelection" type="button">取消选择</button></div>
       <div class="selection-actions"><button class="button" id="addToAlbum" type="button">${icons.folder}加入图库</button><button class="button danger" id="deleteSelected" type="button">${icons.trash}永久删除</button></div>
     </div>` : ''}
-    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.files.length ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.files.length ? '试试更换筛选条件或搜索词。' : '使用上方“上传文件”，或直接拖拽 / Ctrl+V 粘贴 JPG、PNG、GIF、WebP、AVIF、MP4 或 WebM。'}</p></div>`}
+    ${filtered.length ? `<div class="media-grid">${filtered.map(fileCard).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.image}</span><h2>${state.fileQuery || state.filter !== 'all' ? '没有符合条件的文件' : '还没有上传文件'}</h2><p>${state.fileQuery || state.filter !== 'all' ? '试试更换筛选条件或搜索词。' : '使用上方“上传文件”，或直接拖拽 / Ctrl+V 粘贴 JPG、PNG、GIF、WebP、AVIF、MP4 或 WebM。'}</p></div>`}
+    ${state.filesNextCursor ? `<div class="load-more"><button class="button" id="loadMoreFiles" type="button">加载更多</button></div>` : ''}
   </section>`;
   bindFileEvents();
+  bindCharInfoBridge();
   observeVideos();
+  if (focusSearch) {
+    const search = document.querySelector('#fileSearch');
+    search?.focus();
+    search?.setSelectionRange(search.value.length, search.value.length);
+  }
 }
 
 function albumRow(album) {
@@ -316,26 +412,25 @@ function albumRow(album) {
   const focus = albumCoverPosition(album);
   const useSavedFocus = cover && selectedCoverFileId(album) === cover.id && isStaticCoverFile(cover);
   const coverMedia = !cover ? `<span class="empty-icon">${icons.image}</span>` : isVideoFile(cover)
-    ? `<video src="${fileUrl(cover)}" muted loop playsinline preload="metadata"></video>`
+    ? `<video src="${fileUrl(cover)}" muted loop playsinline disablepictureinpicture preload="metadata"></video>`
     : `<img src="${escapeHtml(previewUrl(cover))}" alt="${escapeHtml(cover.file_name || album.name)}" loading="lazy" decoding="async"${useSavedFocus ? ` style="object-position:${focus.x}% ${focus.y}%"` : ''}>`;
   const canShare = Boolean(state.user.publicHandle);
-  const canShareCharInfo = canShare && Boolean(album.charInfoCharacterName);
+  const canShareCharInfo = Boolean(album.charInfoCharacterName);
   const shareUrl = canShare ? `${location.origin}/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
-  const feedUrl = canShareCharInfo ? `${location.origin}/api/public/charinfo/${encodeURIComponent(album.id)}` : '';
+  const feedUrl = canShareCharInfo ? `${location.origin}/api/public/album-gallery/${encodeURIComponent(album.id)}` : '';
   return `<article class="album-row" data-album-id="${escapeHtml(album.id)}">
-    <div class="album-cover">${coverMedia}</div>
+    <a class="album-cover" href="/account/?view=albums&album=${encodeURIComponent(album.id)}" aria-label="打开图库 ${escapeHtml(album.name)}"${cover?.nsfw ? ` data-media-spoiler${spoilerAction}` : ''}>${coverMedia}${spoilerBadge(cover?.nsfw)}</a>
     <div class="album-body">
-      <h2>${escapeHtml(album.name)}</h2>
+      <h2><a href="/account/?view=albums&album=${encodeURIComponent(album.id)}">${escapeHtml(album.name)}</a></h2>
       <div class="album-meta"><span>${items.length} 个项目</span><span>最近更新：${formatDate(album.updated_at)}</span></div>
+      <div class="album-card-actions"><button class="button" type="button" data-manage-album>打开图库</button><button class="button ghost" type="button" data-edit-album>编辑信息</button>${bridgeAlbumAction(album)}</div>
       <details class="album-actions-menu">
-        <summary>管理图库</summary>
+        <summary>分享与更多</summary>
         <div class="album-actions">
-          <p class="album-visibility">${album.visibility === 'public' ? '会显示在发现页' : '不会显示在发现页'}${state.user.publicHandle ? ` · 可通过分享链接访问${album.charInfoCharacterName ? ` · CharInfo：${escapeHtml(album.charInfoCharacterName)}` : ' · CharInfo 未配置角色全名'}` : ' · 设置公开名称后可复制分享链接'}</p>
+          <p class="album-visibility">${state.user.publicHandle ? `会显示在发现页 · 可通过分享链接访问${album.charInfoCharacterName ? ` · CharInfo：${escapeHtml(album.charInfoCharacterName)}` : ' · CharInfo 未配置角色全名'}` : '设置公开名称后，图库会显示在发现页并可分享'}</p>
           ${canShare ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : ''}
-          ${canShareCharInfo ? `<button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制 CharInfo 链接</button>` : ''}
-          ${album.charInfoCharacterName ? `<a class="button primary" href="/charinfo/?album=${encodeURIComponent(album.id)}">打开 Creator</a>` : '<button class="button primary" type="button" data-edit-album>配置 CharInfo</button>'}
-          <button class="button" type="button" data-manage-album>管理内容</button>
-          ${album.charInfoCharacterName ? '<button class="button" type="button" data-edit-album>编辑图库</button>' : ''}
+          ${canShareCharInfo ? `<button class="button" type="button" data-copy="${escapeHtml(feedUrl)}">${icons.link}复制远程图库链接</button>` : ''}
+          ${album.charInfoCharacterName ? '' : '<button class="button" type="button" data-edit-album>填写关联角色全名</button>'}
           <button class="button danger" type="button" data-delete-album>删除图库</button>
         </div>
       </details>
@@ -345,15 +440,20 @@ function albumRow(album) {
 
 function renderAlbums() {
   syncNavigation();
+  const album = state.albums.find(item => item.id === state.albumId);
   main.innerHTML = `<section class="page-section">
-    <header class="page-head">
-      <div class="page-title"><h1>我的图库</h1></div>
+    ${workspaceHeader()}
+    ${charInfoBridge && state.albumId && !album ? '<div class="notice-panel"><p role="alert">该图库不可用或不属于当前账号。请选择下方其他图库，或新建图库。</p></div>' : ''}
+    ${album ? albumDetailMarkup(album) : `<div class="workspace-section-head">
+      <h2>我的图库</h2>
       <button class="button primary" id="createAlbum" type="button">${icons.plus}新建图库</button>
-    </header>
+    </div>
     ${state.user.publicHandle ? '' : '<div class="notice-panel"><div><strong>准备公开图库？</strong><p>先设置一个用于分享链接的公开名称。它会绑定当前 Discord 账号。</p></div><button class="button" id="setPublicHandle" type="button">设置公开名称</button></div>'}
-    ${state.albums.length ? `<div class="album-list">${state.albums.map(albumRow).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.folder}</span><h2>还没有图库</h2><p>创建图库后，可以把同一文件整理进一个或多个图库。</p><button class="button primary" id="emptyCreateAlbum" type="button">新建第一个图库</button></div>`}
+    ${state.albums.length ? `<div class="album-list">${state.albums.map(albumRow).join('')}</div>` : `<div class="empty-state"><span class="empty-icon">${icons.folder}</span><h2>还没有图库</h2><p>创建图库后，可以直接选择已有文件加入。</p><button class="button primary" id="emptyCreateAlbum" type="button">新建第一个图库</button></div>`}`}
   </section>`;
   bindAlbumEvents();
+  bindCharInfoBridge();
+  if (album) bindAlbumItemEvents(album);
   observeVideos();
 }
 
@@ -374,8 +474,8 @@ function moderationRow(file) {
   const canRestore = ['admin', 'owner'].includes(state.user.role);
   const status = file.moderation_status === 'quarantined' ? '已撤下' : file.moderation_status === 'deleting' ? '删除处理中' : '正常';
   return `<article class="moderation-row" data-file-id="${escapeHtml(file.id)}">
-    <button class="moderation-thumb" type="button" data-preview-admin aria-label="预览 ${escapeHtml(file.file_name || file.id)}">${isVideo ? `<video src="${fileUrl(file)}" muted playsinline preload="metadata"></video>` : `<img src="${fileUrl(file)}" alt="" loading="lazy">`}</button>
-    <div class="moderation-copy file-column"><strong>${escapeHtml(file.file_name || file.id)}</strong><span>${escapeHtml(file.id)}</span></div>
+    <button class="moderation-thumb" type="button" data-preview-admin aria-label="预览 ${escapeHtml(systemFileName(file))}"${file.nsfw ? ` data-media-spoiler${spoilerAction}` : ''}>${isVideo ? `<video src="${fileUrl(file)}" muted playsinline disablepictureinpicture preload="metadata"></video>` : `<img src="${fileUrl(file)}" alt="" loading="lazy">`}${spoilerBadge(file.nsfw)}</button>
+    <div class="moderation-copy file-column"><strong>${escapeHtml(systemFileName(file))}</strong><span>${escapeHtml(file.id)}</span></div>
     <div class="moderation-copy owner-column"><strong>${escapeHtml(file.owner_name || '未绑定账号')}</strong><span>${escapeHtml(file.owner_id || '旧文件')}</span></div>
     <div class="moderation-copy type-column"><strong>${isVideo ? `视频 / ${videoTypeLabel(file)}` : '图片'}</strong><span>${formatBytes(file.file_size_bytes)}</span></div>
     <time class="moderation-time">${formatDate(file.timestamp)}</time>
@@ -483,8 +583,8 @@ function observeVideos() {
   });
 }
 
-function openDialog(content, { closeable = true, wide = false, className = '', label = '对话框' } = {}) {
-  activeDialogClose?.();
+function openDialog(content, { closeable = true, wide = false, className = '', label = '对话框', beforeClose, onClose } = {}) {
+  if (activeDialogClose?.() === false) return null;
   const previouslyFocused = document.activeElement;
   dialogRoot.innerHTML = `<div class="dialog-backdrop" role="presentation"><section class="dialog${wide ? ' wide' : ''}${className ? ` ${className}` : ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(label)}" tabindex="-1">${content}</section></div>`;
   const backdrop = dialogRoot.firstElementChild;
@@ -493,23 +593,33 @@ function openDialog(content, { closeable = true, wide = false, className = '', l
   let closed = false;
   const close = () => {
     if (closed) return;
+    if (beforeClose?.() === false) return false;
     closed = true;
     document.removeEventListener('keydown', closeOnEscape);
     dialogRoot.innerHTML = '';
     if (activeDialogClose === close) activeDialogClose = null;
+    onClose?.();
     if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus();
   };
   const closeOnEscape = event => {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && closeable) {
       event.preventDefault();
       close();
+    }
+    if (event.key === 'Tab') {
+      const controls = [...dialog.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')].filter(node => node.getClientRects().length);
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (!first) { event.preventDefault(); dialog.focus(); }
+      else if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog)) { event.preventDefault(); first.focus(); }
     }
   };
   if (closeable) {
     backdrop.addEventListener('click', event => { if (event.target === backdrop) close(); });
     dialogRoot.querySelectorAll('[data-close-dialog]').forEach(button => button.addEventListener('click', close));
-    document.addEventListener('keydown', closeOnEscape);
   }
+  document.addEventListener('keydown', closeOnEscape);
   activeDialogClose = close;
   return close;
 }
@@ -550,14 +660,87 @@ async function ensurePublicHandle() {
 function openFileViewer(file) {
   if (!file) return;
   const isVideo = isVideoFile(file);
-  const visibility = file.visibility === 'public' ? 'public' : 'private';
-  openDialog(`<div class="media-viewer-head"><div><h2>${escapeHtml(file.file_name || file.id)}</h2><p>${formatBytes(file.file_size_bytes)}${formatDate(file.timestamp) ? ` · ${formatDate(file.timestamp)}` : ''}</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
-    <div class="file-preview-media" data-media-viewer-stage>${isVideo ? `<video src="${fileUrl(file)}" autoplay muted loop playsinline controls></video>` : `<img src="${fileUrl(file)}" alt="${escapeHtml(file.file_name || '')}">`}</div>
-    <div class="media-viewer-details"><label>发现页展示<select class="file-visibility" id="viewerVisibility" aria-label="是否显示在发现页"><option value="private" ${visibility === 'private' ? 'selected' : ''}>不显示</option><option value="public" ${visibility === 'public' ? 'selected' : ''}>显示在发现页</option></select></label><div class="media-viewer-actions"><button class="button" type="button" id="copyViewerFile">${icons.link}复制链接</button><a class="button" href="${escapeHtml(fileUrl(file))}" target="_blank" rel="noopener">${icons.external}打开原始尺寸</a></div></div>`, { className: 'media-viewer-dialog', label: `查看 ${file.file_name || file.id}` });
-  dialogRoot.querySelector('#viewerVisibility')?.addEventListener('change', event => updateFileVisibility(file.id, event.currentTarget.value));
+  const name = systemFileName(file);
+  const canEditTags = Array.isArray(file.tags);
+  let guardClose = () => true;
+  let guardUnload;
+  const onViewerClosed = () => {
+    if (guardUnload) window.removeEventListener('beforeunload', guardUnload);
+    if (state.view === 'files' && state.fileQuery && viewCache.files.dirty) refreshView('files');
+  };
+  const closeViewer = openDialog(`<div class="media-viewer-head"><div><h2>${escapeHtml(name)}</h2><p>系统名称 · ${formatBytes(file.file_size_bytes)}${formatDate(file.timestamp) ? ` · ${formatDate(file.timestamp)}` : ''}</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
+    <div class="file-preview-media" data-media-viewer-stage>${isVideo ? `<video src="${fileUrl(file)}" autoplay muted loop playsinline controls></video>` : `<img src="${fileUrl(file)}" alt="${escapeHtml(name)}">`}</div>
+    <div class="media-viewer-details">${canEditTags ? `<form id="fileTagsForm" class="file-tags-form" novalidate><div class="field"><label for="fileTags">标签</label><div class="file-tags-input"><input id="fileTags" name="tags" value="${escapeHtml(file.tags.join(', '))}" placeholder="例如：人物、金发、立绘" autocomplete="off" aria-describedby="fileTagsHelp fileTagsStatus"><button class="button" type="submit" disabled>保存标签</button></div><small id="fileTagsHelp">用逗号或空格分隔，最多 30 个标签，每个 32 字。文件名由系统管理。</small><small id="fileTagsStatus" role="status" aria-live="polite"></small><div id="fileTagsDiscard" class="file-tags-discard" hidden><span>标签尚未保存。</span><button class="button" type="button" data-keep-tags>继续编辑</button><button class="button" type="button" data-discard-tags>放弃修改并关闭</button></div></div></form>` : '<p>加入人物图库后，可通过图库在发现页浏览。</p>'}<div class="media-viewer-actions"><button class="button" type="button" id="copyViewerFile">${icons.link}复制链接</button><a class="button" href="${escapeHtml(fileUrl(file))}" target="_blank" rel="noopener">${icons.external}新标签页打开</a></div></div>`, { className: 'media-viewer-dialog', label: `查看 ${name}`, beforeClose: () => guardClose(), onClose: onViewerClosed });
+  if (closeViewer === null) return;
+  const form = dialogRoot.querySelector('#fileTagsForm');
+  if (form) {
+    const input = form.querySelector('#fileTags');
+    const button = form.querySelector('button[type="submit"]');
+    const status = form.querySelector('#fileTagsStatus');
+    let savedValue = input.value;
+    let saving = false;
+    const discard = form.querySelector('#fileTagsDiscard');
+    guardClose = () => {
+      if (saving) { status.textContent = '正在保存标签，请稍候。'; return false; }
+      if (input.value === savedValue) return true;
+      discard.hidden = false;
+      discard.querySelector('[data-keep-tags]').focus();
+      return false;
+    };
+    guardUnload = event => {
+      if (saving || input.value !== savedValue) { event.preventDefault(); event.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', guardUnload);
+    form.querySelector('[data-keep-tags]').addEventListener('click', () => { discard.hidden = true; input.focus(); });
+    form.querySelector('[data-discard-tags]').addEventListener('click', () => { input.value = savedValue; closeViewer(); });
+    input.addEventListener('keydown', event => { if (event.key === 'Enter' && event.isComposing) event.preventDefault(); });
+    input.addEventListener('input', () => {
+      button.disabled = saving || input.value === savedValue;
+      input.removeAttribute('aria-invalid');
+      status.textContent = '';
+      status.classList.remove('field-error');
+    });
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (saving || event.isComposing) return;
+      const tags = [...new Set(input.value.split(/[\s,，、]+/u).filter(Boolean).map(tag => tag.toLowerCase()))];
+      if (tags.length > 30 || tags.some(tag => tag.length > 32 || !/^[\w\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af-]+$/.test(tag))) {
+        status.textContent = '最多 30 个标签，每个不超过 32 字；可使用中日韩文字、英文字母、数字、短横线和下划线。';
+        status.classList.add('field-error');
+        input.setAttribute('aria-invalid', 'true');
+        input.focus();
+        return;
+      }
+      saving = true;
+      discard.hidden = true;
+      button.disabled = true;
+      input.disabled = true;
+      form.setAttribute('aria-busy', 'true');
+      status.classList.remove('field-error');
+      status.textContent = '正在保存标签…';
+      try {
+        const result = await api('/api/user/files', { method: 'PATCH', body: JSON.stringify({ fileId: file.id, tags }) });
+        file.tags = result.tags;
+        state.files.filter(item => item.id === file.id).forEach(item => { item.tags = result.tags; });
+        state.albums.forEach(album => (album.items || []).filter(item => item.id === file.id).forEach(item => { item.tags = result.tags; }));
+        input.value = result.tags.join(', ');
+        savedValue = input.value;
+        markViewDirty('files', 'albums');
+        status.textContent = '标签已保存。';
+      } catch (error) {
+        status.textContent = `标签未保存。${error.message || '请重试。'}`;
+        status.classList.add('field-error');
+      } finally {
+        saving = false;
+        input.disabled = false;
+        button.disabled = input.value === savedValue;
+        form.removeAttribute('aria-busy');
+      }
+    });
+  }
   dialogRoot.querySelector('#copyViewerFile')?.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(new URL(fileUrl(file), location.origin).href);
+      await navigator.clipboard.writeText(publicFileUrl(file.id, await getSiteConfig()));
       toast('资源链接已复制。');
     } catch {
       toast('复制失败，请直接打开原文件后复制地址。', 'error');
@@ -570,10 +753,32 @@ function previewFile(file) {
 }
 
 function bindFileEvents() {
-  document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => { state.filter = button.dataset.filter; renderFiles(); }));
-  document.querySelector('#fileSearch')?.addEventListener('change', event => { state.fileQuery = event.target.value; renderFiles(); });
-  document.querySelector('#fileSearch')?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); state.fileQuery = event.currentTarget.value; renderFiles(); } });
-  document.querySelector('#fileSort')?.addEventListener('change', event => { state.fileSort = event.target.value; renderFiles(); });
+  const reload = async (focusSearch = false) => {
+    try {
+      await loadFiles();
+      renderFiles({ focusSearch });
+    } catch (error) {
+      toast(error.message || '无法读取文件。', 'error');
+    }
+  };
+  document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', async () => { state.filter = button.dataset.filter; await reload(); }));
+  const search = document.querySelector('#fileSearch');
+  const clearSearch = document.querySelector('#clearFileSearch');
+  search?.addEventListener('input', () => { clearSearch.hidden = !search.value; });
+  search?.addEventListener('change', async event => { if (event.target.value !== state.fileQuery) { state.fileQuery = event.target.value; await reload(); } });
+  search?.addEventListener('keydown', async event => { if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); state.fileQuery = event.currentTarget.value; await reload(true); } });
+  clearSearch?.addEventListener('click', async () => { search.value = ''; state.fileQuery = ''; clearSearch.hidden = true; search.focus(); await reload(true); });
+  document.querySelector('#fileSort')?.addEventListener('change', async event => { state.fileSort = event.target.value; await reload(); });
+  document.querySelector('#loadMoreFiles')?.addEventListener('click', async event => {
+    event.currentTarget.disabled = true;
+    try {
+      await loadFiles({ reset: false });
+      renderFiles();
+    } catch (error) {
+      event.currentTarget.disabled = false;
+      toast(error.message || '无法读取更多文件。', 'error');
+    }
+  });
   document.querySelector('#toggleSelectionMode')?.addEventListener('click', () => {
     state.selectionMode = !state.selectionMode;
     if (!state.selectionMode) state.selected.clear();
@@ -599,43 +804,6 @@ function bindFileEvents() {
   });
 }
 
-async function updateFileVisibility(fileId, visibility) {
-  const file = state.files.find(item => item.id === fileId);
-  if (!file) return;
-  const previous = {
-    visibility: file.visibility || 'private',
-    thumbnailUrl: file.thumbnail_url || null,
-    thumbnailReady: Boolean(file.thumbnail_ready),
-  };
-  file.visibility = visibility;
-  file.discover_eligible = visibility === 'public';
-  renderFiles();
-  try {
-    const result = await api(`/api/user/files/${encodeFilePath(fileId)}`, { method: 'PATCH', body: JSON.stringify({ visibility }) });
-    file.visibility = result.visibility || visibility;
-    file.discover_eligible = file.visibility === 'public';
-    file.thumbnail_url = result.thumbnailUrl || null;
-    file.thumbnail_ready = Boolean(result.thumbnailReady);
-    markViewFresh('files');
-    markViewDirty('albums');
-    renderFiles();
-    if (file.visibility === 'private') {
-      toast('已从发现页隐藏；分享链接仍可访问。');
-    } else if (result.thumbnailReady) {
-      toast(result.thumbnailCreated ? '已显示在发现页，并已生成可复用缩略图。' : '已显示在发现页；现有缩略图会继续复用。');
-    } else {
-      toast('已显示在发现页；缩略图暂时使用动态预览，原图不受影响。');
-    }
-  } catch (error) {
-    file.visibility = previous.visibility;
-    file.thumbnail_url = previous.thumbnailUrl;
-    file.thumbnail_ready = previous.thumbnailReady;
-    file.discover_eligible = previous.visibility === 'public';
-    renderFiles();
-    toast(error.message || '无法更新可见性。', 'error');
-  }
-}
-
 async function addSelectedToAlbum() {
   if (!state.albums.length) await loadAlbums(false);
   if (!state.albums.length) {
@@ -654,18 +822,30 @@ async function addSelectedToAlbum() {
     const albumId = dialogRoot.querySelector('input[name="album"]:checked')?.value;
     if (!albumId) return;
     event.currentTarget.disabled = true;
-    const added = await addSelectedFilesToAlbum(albumId);
-    close();
-    renderFiles();
-    toast(`已将 ${added} 个文件加入图库。`);
+    const button = event.currentTarget;
+    try {
+      const added = await addSelectedFilesToAlbum(albumId);
+      close();
+      if (state.view === 'files') renderFiles();
+      toast(`已将 ${added} 个文件加入图库。`);
+    } catch (error) {
+      button.disabled = false;
+      toast(error.message || '无法加入图库，请重试。', 'error');
+    }
   });
 }
 
 async function addSelectedFilesToAlbum(albumId) {
+  const detail = await api(`/api/user/albums/${encodeURIComponent(albumId)}`);
+  const existingItems = detail.items || [];
+  const included = new Set(existingItems.map(item => item.id));
+  let position = Math.max(-1, ...existingItems.map(item => Number(item.position) || 0)) + 1;
   let added = 0;
   for (const fileId of state.selected) {
+    if (included.has(fileId)) continue;
     try {
-      await api(`/api/user/albums/${encodeURIComponent(albumId)}/items`, { method: 'POST', body: JSON.stringify({ fileId }) });
+      await api(`/api/user/albums/${encodeURIComponent(albumId)}/items`, { method: 'POST', body: JSON.stringify({ fileId, position }) });
+      position += 1;
       added += 1;
     } catch (error) {
       toast(error.message, 'error');
@@ -679,7 +859,7 @@ async function addSelectedFilesToAlbum(albumId) {
 function confirmDeleteSelected() {
   const selectedFiles = state.files.filter(file => state.selected.has(file.id));
   const content = `<div class="dialog-head"><h2>永久删除文件？</h2><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
-    <div class="dialog-body"><p style="margin-top:0;color:var(--muted);line-height:1.65">将永久删除 ${selectedFiles.length} 个文件。它们会从所有图库和存储中移除，已保存的链接也会失效。此操作无法恢复。</p><ul>${selectedFiles.slice(0, 8).map(file => `<li>${escapeHtml(file.file_name || file.id)}</li>`).join('')}</ul>${selectedFiles.length > 8 ? `<p>以及另外 ${selectedFiles.length - 8} 个文件</p>` : ''}</div>
+    <div class="dialog-body"><p style="margin-top:0;color:var(--muted);line-height:1.65">将永久删除 ${selectedFiles.length} 个文件。它们会从所有图库和存储中移除，已保存的链接也会失效。此操作无法恢复。</p><ul>${selectedFiles.slice(0, 8).map(file => `<li>${escapeHtml(systemFileName(file))}</li>`).join('')}</ul>${selectedFiles.length > 8 ? `<p>以及另外 ${selectedFiles.length - 8} 个文件</p>` : ''}</div>
     <div class="dialog-actions"><button class="button" type="button" data-close-dialog>取消</button><button class="button danger" type="button" id="confirmDelete">确认永久删除</button></div>`;
   const close = openDialog(content);
   dialogRoot.querySelector('#confirmDelete').addEventListener('click', async event => {
@@ -690,7 +870,7 @@ function confirmDeleteSelected() {
         await api(`/api/user/files/${encodeFilePath(file.id)}`, { method: 'DELETE' });
         deleted += 1;
       } catch (error) {
-        toast(`${file.file_name || file.id}：${error.message}`, 'error');
+        toast(`${systemFileName(file)}：${error.message}`, 'error');
       }
     }
     close();
@@ -704,17 +884,16 @@ function confirmDeleteSelected() {
 
 function albumDialog(album = null, { onCreated = null } = {}) {
   const editing = Boolean(album);
+  const originView = state.view;
+  const originAlbumId = state.albumId;
   const content = `<form id="albumForm">
     <div class="dialog-head"><h2>${editing ? '编辑图库' : '新建图库'}</h2><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
     <div class="dialog-body">
       <div class="field"><label for="albumName">图库名称</label><input id="albumName" name="name" maxlength="80" value="${escapeHtml(album?.name || '')}" required></div>
       <div class="field"><label for="albumSlug">分享链接名称</label><input id="albumSlug" name="slug" maxlength="80" value="${escapeHtml(album?.slug || '')}" pattern="[a-z0-9][a-z0-9\\-]*"><small>用于分享链接，只能使用小写英文字母、数字和短横线；留空会根据图库名称生成。</small></div>
       <div class="field"><label for="albumDescription">说明</label><textarea id="albumDescription" name="description" maxlength="200">${escapeHtml(album?.description || '')}</textarea></div>
-      <div class="field"><label for="albumCharInfoCharacterName">CharInfo 角色全名（可选）</label><input id="albumCharInfoCharacterName" name="charInfoCharacterName" maxlength="80" value="${escapeHtml(album?.charInfoCharacterName || '')}"><small>需要生成 CharInfo 链接时填写角色完整姓名；不要填写 Discord 用户名或角色简称。</small></div>
-      <fieldset class="field" style="border:0;padding:0"><legend>可见性</legend>
-        <label class="radio-option"><input type="radio" name="visibility" value="public" ${album?.visibility !== 'unlisted' ? 'checked' : ''}><span class="radio-copy"><strong>显示在发现页</strong><small>会展示在发现页；分享链接始终由公开名称和图库链接名称决定。</small></span></label>
-        <label class="radio-option"><input type="radio" name="visibility" value="unlisted" ${album?.visibility === 'unlisted' ? 'checked' : ''}><span class="radio-copy"><strong>不显示在发现页</strong><small>不会出现在发现页，但仍可通过分享链接访问。</small></span></label>
-      </fieldset>
+      <div class="field"><label for="albumCharInfoCharacterName">关联角色全名（可选）</label><input id="albumCharInfoCharacterName" name="charInfoCharacterName" maxlength="80" value="${escapeHtml(album?.charInfoCharacterName || '')}"><small>连接 ST 远程图库时填写角色完整姓名，仅用于关联图库。角色资料请在 ST 的 CharInfo Manager 中编辑。</small></div>
+      <p>设置公开名称后，图库会显示在发现页；每个图库只展示一张封面。</p>
       <small class="field-error" id="albumError"></small>
     </div>
     <div class="dialog-actions"><button class="button" type="button" data-close-dialog>取消</button><button class="button primary" type="submit">${editing ? '保存更改' : '创建图库'}</button></div>
@@ -723,7 +902,7 @@ function albumDialog(album = null, { onCreated = null } = {}) {
   dialogRoot.querySelector('#albumForm').addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.currentTarget;
-    const payload = { name: form.name.value.trim(), slug: form.slug.value.trim() || undefined, description: form.description.value.trim(), charInfoCharacterName: form.charInfoCharacterName.value.trim(), visibility: form.visibility.value };
+    const payload = { name: form.name.value.trim(), slug: form.slug.value.trim() || undefined, description: form.description.value.trim(), charInfoCharacterName: form.charInfoCharacterName.value.trim() };
     form.querySelector('button[type="submit"]').disabled = true;
     try {
       const savedAlbum = editing
@@ -733,10 +912,14 @@ function albumDialog(album = null, { onCreated = null } = {}) {
       await loadAlbums(true);
       if (!editing && onCreated) {
         const added = await onCreated(savedAlbum.id);
-        renderFiles();
+        await loadAlbums(true);
+        if (state.view === 'files') renderFiles();
         toast(`图库已创建，并已将 ${added} 个文件加入图库。`);
       } else {
-        renderAlbums();
+        if (state.view === 'albums') {
+          if (!editing && originView === 'albums' && state.albumId === originAlbumId) state.albumId = savedAlbum.id;
+          renderAlbums();
+        }
         toast(editing ? '图库已更新。' : '图库已创建。');
       }
     } catch (error) {
@@ -750,51 +933,70 @@ function bindAlbumEvents() {
   document.querySelector('#createAlbum')?.addEventListener('click', () => albumDialog());
   document.querySelector('#emptyCreateAlbum')?.addEventListener('click', () => albumDialog());
   document.querySelectorAll('[data-copy]').forEach(button => button.addEventListener('click', async () => {
-    await navigator.clipboard.writeText(button.dataset.copy);
-    toast('链接已复制。');
+    try {
+      await navigator.clipboard.writeText(button.dataset.copy);
+      toast('链接已复制。');
+    } catch {
+      toast('复制失败，请重试。', 'error');
+    }
   }));
-  document.querySelector('#setPublicHandle')?.addEventListener('click', async () => { await ensurePublicHandle(); renderAlbums(); });
-  document.querySelectorAll('.album-row').forEach(row => {
+  document.querySelector('#setPublicHandle')?.addEventListener('click', async () => { await ensurePublicHandle(); if (state.view === 'albums') renderAlbums(); });
+  document.querySelectorAll('.album-row, .album-detail').forEach(row => {
     const album = state.albums.find(item => item.id === row.dataset.albumId);
-    row.querySelector('[data-manage-album]').addEventListener('click', () => manageAlbumItems(album));
-    row.querySelector('[data-edit-album]').addEventListener('click', () => albumDialog(album));
-    row.querySelector('[data-delete-album]').addEventListener('click', () => confirmDeleteAlbum(album));
+    row.querySelector('[data-manage-album]')?.addEventListener('click', () => manageAlbumItems(album));
+    row.querySelectorAll('[data-edit-album]').forEach(button => button.addEventListener('click', () => albumDialog(album)));
+    row.querySelector('[data-delete-album]')?.addEventListener('click', () => confirmDeleteAlbum(album));
   });
 }
 
 function manageAlbumItems(album) {
+  if (!album) return;
+  navigateWorkspace({ view: 'albums', albumId: album.id });
+}
+
+function albumDetailMarkup(album) {
   const items = [...(album.items || [])].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
   const coverFileId = selectedCoverFileId(album);
   const rows = items.map((item, index) => `<article class="album-item-row" data-file-id="${escapeHtml(item.id)}">
-    <div class="album-item-thumb">${isVideoFile(item) ? `<video src="${fileUrl(item)}" muted playsinline preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(item.file_name || item.id)}" loading="lazy" decoding="async">`}</div>
-    <div class="album-item-copy"><strong>${escapeHtml(item.file_name || item.id)}</strong><span>${formatBytes(item.file_size_bytes)}</span></div>
-    <div class="album-item-actions">${isStaticCoverFile(item) ? `<button class="button" type="button" data-edit-cover>${coverFileId === item.id ? '调整封面' : '设为封面'}</button>` : ''}<button class="icon-button" type="button" data-move-up aria-label="上移" ${index === 0 ? 'disabled' : ''}>↑</button><button class="icon-button" type="button" data-move-down aria-label="下移" ${index === items.length - 1 ? 'disabled' : ''}>↓</button><button class="button danger" type="button" data-remove-item>移出图库</button></div>
+    <button class="album-item-thumb" type="button" data-preview-item aria-label="查看 ${escapeHtml(systemFileName(item))}"${item.nsfw ? ` data-media-spoiler${spoilerAction}` : ''}>${isVideoFile(item) ? `<video src="${fileUrl(item)}" muted playsinline disablepictureinpicture preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(systemFileName(item))}" loading="lazy" decoding="async">`}${spoilerBadge(item.nsfw)}</button>
+    <div class="album-item-copy"><strong>${escapeHtml(systemFileName(item))}</strong><span>${formatBytes(item.file_size_bytes)}</span></div>
+    <div class="album-item-actions">${coverFileId === item.id ? '<span class="status-chip">当前封面</span>' : ''}${isStaticCoverFile(item) ? `<button class="button" type="button" data-edit-cover>${coverFileId === item.id ? '调整封面' : '设为封面'}</button>` : ''}<button class="icon-button" type="button" data-move-up aria-label="上移 ${escapeHtml(systemFileName(item))}" ${index === 0 ? 'disabled' : ''}>↑</button><button class="icon-button" type="button" data-move-down aria-label="下移 ${escapeHtml(systemFileName(item))}" ${index === items.length - 1 ? 'disabled' : ''}>↓</button><button class="button ghost" type="button" data-remove-item>移出图库</button></div>
   </article>`).join('');
-  const content = `<div class="dialog-head"><div><h2>管理“${escapeHtml(album.name)}”的内容</h2><p>${items.length} 个项目</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div><div class="dialog-body">${coverFileId ? '<button class="button" type="button" data-clear-cover>恢复自动封面</button>' : ''}${rows || '<div class="empty-state compact"><h3>图库里还没有文件</h3><p>请从“我的文件”选择内容加入。</p></div>'}</div>`;
-  openDialog(content, { wide: true });
-  dialogRoot.querySelectorAll('.album-item-row').forEach((row, index) => {
+  const shareUrl = state.user.publicHandle ? `${location.origin}/gallery/${encodeURIComponent(state.user.publicHandle)}/${encodeURIComponent(album.slug)}` : '';
+  return `<div class="album-detail" data-album-id="${escapeHtml(album.id)}">
+    <a class="album-back" href="/account/?view=albums">← 所有图库</a>
+    <div class="workspace-section-head"><div><h2>${escapeHtml(album.name)}</h2><p>${items.length} 个文件${album.description ? ` · ${escapeHtml(album.description)}` : ''}</p></div><div class="album-detail-actions"><button class="button" type="button" data-edit-album>编辑信息</button><button class="button primary" id="addAlbumFiles" type="button">${icons.plus}添加已有文件</button></div></div>
+    <div class="album-detail-tools">${shareUrl ? `<button class="button" type="button" data-copy="${escapeHtml(shareUrl)}">${icons.link}复制分享链接</button>` : '<button class="button" id="setPublicHandle" type="button">设置公开名称以分享</button>'}${album.charInfoCharacterName ? `<button class="button" type="button" data-copy="${escapeHtml(`${location.origin}/api/public/album-gallery/${encodeURIComponent(album.id)}`)}">复制远程图库链接</button>` : ''}${coverFileId ? '<button class="button ghost" type="button" data-clear-cover>恢复自动封面</button>' : ''}<button class="button ghost album-delete" type="button" data-delete-album>删除图库</button></div>
+    ${bridgeAlbumAction(album, true)}
+    <p class="album-content-hint">使用上下箭头调整文件顺序；移出图库会保留原文件。</p>
+    <div class="album-items">${rows || '<div class="empty-state compact"><span class="empty-icon">' + icons.folder + '</span><h3>图库里还没有文件</h3><p>点击“添加已有文件”，直接选择要加入的图片或视频。</p></div>'}</div>
+  </div>`;
+}
+
+function bindAlbumItemEvents(album) {
+  const items = [...(album.items || [])].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+  document.querySelector('#addAlbumFiles')?.addEventListener('click', () => openAlbumFilePicker(album));
+  main.querySelectorAll('.album-item-row').forEach((row, index) => {
     const fileId = row.dataset.fileId;
     const mutate = async (method, body = null, suffix = '') => {
       row.classList.add('busy');
       try {
         await api(`/api/user/albums/${encodeURIComponent(album.id)}/items${suffix}`, { method, ...(body ? { body: JSON.stringify(body) } : {}) });
         await loadAlbums(true);
-        const refreshed = state.albums.find(item => item.id === album.id);
-        manageAlbumItems(refreshed || album);
+        if (state.view === 'albums') renderAlbums();
+        toast('已移出图库，原文件仍然保留。');
       } catch (error) {
         row.classList.remove('busy');
         toast(error.message, 'error');
       }
     };
-    const reorder = async (otherFile, nextPosition, otherPosition) => {
+    const reorder = async (otherFile) => {
       row.classList.add('busy');
       try {
-        await Promise.all([
-          api(`/api/user/albums/${encodeURIComponent(album.id)}/items`, { method: 'PATCH', body: JSON.stringify({ fileId, position: nextPosition }) }),
-          api(`/api/user/albums/${encodeURIComponent(album.id)}/items`, { method: 'PATCH', body: JSON.stringify({ fileId: otherFile.id, position: otherPosition }) }),
-        ]);
+        await api(`/api/user/albums/${encodeURIComponent(album.id)}/items`, { method: 'PATCH', body: JSON.stringify({ fileId, swapWithFileId: otherFile.id }) });
         await loadAlbums(true);
-        manageAlbumItems(state.albums.find(item => item.id === album.id) || album);
+        if (state.view === 'albums') renderAlbums();
+        toast('展示顺序已更新。');
       } catch (error) {
         row.classList.remove('busy');
         toast(error.message, 'error');
@@ -802,29 +1004,137 @@ function manageAlbumItems(album) {
     };
     row.querySelector('[data-move-up]')?.addEventListener('click', async () => {
       const previous = items[index - 1];
-      await reorder(previous, index - 1, index);
+      await reorder(previous);
     });
     row.querySelector('[data-move-down]')?.addEventListener('click', async () => {
       const next = items[index + 1];
-      await reorder(next, index + 1, index);
+      await reorder(next);
     });
     row.querySelector('[data-edit-cover]')?.addEventListener('click', () => openAlbumCoverEditor(album, items[index]));
+    row.querySelector('[data-preview-item]')?.addEventListener('click', () => openFileViewer(items[index]));
     row.querySelector('[data-remove-item]')?.addEventListener('click', () => mutate('DELETE', null, `?fileId=${encodeURIComponent(fileId)}`));
   });
-  dialogRoot.querySelector('[data-clear-cover]')?.addEventListener('click', async event => {
-    event.currentTarget.disabled = true;
+  main.querySelector('[data-clear-cover]')?.addEventListener('click', async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
     try {
       await api(`/api/user/albums/${encodeURIComponent(album.id)}`, { method: 'PATCH', body: JSON.stringify({ coverFileId: null }) });
       await loadAlbums(true);
-      const refreshed = state.albums.find(item => item.id === album.id) || album;
-      renderAlbums();
-      manageAlbumItems(refreshed);
+      if (state.view === 'albums') renderAlbums();
       toast('已恢复自动封面。');
     } catch (error) {
-      event.currentTarget.disabled = false;
+      button.disabled = false;
       toast(error.message, 'error');
     }
   });
+}
+
+function openAlbumFilePicker(album) {
+  const included = new Set((album.items || []).map(item => item.id));
+  const selected = new Set();
+  let files = [];
+  let cursor = null;
+  let requestId = 0;
+  let query = '';
+  let position = Math.max(-1, ...(album.items || []).map(item => Number(item.position) || 0)) + 1;
+  const close = openDialog(`<div class="dialog-head"><div><h2>添加文件到“${escapeHtml(album.name)}”</h2><p>选择已有文件；同一文件可以加入多个图库。</p></div><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
+    <div class="dialog-body"><form id="albumFileSearchForm" class="album-file-search" novalidate><label class="search-control"><span class="sr-only">搜索已有文件</span><input type="search" id="albumFileSearch" placeholder="搜索文件名"><button class="icon-button" id="clearAlbumFileSearch" type="button" aria-label="清除搜索" hidden>${icons.close}</button></label><button class="button" type="submit">搜索</button></form><div id="albumFileResults" class="album-file-results" aria-live="polite"></div><p class="field-error" id="albumFileError" role="status"></p></div>
+    <div class="dialog-actions"><span id="albumFileSelectionCount" class="album-file-count">已选择 0 个文件</span><button class="button" type="button" data-close-dialog>取消</button><button class="button primary" id="confirmAlbumFiles" type="button" disabled>添加到图库</button></div>`, { wide: true, label: '选择已有文件' });
+  const results = dialogRoot.querySelector('#albumFileResults');
+  const search = dialogRoot.querySelector('#albumFileSearch');
+  const clear = dialogRoot.querySelector('#clearAlbumFileSearch');
+  const confirm = dialogRoot.querySelector('#confirmAlbumFiles');
+  const errorNode = dialogRoot.querySelector('#albumFileError');
+  const updateSelection = () => {
+    dialogRoot.querySelector('#albumFileSelectionCount').textContent = `已选择 ${selected.size} 个文件`;
+    confirm.disabled = selected.size === 0;
+  };
+  const renderResults = () => {
+    results.innerHTML = files.length ? `<div class="album-file-grid">${files.map((file, index) => {
+      const inputId = `album-file-${index}`;
+      const inAlbum = included.has(file.id);
+      const name = escapeHtml(systemFileName(file));
+      const media = isVideoFile(file) ? `<video src="${fileUrl(file)}" muted playsinline disablepictureinpicture preload="metadata"></video>` : `<img src="${escapeHtml(previewUrl(file))}" alt="" loading="lazy" decoding="async">`;
+      return `<div class="album-file-option${inAlbum ? ' included' : ''}">
+        <input id="${inputId}" type="checkbox" value="${escapeHtml(file.id)}" ${inAlbum || selected.has(file.id) ? 'checked' : ''} ${inAlbum ? 'disabled' : ''}>
+        <div class="album-file-preview"${file.nsfw ? ' data-media-spoiler' : ''}><label for="${inputId}">${media}</label>${spoilerBadge(file.nsfw, true)}</div>
+        <label for="${inputId}"><strong title="${name}">${name}</strong><small>${inAlbum ? '已在图库中' : formatBytes(file.file_size_bytes)}</small></label>
+      </div>`;
+    }).join('')}</div>${cursor ? '<div class="load-more"><button class="button" type="button" data-more-album-files>加载更多</button></div>' : ''}` : `<div class="empty-state compact"><h3>${query ? '没有符合条件的文件' : '还没有上传文件'}</h3><p>${query ? '试试其他文件名，或清除搜索。' : '在“全部文件”上传后，即可在这里选择加入。'}</p></div>`;
+  };
+  const load = async (more = false) => {
+    const currentRequest = ++requestId;
+    const params = new URLSearchParams({ limit: '50', sort: 'newest', filter: 'all' });
+    if (query) params.set('query', query);
+    if (more && cursor) params.set('cursor', cursor);
+    errorNode.textContent = '';
+    results.setAttribute('aria-busy', 'true');
+    if (!more) results.innerHTML = '<div class="loading-state"><span class="spinner" aria-hidden="true"></span><p>正在读取文件…</p></div>';
+    else results.querySelector('[data-more-album-files]').disabled = true;
+    try {
+      const data = await api(`/api/user/files?${params}`);
+      if (currentRequest !== requestId || !results.isConnected) return;
+      files = more ? [...files, ...(data.files || [])] : (data.files || []);
+      cursor = data.nextCursor || null;
+      renderResults();
+    } catch (error) {
+      if (currentRequest !== requestId || !results.isConnected) return;
+      errorNode.textContent = error.message || '无法读取文件，请重试。';
+      if (!more) results.innerHTML = '<div class="empty-state compact"><button class="button" type="button" data-retry-album-files>重新读取</button></div>';
+      else results.querySelector('[data-more-album-files]').disabled = false;
+    } finally {
+      if (currentRequest === requestId) results.removeAttribute('aria-busy');
+    }
+  };
+  dialogRoot.querySelector('#albumFileSearchForm').addEventListener('submit', event => {
+    event.preventDefault();
+    query = search.value.trim();
+    load();
+  });
+  search.addEventListener('input', () => { clear.hidden = !search.value; });
+  search.addEventListener('keydown', event => { if (event.key === 'Enter' && event.isComposing) event.preventDefault(); });
+  clear.addEventListener('click', () => { search.value = ''; query = ''; clear.hidden = true; search.focus(); load(); });
+  results.addEventListener('change', event => {
+    if (!event.target.matches('input[type="checkbox"]')) return;
+    if (event.target.checked) selected.add(event.target.value); else selected.delete(event.target.value);
+    updateSelection();
+  });
+  results.addEventListener('click', event => {
+    if (event.target.closest('[data-more-album-files]')) load(true);
+    if (event.target.closest('[data-retry-album-files]')) load();
+  });
+  confirm.addEventListener('click', async () => {
+    confirm.disabled = true;
+    dialogRoot.querySelectorAll('input, button').forEach(control => { control.disabled = true; });
+    const failures = [];
+    let added = 0;
+    for (const fileId of selected) {
+      try {
+        await api(`/api/user/albums/${encodeURIComponent(album.id)}/items`, { method: 'POST', body: JSON.stringify({ fileId, position }) });
+        position += 1;
+        included.add(fileId);
+        selected.delete(fileId);
+        added += 1;
+      } catch (error) {
+        failures.push(error.message);
+      }
+    }
+    if (added) {
+      markViewDirty('albums');
+      try {
+        await loadAlbums(true);
+        if (state.view === 'albums') renderAlbums();
+      } catch (error) { failures.push(error.message); }
+      toast(`已将 ${added} 个文件加入图库。`);
+    }
+    if (!results.isConnected) return;
+    if (!failures.length) { close(); return; }
+    dialogRoot.querySelectorAll('input, button').forEach(control => { control.disabled = false; });
+    errorNode.textContent = `部分文件未能加入：${failures[0]}。已成功加入的文件会保留。`;
+    renderResults();
+    updateSelection();
+  });
+  load();
 }
 
 function openAlbumCoverEditor(album, item) {
@@ -833,7 +1143,7 @@ function openAlbumCoverEditor(album, item) {
   const content = `<form id="albumCoverForm">
     <div class="dialog-head"><h2>调整封面</h2><button class="icon-button" type="button" data-close-dialog aria-label="关闭">${icons.close}</button></div>
     <div class="dialog-body cover-editor-body">
-      <div class="cover-focus-preview"><img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(item.file_name || item.id)}" draggable="false" style="object-position:${initial.x}% ${initial.y}%"></div>
+      <div class="cover-focus-preview"${item.nsfw ? ' data-media-spoiler' : ''}><img src="${escapeHtml(previewUrl(item))}" alt="${escapeHtml(systemFileName(item))}" draggable="false" style="object-position:${initial.x}% ${initial.y}%">${spoilerBadge(item.nsfw, true)}</div>
       <label class="cover-focus-control" for="coverFocusX"><span>水平焦点 <output id="coverFocusXValue" for="coverFocusX">${initial.x}%</output></span><input id="coverFocusX" name="coverFocusX" type="range" min="0" max="100" step="1" value="${initial.x}" aria-label="水平焦点"></label>
       <label class="cover-focus-control" for="coverFocusY"><span>垂直焦点 <output id="coverFocusYValue" for="coverFocusY">${initial.y}%</output></span><input id="coverFocusY" name="coverFocusY" type="range" min="0" max="100" step="1" value="${initial.y}" aria-label="垂直焦点"></label>
     </div>
@@ -862,6 +1172,7 @@ function openAlbumCoverEditor(album, item) {
     updatePreview();
   };
   focusPreview.addEventListener('pointerdown', event => {
+    if (focusPreview.hasAttribute('data-media-spoiler')) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     drag = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, focusX: Number(xInput.value), focusY: Number(yInput.value) };
     focusPreview.setPointerCapture(event.pointerId);
@@ -884,10 +1195,8 @@ function openAlbumCoverEditor(album, item) {
     try {
       await api(`/api/user/albums/${encodeURIComponent(album.id)}`, { method: 'PATCH', body: JSON.stringify({ coverFileId: item.id, coverPositionX: Number(xInput.value), coverPositionY: Number(yInput.value) }) });
       await loadAlbums(true);
-      const refreshed = state.albums.find(entry => entry.id === album.id) || album;
       close();
-      renderAlbums();
-      manageAlbumItems(refreshed);
+      if (state.view === 'albums') renderAlbums();
       toast('封面已更新。');
     } catch (error) {
       button.disabled = false;
@@ -902,16 +1211,20 @@ function confirmDeleteAlbum(album) {
     <div class="dialog-actions"><button class="button" type="button" data-close-dialog>取消</button><button class="button danger" type="button" id="confirmDeleteAlbum">删除图库</button></div>`;
   const close = openDialog(content);
   dialogRoot.querySelector('#confirmDeleteAlbum').addEventListener('click', async event => {
-    event.currentTarget.disabled = true;
+    const button = event.currentTarget;
+    button.disabled = true;
     try {
       await api(`/api/user/albums/${encodeURIComponent(album.id)}`, { method: 'DELETE' });
       close();
       await loadAlbums(true);
-      renderAlbums();
+      if (state.view === 'albums') {
+        if (state.albumId === album.id) state.albumId = null;
+        renderAlbums();
+      }
       toast('图库已删除，原文件仍然保留。');
     } catch (error) {
       toast(error.message, 'error');
-      event.currentTarget.disabled = false;
+      button.disabled = false;
     }
   });
 }
@@ -923,7 +1236,7 @@ async function loadViewData(key) {
     if (key === 'files') {
       await Promise.all([loadFiles(), state.albums.length ? Promise.resolve() : loadAlbums(false)]);
     } else if (key === 'albums') {
-      await loadAlbums(true);
+      await Promise.all([loadAlbums(true), cacheEntry('files').loaded ? Promise.resolve() : loadFiles()]);
     } else {
       await loadAdminData();
     }
@@ -985,17 +1298,42 @@ async function showView({ initial = false, force = false } = {}) {
   }
 }
 
+async function syncWorkspaceWallpaper() {
+  const isAdmin = state.view === 'admin';
+  if (wallpaperAdminScope === isAdmin) return;
+  wallpaperAdminScope = isAdmin;
+  const initialization = ++wallpaperInitialization;
+  stopWorkspaceWallpaper?.();
+  stopWorkspaceWallpaper = null;
+  if (pendingWorkspaceWallpaper) await pendingWorkspaceWallpaper;
+  if (initialization !== wallpaperInitialization) return;
+  const pending = initializeWorkspaceWallpaper({ isAdmin });
+  pendingWorkspaceWallpaper = pending;
+  const stop = await pending;
+  if (pendingWorkspaceWallpaper === pending) pendingWorkspaceWallpaper = null;
+  if (initialization !== wallpaperInitialization) {
+    stop();
+    return;
+  }
+  stopWorkspaceWallpaper = stop;
+}
+
 async function navigateWorkspace(target, { historyMode = 'push' } = {}) {
   if (!target) return;
-  let { view, section } = target;
+  let { view, section, albumId = null } = target;
   if (view === 'admin' && !['manager', 'admin', 'owner'].includes(state.user?.role)) view = 'files';
   if (view === 'admin' && section === 'users' && state.user?.role !== 'owner') section = 'content';
-  if (state.view === view && (view !== 'admin' || state.adminSection === section)) return;
+  if (state.view === view && (view !== 'admin' || state.adminSection === section) && (view !== 'albums' || state.albumId === albumId)) return;
 
+  if (activeDialogClose?.() === false) {
+    if (historyMode === 'none') history.pushState(null, '', buildWorkspaceUrl());
+    return;
+  }
   rememberScroll();
   state.view = view;
+  state.albumId = view === 'albums' ? albumId : null;
   if (view === 'admin') state.adminSection = section;
-  dialogRoot.innerHTML = '';
+  syncWorkspaceWallpaper();
   const url = buildWorkspaceUrl(view, section);
   if (historyMode === 'push') history.pushState(null, '', url);
   else if (historyMode === 'replace') history.replaceState(null, '', url);
@@ -1027,11 +1365,13 @@ async function init() {
     const data = await api('/api/user/me');
     state.user = data.user;
     mountLegacyShell(state.user);
+    enableSpoilerPreviews();
     bindWorkspaceNavigation();
     if (!['manager', 'admin', 'owner'].includes(state.user.role) && state.view === 'admin') state.view = 'files';
     if (state.view === 'admin' && state.adminSection === 'users' && state.user.role !== 'owner') state.adminSection = 'content';
-    applyConfiguredWallpaper();
+    syncWorkspaceWallpaper();
     await showView({ initial: true });
+    charInfoBridge?.start(state.user.id);
   } catch (error) {
     if (error.status === 401) showLogin();
     else main.innerHTML = `<div class="error-state"><h2>账户暂时不可用</h2><p>${escapeHtml(error.message)}</p></div>`;

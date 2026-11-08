@@ -1,6 +1,8 @@
 import { transformImageResponse } from '../file/imageTransform.js';
 import { getDatabase } from '../utils/databaseAdapter.js';
 import { DiscordAPI } from '../utils/storage/discordAPI.js';
+import { fetchSecurityConfig } from '../utils/sysConfig.js';
+import { legacyFileRestriction } from '../utils/files/fileAccess.js';
 import {
     createThumbnailTransform,
     getPermanentThumbnail,
@@ -44,10 +46,20 @@ export async function onRequest(context) {
         return new Response('Thumbnail not found', { status: 404, headers: noStoreHeaders() });
     }
 
+    const securityConfig = await fetchSecurityConfig(env);
+    if (legacyFileRestriction(metadata, securityConfig.access.whiteListMode)) {
+        return new Response('Thumbnail not found', { status: 404, headers: noStoreHeaders() });
+    }
+
     const currentVersion = thumbnailContentVersion(metadata);
     const requestedVersion = requestUrl.searchParams.get('v') || '';
     if (requestedVersion && requestedVersion !== currentVersion) {
-        return new Response('Thumbnail version not found', { status: 404, headers: noStoreHeaders() });
+        // Older ST/worldbook entries may retain a thumbnail version from before
+        // regeneration. Access controls above still apply before redirecting to
+        // the current rendition; never cache this stale-version redirect.
+        return currentVersion
+            ? thumbnailVersionRedirect(request.url, fileId, variantName, currentVersion, true)
+            : new Response('Thumbnail version not found', { status: 404, headers: noStoreHeaders() });
     }
     if (!requestedVersion && currentVersion) {
         return thumbnailVersionRedirect(request.url, fileId, variantName, currentVersion);
@@ -60,7 +72,27 @@ export async function onRequest(context) {
     const cached = await matchEdgeCache(edgeCache, cacheKey);
     if (cached) return request.method === 'HEAD' ? headResponse(cached) : cached;
 
-    const permanent = getPermanentThumbnail(metadata);
+    // Portrait must be generated from the full original, never upscaled from a 720px thumbnail.
+    const permanent = variantName === 'portrait' ? null : getPermanentThumbnail(metadata);
+    if (permanent?.Channel === 'CloudflareR2') {
+        try {
+            const variant = permanent.Variants[variantName];
+            const object = request.method === 'HEAD'
+                ? await env.THUMBNAILS?.head(variant.Key)
+                : await env.THUMBNAILS?.get(variant.Key);
+            if (!object || (request.method !== 'HEAD' && !object.body)) {
+                return new Response('Permanent thumbnail source unavailable', { status: 502, headers: noStoreHeaders() });
+            }
+            const headers = new Headers({ 'Content-Type': THUMBNAIL_CONTENT_TYPE, 'Content-Length': String(object.size) });
+            if (object.httpEtag) headers.set('ETag', object.httpEtag);
+            const response = cacheableThumbnailResponse(new Response(request.method === 'HEAD' ? null : object.body, { headers }), fileId, variantName, metadata, cacheControl);
+            if (request.method !== 'HEAD') await putEdgeCache(context, edgeCache, cacheKey, response);
+            return response;
+        } catch (error) {
+            console.error('R2 thumbnail read failed:', error.message);
+            return new Response('Permanent thumbnail source unavailable', { status: 502, headers: noStoreHeaders() });
+        }
+    }
     if (request.method === 'HEAD' && variantName === 'gallery' && permanent) {
         return permanentThumbnailHead(permanent, fileId, metadata, cacheControl);
     }
@@ -75,7 +107,9 @@ export async function onRequest(context) {
 }
 
 async function createThumbnailResponse(context, fileId, metadata, variantName, cacheControl) {
-    const permanent = getPermanentThumbnail(metadata);
+    // Old R2 galleries have only 160/256/720px variants. Avoid a missing R2
+    // variant lookup and do not use any stored 720px thumbnail as the source.
+    const permanent = variantName === 'portrait' ? null : getPermanentThumbnail(metadata);
     let source = permanent ? await fetchPermanentThumbnail(context.env, metadata) : null;
     if (permanent && !source) {
         return new Response('Permanent thumbnail source unavailable', { status: 502, headers: noStoreHeaders() });
@@ -173,13 +207,13 @@ function thumbnailCacheKey(requestUrl, variantName, version) {
     return new Request(url.toString(), { method: 'GET' });
 }
 
-function thumbnailVersionRedirect(requestUrl, fileId, variantName, version) {
+function thumbnailVersionRedirect(requestUrl, fileId, variantName, version, isStale = false) {
     const location = absoluteThumbnailUrl(requestUrl, fileId, variantName, version);
     return new Response(null, {
         status: 302,
         headers: {
             ...corsHeaders(),
-            'Cache-Control': LEGACY_THUMBNAIL_CACHE_CONTROL,
+            'Cache-Control': isStale ? 'no-store' : LEGACY_THUMBNAIL_CACHE_CONTROL,
             'Location': location,
         },
     });

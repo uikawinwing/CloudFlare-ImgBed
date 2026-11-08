@@ -1,5 +1,5 @@
 import { charInfoVisualStorageKey } from '../../../utils/charInfoVisualConfig.js';
-import { createCharInfoVisualPack } from '../../../utils/charInfoVisualPack.js';
+import { createCharInfoVisualPack, createCharInfoGalleryPack } from '../../../utils/charInfoVisualPack.js';
 import { listSharedAlbumFiles } from '../../../utils/publicCatalog.js';
 
 const CORS_HEADERS = {
@@ -14,12 +14,14 @@ export async function onRequestOptions() {
 
 export async function onRequestGet({ request, env, params }) {
     if (!env.img_d1?.prepare) return json({ error: 'D1 is required' }, 503);
+    const view = new URL(request.url).searchParams.get('view') || 'visual';
+    if (!['visual', 'gallery'].includes(view)) return json({ error: 'Unknown CharInfo view' }, 400);
 
     const albumId = normalizeAlbumId(params?.albumId) || albumIdFromRequest(request.url);
     if (!albumId) return json({ error: 'Gallery not found' }, 404);
 
     const album = await env.img_d1.prepare(
-        "SELECT a.id, a.name, a.description, a.char_info_character_name, a.updated_at, u.discord_id, u.username, u.public_handle FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE a.id = ? AND u.status = 'active'",
+        "SELECT a.id, a.slug, a.name, a.description, a.char_info_character_name, a.updated_at, u.discord_id, u.username, u.public_handle FROM albums a JOIN users u ON u.discord_id = a.owner_id WHERE a.id = ? AND u.status = 'active'",
     ).bind(albumId).first();
     if (!album) return json({ error: 'Gallery not found' }, 404);
 
@@ -31,12 +33,13 @@ export async function onRequestGet({ request, env, params }) {
 
     let pack;
     try {
-        pack = createCharInfoVisualPack({ album, files, storedVisualConfig, requestUrl: request.url });
+        const createPack = view === 'gallery' ? createCharInfoGalleryPack : createCharInfoVisualPack;
+        pack = createPack({ album, files, storedVisualConfig, requestUrl: request.url });
     } catch (error) {
         return json({ error: error instanceof Error ? error.message : String(error) }, 409);
     }
 
-    const etag = makeEtag(album, files, storedVisualConfig);
+    const etag = makeEtag(album, files, storedVisualConfig, view);
     const lastModifiedAt = Math.max(Number(album.updated_at) || 0, ...files.map((file) => Number(file.timestamp) || 0));
     const headers = publicHeaders(etag, lastModifiedAt);
     if (request.headers.get('If-None-Match') === etag) return new Response(null, { status: 304, headers });
@@ -65,15 +68,17 @@ function normalizeAlbumId(value) {
     return normalized;
 }
 
-function makeEtag(album, files, storedVisualConfig) {
+function makeEtag(album, files, storedVisualConfig, view) {
     const signature = [
+        view,
         album.id || '',
         album.public_handle || '',
+        album.slug || '',
         album.char_info_character_name || '',
         album.name || '',
         album.description || '',
         storedVisualConfig || '',
-        ...files.map((file) => `${file.id}:${file.file_name || ''}:${file.file_type || ''}:${file.timestamp || ''}`),
+        ...files.map((file) => `${file.id}:${file.file_name || ''}:${file.file_type || ''}:${file.timestamp || ''}:${file.thumbnail_created_at || ''}`),
     ].join('|');
     return `W/\"${album.id}:${hashString(signature)}\"`;
 }

@@ -60,17 +60,13 @@ export async function fetchUploadConfig(env, context = null) {
         // 去除 已禁用 的渠道
         settings.telegram.channels = settings.telegram.channels.filter((channel) => channel.enabled);
         settings.cfr2.channels = settings.cfr2.channels.filter((channel) => channel.enabled);
-        settings.s3.channels = settings.s3.channels.filter((channel) => channel.enabled);
         settings.discord.channels = settings.discord.channels.filter((channel) => channel.enabled);
         settings.huggingface.channels = settings.huggingface.channels.filter((channel) => channel.enabled);
-        settings.webdav.channels = settings.webdav.channels.filter((channel) => channel.enabled);
 
-        // 根据容量限制过滤渠道（可用于 R2、S3、WebDAV）
+        // 根据容量限制过滤渠道。
         // 需要 context 来调用 getIndexMeta
         if (context) {
             settings.cfr2.channels = await filterChannelsByQuota(context, settings.cfr2.channels);
-            settings.s3.channels = await filterChannelsByQuota(context, settings.s3.channels);
-            settings.webdav.channels = await filterChannelsByQuota(context, settings.webdav.channels);
         }
 
         return settings;
@@ -80,10 +76,8 @@ export async function fetchUploadConfig(env, context = null) {
         return {
             telegram: { channels: [] },
             cfr2: { channels: [] },
-            s3: { channels: [] },
             discord: { channels: [] },
-            huggingface: { channels: [] },
-            webdav: { channels: [] }
+            huggingface: { channels: [] }
         };
     }
 }

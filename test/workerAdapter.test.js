@@ -13,6 +13,7 @@ describe('Worker route adapter', () => {
     before(async function () {
         this.timeout(30000);
         const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+        execFileSync(process.execPath, [join(repositoryRoot, 'deploy', 'worker', 'generate-routes.js')], { cwd: repositoryRoot, stdio: 'pipe' });
         bundleDirectory = mkdtempSync(join(tmpdir(), 'imgbed-worker-test-'));
         execFileSync(process.execPath, [
             join(repositoryRoot, 'node_modules', 'wrangler', 'bin', 'wrangler.js'),
@@ -46,6 +47,49 @@ describe('Worker route adapter', () => {
         }, executionContext());
         assert.strictEqual(response.status, 200);
         assert.match(await response.text(), /ImgBed staging/);
+    });
+
+    it('protects settings reads and writes through the actual management middleware', async () => {
+        globalThis.caches = emptyCache();
+        for (const role of ['owner', 'admin', 'manager', 'member', null]) {
+            let writes = 0;
+            const values = new Map([['manage@session@test-session', JSON.stringify({ authType: 'user', expiresAt: Date.now() + 60000, identity: { id: 'test-user' } })]]);
+            const env = {
+                DISCORD_CLIENT_ID: 'test-client', DISCORD_CLIENT_SECRET: 'test-secret',
+                img_url: { get: async key => values.get(key) ?? null, put: async (key, value) => { writes++; values.set(key, value); } },
+                img_d1: { prepare: sql => ({ bind() { return this; }, first: async () => sql.includes('FROM users WHERE discord_id') ? { username: 'Test', role, status: 'active' } : null }) },
+            };
+            for (const section of ['upload', 'others']) for (const method of ['GET', 'POST']) {
+                const response = await worker.fetch(new Request(`https://staging.example.test/api/manage/sysConfig/${section}`, {
+                    method,
+                    headers: { ...(role ? { Cookie: 'user_session=test-session' } : {}), Origin: 'https://staging.example.test', 'Content-Type': 'application/json' },
+                    ...(method === 'POST' ? { body: '{}' } : {}),
+                }), env, executionContext());
+                if (role === 'owner' || role === 'admin') assert.strictEqual(response.status, 200, `${role} ${method} ${section}`);
+                else assert.ok([401, 403].includes(response.status), `${role} ${method} ${section}: ${response.status}`);
+            }
+            assert.strictEqual(writes, ['owner', 'admin'].includes(role) ? 2 : 0, `${role} settings writes`);
+        }
+    });
+
+    it('serves the re-exported identity route as JSON instead of frontend HTML', async () => {
+        globalThis.caches = emptyCache();
+        const identity = { id: 'test-user', username: 'Test', role: 'owner' };
+        const env = {
+            DISCORD_CLIENT_ID: 'test-client', DISCORD_CLIENT_SECRET: 'test-secret',
+            img_url: { get: async key => key === 'manage@session@test-session' ? JSON.stringify({ authType: 'user', expiresAt: Date.now() + 60000, identity }) : null },
+            ASSETS: { fetch: async () => new Response('<html>Asset fallback</html>', { headers: { 'Content-Type': 'text/html' } }) },
+        };
+        for (const authenticated of [false, true]) {
+            const response = await worker.fetch(new Request('https://staging.example.test/api/user/me', {
+                headers: authenticated ? { Cookie: 'user_session=test-session' } : {},
+            }), env, executionContext());
+            assert.strictEqual(response.status, authenticated ? 200 : 401);
+            assert.match(response.headers.get('content-type'), /application\/json/);
+            const body = await response.json();
+            assert.strictEqual(body.authenticated, authenticated);
+            if (authenticated) assert.deepStrictEqual(body.user, { ...identity, publicHandle: null });
+        }
     });
 
     it('matches required dynamic Gallery Pack segments on Workers', async () => {
@@ -85,6 +129,32 @@ describe('Worker route adapter', () => {
         assert.strictEqual(pack.format, 'char-info-gallery-pack');
         assert.strictEqual(pack.avatarThumbnail, 'https://staging.example.test/thumb/users/master/portrait.png?variant=avatar&v=11');
         assert.strictEqual(pack.gallery[0].thumbnail, 'https://staging.example.test/thumb/users/master/portrait.png?v=11');
+    });
+
+    it('serves the dedicated UUID gallery route and revalidates without the generic cache', async () => {
+        globalThis.caches = { default: { match() { throw new Error('Gallery must revalidate at its route'); } } };
+        const albumId = '12345678-1234-4234-8234-123456789abc';
+        const env = { img_d1: { prepare(sql) {
+            if (sql.includes('FROM albums a JOIN users u')) return { bind: id => {
+                assert.strictEqual(id, albumId);
+                return { first: async () => ({ id, char_info_character_name: '旅人' }) };
+            } };
+            if (sql.includes('FROM album_items ai')) return { bind: () => ({ all: async () => ({ results: [] }) }) };
+            if (sql.includes('FROM other_data')) return { bind: () => ({ first: async () => null }) };
+            throw new Error(`Unexpected SQL: ${sql}`);
+        } } };
+        const url = `https://staging.example.test/api/public/album-gallery/${albumId}`;
+        const read = headers => worker.fetch(new Request(url, { headers }), env, executionContext());
+        const first = await read();
+        assert.strictEqual(first.status, 200);
+        assert.strictEqual((await first.json()).packId, albumId);
+        assert.strictEqual((await read({ 'If-None-Match': first.headers.get('etag') })).status, 304);
+        const options = await worker.fetch(new Request(url, { method: 'OPTIONS' }), env, executionContext());
+        assert.strictEqual(options.status, 204);
+        assert.strictEqual(options.headers.get('Access-Control-Allow-Methods'), 'GET, OPTIONS');
+        for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+            assert.strictEqual((await worker.fetch(new Request(url, { method }), env, executionContext())).status, 405);
+        }
     });
 
     it('preserves Gallery Pack ETag revalidation through the Worker adapter', async () => {
@@ -176,6 +246,30 @@ describe('Worker route adapter', () => {
         assert.strictEqual(response.status, 200);
         assert.strictEqual(response.headers.get('cache-control'), 'public, max-age=31536000, immutable');
         assert.strictEqual(cacheMatches, 1, 'the generic Worker cache must not run ahead of the thumbnail route');
+    });
+
+    it('does not send retired storage IDs to Telegraph', async () => {
+        const originalFetch = globalThis.fetch;
+        let externalReads = 0;
+        globalThis.fetch = async () => {
+            externalReads += 1;
+            throw new Error('Retired storage must not fall through to Telegraph');
+        };
+        try {
+            for (const channel of ['S3', 'WebDAV']) {
+                const metadata = { Channel: channel, FileType: 'image/png', ModerationStatus: 'active' };
+                const response = await worker.fetch(
+                    new Request('https://staging.example.test/file/legacy.png'),
+                    { img_url: { get: async () => null, getWithMetadata: async () => ({ value: '', metadata }) } },
+                    executionContext(),
+                );
+                assert.strictEqual(response.status, 410);
+                assert.match(response.headers.get('cache-control'), /no-store/);
+            }
+            assert.strictEqual(externalReads, 0);
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
     });
 
     it('does not let the generic Worker cache bypass original-file moderation checks', async () => {

@@ -15,6 +15,7 @@
 import { readdirSync, statSync, readFileSync, writeFileSync } from 'fs';
 import { join, relative, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
+import './build-video-compression.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '../..');
@@ -34,7 +35,9 @@ const routes = [];       // { urlPath, importPath, varName, isCatchAll, dir, mid
 function hasOnRequestExport(filePath) {
     const content = readFileSync(filePath, 'utf8');
     return /export\s+(async\s+)?function\s+onRequest/m.test(content)
-        || /export\s+const\s+onRequest\b/m.test(content);
+        || /export\s+const\s+onRequest\b/m.test(content)
+        || [...content.matchAll(/export\s*\{([^}]+)\}/g)].some(([, names]) => names.split(',').some(name =>
+            /^onRequest(?:Get|Head|Post|Put|Patch|Delete|Options)?$/.test(name.trim().split(/\s+as\s+/).at(-1))));
 }
 
 /**
@@ -476,6 +479,7 @@ export default {
         const routeHandlesRevalidation = pathname.startsWith('/file/')
             || pathname.startsWith('/thumb/')
             || pathname.startsWith('/api/public/gallery/')
+            || pathname.startsWith('/api/public/album-gallery/')
             || pathname.startsWith('/api/public/charinfo/');
         if (routeHandlesRevalidation) return await executeRoute();
         return await maybeServeFromCache(request, ctx, executeRoute);

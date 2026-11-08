@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('imgbed-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch{}</script>
+  <link rel="stylesheet" href="/theme.css"><link rel="stylesheet" href="/charinfo-upload/style.css">
+  <title>连接 ImgBed</title>
+</head>
+<body class="upload-launcher">
+  <form id="launchConnection" action="/api/charinfo-upload/launch" method="post" target="_blank" rel="noopener">
+    <button id="launchButton" type="submit" disabled>连接 ImgBed</button>
+  </form>
+  <p id="launchStatus" role="status" aria-live="polite">正在核对连接…</p>
+  <script type="module">import { mountLauncher } from '/charinfo-upload/launcher.js'; mountLauncher();</script>
+</body>
+</html>

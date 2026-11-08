@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN" data-site-page-title="连接 ST 上传">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="robots" content="noindex">
+  <link rel="icon" href="/static/media/logo.png">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('imgbed-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch{}</script>
+  <link rel="stylesheet" href="/theme.css"><link rel="stylesheet" href="/discover/discover.css"><link rel="stylesheet" href="/charinfo-upload/style.css">
+  <title>连接 ST 上传 · Charatopia</title>
+</head>
+<body>
+  <header class="public-nav"><a class="brand" href="/" data-site-link aria-label="Charatopia 首页"><span class="site-brand-symbol" data-site-logo aria-hidden="true"><span class="site-wordmark" data-site-logo-fallback></span></span><span data-site-name data-site-brand-text hidden>Charatopia</span></a></header>
+  <main class="upload-authorization">
+    <h1>允许 ST 连接您的图库</h1>
+    <p>连接后，此 ST 来源仅可上传文件、建立角色图库、读取本人同名图库成员，以及调整图库成员和顺序。不会授予删除原文件、读取其他私有账号资料或修改角色正文的权限。</p>
+    <p>上传后的文件已有直链；保存图库后会提供公开图库链接。请只允许您信任的 ST 来源连接。</p>
+    <dl id="connectionDetails" hidden><dt>ST 来源</dt><dd id="connectionOrigin"></dd><dt>ImgBed 账号</dt><dd id="connectionAccount"></dd></dl>
+    <p class="connection-status" id="connectionStatus" role="status" aria-live="polite">正在核对 ST 上传窗口…</p>
+    <div class="authorization-actions"><a class="primary-button" id="discordLogin" hidden>登录 Discord</a><button class="primary-button" id="approveConnection" type="button" disabled>允许连接</button><button class="text-button" id="cancelConnection" type="button">取消</button></div>
+    <p class="authorization-note" id="authorizationExpiry">授权自允许时起最多保留 24 小时，使用或续接不会自动延长这个截止时间。浏览器可能限制持久连接，需要重新登录或授权。</p>
+    <p class="authorization-note">角色正文和档案仍在 ST 中编辑保存。主动断开连接会撤销此 ST 来源的授权，不会删除已上传文件。</p>
+  </main>
+  <script type="module" src="/site.js"></script><script type="module" src="/theme.js"></script>
+  <script type="module">import { mountConnectPage } from '/charinfo-upload/connect.js'; mountConnectPage();</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+/charinfo-upload/*
+  Cache-Control: no-store
+  Referrer-Policy: same-origin
+
+/charinfo-upload/connect*
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer

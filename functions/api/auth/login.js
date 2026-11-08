@@ -2,9 +2,14 @@ import { fetchSecurityConfig } from "../../utils/sysConfig.js";
 import { verifyPassword, rehashIfNeeded } from "../../utils/auth/passwordHash.js";
 import { createSession } from "../../utils/auth/sessionManager.js";
 import { getDatabase } from "../../utils/databaseAdapter.js";
+import { isDiscordAuthConfigured } from "../../utils/auth/discordIdentity.js";
 
 export async function onRequestPost(context) {
     const { request, env } = context;
+
+    if (isDiscordAuthConfigured(env)) {
+        return new Response('Discord sign-in is required', { status: 403 });
+    }
 
     const jsonRequest = await request.json();
     const authCode = jsonRequest.authCode;

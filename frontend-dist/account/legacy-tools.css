@@ -1,4 +1,4 @@
-.legacy-tool-host {
+.legacy-tool-host, .native-tool-host {
   position: fixed;
   z-index: 30;
   inset: 0 0 0 var(--legacy-shell-width, 280px);
@@ -13,7 +13,7 @@
   background: var(--app-bg, #f6f4ef);
 }
 
-.legacy-tool-frame[hidden], .legacy-tool-host[hidden] { display: none !important; }
+.legacy-tool-frame[hidden], .legacy-tool-host[hidden], .native-tool-host[hidden] { display: none !important; }
 
 .legacy-tool-frame iframe {
   width: 100%;
@@ -56,7 +56,7 @@
 @keyframes legacy-tool-pulse { from { opacity: .35; transform: scale(.82); } to { opacity: 1; transform: scale(1); } }
 
 @media (max-width: 720px) {
-  .legacy-tool-host { left: 0; }
+  .legacy-tool-host, .native-tool-host { left: 0; }
   .legacy-tool-first-load { top: 14px; right: 14px; }
 }
 

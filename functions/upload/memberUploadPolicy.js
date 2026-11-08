@@ -1,4 +1,4 @@
-const SUPPORTED_STORAGE_CHANNELS = new Set(['telegram', 'cfr2', 's3', 'discord', 'huggingface', 'webdav']);
+const SUPPORTED_STORAGE_CHANNELS = new Set(['telegram', 'cfr2', 'discord']);
 
 const configValue = (pageConfig, id, fallback = null) => {
     const setting = pageConfig?.config?.find(item => item?.id === id);

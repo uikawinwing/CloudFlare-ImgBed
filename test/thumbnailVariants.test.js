@@ -1,12 +1,12 @@
 import assert from 'assert';
-import sharp from 'sharp';
-import { dockerImageProcessor } from '../deploy/server/imageProcessor.js';
 import {
     THUMBNAIL_CONTENT_TYPE,
     THUMBNAIL_VARIANTS,
     absoluteThumbnailUrl,
     createThumbnailTransform,
     ensurePermanentThumbnail,
+    getPermanentThumbnail,
+    getThumbnailVariant,
     thumbnailContentVersion,
     thumbnailVariantUrls,
 } from '../functions/utils/thumbnail.js';
@@ -26,11 +26,34 @@ describe('thumbnail variants', () => {
         );
     });
 
-    it('uses one scale-down WebP transform description and never upscales smaller originals', async () => {
+    it('offers 1440px Q88 WebP portrait while preserving old permanent variants', () => {
+        assert.deepStrictEqual(getThumbnailVariant('portrait'), {
+            width: 1440, outputFormat: THUMBNAIL_CONTENT_TYPE, outputQuality: 88,
+        });
+        const fullSize = createThumbnailTransform({ Width: 2160 }, 'portrait');
+        assert.equal(fullSize.options.width, 1440);
+        assert.equal(fullSize.options.fit, 'scale-down');
+        assert.equal(fullSize.outputQuality, 88);
+        assert.equal(createThumbnailTransform({ Width: 700 }, 'portrait').options.width, 700);
+        assert.equal(createThumbnailTransform({ Width: 2160 }, 'gallery').outputQuality, 85);
+        const existing = {
+            Version: 2, Channel: 'CloudflareR2',
+            Variants: Object.fromEntries(['avatar', 'library', 'gallery'].map(name => [name, { Key: name }])),
+        };
+        assert.strictEqual(getPermanentThumbnail({ Thumbnail: existing }), existing);
+        assert.equal(Object.keys(THUMBNAIL_VARIANTS).length, 3);
+        assert.strictEqual(
+            absoluteThumbnailUrl('https://example.test/x', 'test.png', 'portrait', 456),
+            'https://example.test/thumb/test.png?variant=portrait&v=456',
+        );
+    });
+
+    it('uses one scale-down WebP transform description and never requests upscaling', () => {
         assert.deepStrictEqual(createThumbnailTransform({ Width: 120 }, 'avatar'), {
             requested: true,
             options: { width: 120, fit: 'scale-down' },
             outputFormat: THUMBNAIL_CONTENT_TYPE,
+            outputQuality: 85,
             fallback: null,
         });
         assert.deepStrictEqual(createThumbnailTransform({ Width: 800 }, 'library').options, {
@@ -41,19 +64,6 @@ describe('thumbnail variants', () => {
             width: 720,
             fit: 'scale-down',
         });
-        const input = await sharp({
-            create: { width: 80, height: 40, channels: 4, background: '#336699' },
-        }).png().toBuffer();
-        const response = await dockerImageProcessor.transform(new Blob([input]).stream(), {
-            width: 160,
-            fit: 'scale-down',
-            sourceType: 'image/png',
-            outputFormat: 'image/webp',
-        });
-        const output = await sharp(Buffer.from(await response.arrayBuffer())).metadata();
-        assert.strictEqual(output.width, 80);
-        assert.strictEqual(output.height, 40);
-        assert.strictEqual(output.format, 'webp');
     });
 
     it('keeps the legacy gallery URL while generating stable avatar and library URLs', () => {

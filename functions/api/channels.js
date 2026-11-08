@@ -47,21 +47,9 @@ export async function onRequest(context) {
                 name: ch.name,
                 type: 'CloudflareR2'
             })),
-            s3: uploadConfig.s3.channels.map(ch => ({
-                name: ch.name,
-                type: 'S3'
-            })),
             discord: uploadConfig.discord.channels.map(ch => ({
                 name: ch.name,
                 type: 'Discord'
-            })),
-            huggingface: uploadConfig.huggingface.channels.map(ch => ({
-                name: ch.name,
-                type: 'HuggingFace'
-            })),
-            webdav: uploadConfig.webdav.channels.map(ch => ({
-                name: ch.name,
-                type: 'WebDAV'
             }))
         };
 

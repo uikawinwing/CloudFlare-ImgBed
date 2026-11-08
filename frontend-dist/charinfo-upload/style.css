@@ -1,0 +1,19 @@
+.upload-authorization { width: min(640px, calc(100% - 40px)); margin: 48px auto; }
+.upload-authorization h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.3; }
+.upload-authorization p { color: var(--app-muted); line-height: 1.75; }
+.upload-authorization dl { margin-block: 28px; padding-block: 20px; border-block: 1px solid var(--app-border); }
+.upload-authorization dt { margin-top: 14px; font-size: 13px; color: var(--app-muted); }
+.upload-authorization dt:first-child { margin-top: 0; }
+.upload-authorization dd { margin: 5px 0 0; overflow-wrap: anywhere; font-weight: 650; }
+.connection-status { min-height: 5.25em; }
+.authorization-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.authorization-actions button { cursor: pointer; min-height: 44px; }
+.authorization-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.authorization-note { margin-top: 28px; font-size: 13px; }
+.upload-launcher { margin: 0; padding: 6px; background: var(--app-surface); color: var(--app-text); font-family: system-ui, sans-serif; }
+.upload-launcher button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface); color: inherit; cursor: pointer; }
+.upload-launcher button:hover:not(:disabled) { border-color: var(--app-accent); }
+.upload-launcher button:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 2px; }
+.upload-launcher button:active:not(:disabled) { opacity: .8; }
+.upload-launcher button:disabled { opacity: .5; cursor: not-allowed; }
+.upload-launcher p { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--app-muted); }

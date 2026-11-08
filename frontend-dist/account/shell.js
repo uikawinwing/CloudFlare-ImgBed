@@ -1,3 +1,5 @@
+import { applySiteBranding, getSiteConfig, setSitePageTitle } from '../site-config.js';
+
 const icon = (name) => ({
   upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>',
   files: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5h6l2 2h10v9.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 9.5v-3a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2"/></svg>',
@@ -36,7 +38,7 @@ function activeKey() {
     const params = new URLSearchParams(window.location.search);
     const view = params.get('view') || 'files';
     if (view === 'admin') return params.get('section') === 'users' ? 'users' : params.get('section') === 'audit' ? 'audit' : 'content';
-    return view;
+    return view === 'albums' ? 'files' : view;
   }
   if (path === '/dashboard') return 'content';
   if (path === '/customerConfig') return 'access';
@@ -49,8 +51,6 @@ function buildNavigation(role) {
   const member = [
     { key: 'upload', label: '上传', href: '/studio', icon: 'upload' },
     { key: 'files', label: '我的文件', href: accountHref('files'), icon: 'files' },
-    { key: 'albums', label: '我的图库', href: accountHref('albums'), icon: 'gallery' },
-    { key: 'charinfo', label: 'CharInfo Creator', href: '/charinfo/', icon: 'gallery' },
   ];
   const staff = [
     { key: 'content', label: '内容管理', href: accountHref('admin', 'content'), icon: 'shield' },
@@ -60,6 +60,7 @@ function buildNavigation(role) {
       { key: 'access', label: '上传访问', href: '/customerConfig', icon: 'activity' },
       { key: 'system-upload', label: '存储渠道', href: '/systemConfig#upload', icon: 'storage' },
       { key: 'system-page', label: '网站设置', href: '/systemConfig#page', icon: 'settings' },
+      { key: 'system-wallpaper', label: '欢迎页壁纸', href: '/account/?tool=system-wallpaper', icon: 'settings' },
       { key: 'system-security', label: '安全与自动化', href: '/systemConfig#security', icon: 'shield' },
       { key: 'system-status', label: '维护工具', href: '/systemConfig#status', icon: 'tools' },
     ] : []),
@@ -183,7 +184,7 @@ function bindUtilities(shell) {
 
 function syncLegacyPresentation() {
   if (!['/studio', '/studio/'].includes(window.location.pathname)) return;
-  document.title = '上传 · CloudFlare ImgBed';
+  setSitePageTitle('上传');
   const title = document.querySelector('h1.title');
   if (title && title.textContent.trim() !== '上传文件') title.textContent = '上传文件';
 }
@@ -201,7 +202,7 @@ function syncActiveNavigation(shell) {
 function shellMarkup(identity) {
   const role = identity.role || 'member';
   const avatarStyle = identity.avatar ? ` style="background-image:url('${String(identity.avatar).replace(/["\\]/g, '')}')"` : '';
-  return `<button class="legacy-shell-toggle" type="button" aria-label="打开导航" aria-controls="legacyShell" aria-expanded="false">${icon('menu')}</button><div class="legacy-shell-backdrop" hidden></div><aside class="legacy-shell" id="legacyShell" aria-label="主导航"><div class="legacy-shell-brand"><a href="/" aria-label="CloudFlare ImgBed 发现首页"><span class="legacy-shell-mark" aria-hidden="true">${icon('upload')}</span><span>CloudFlare <strong>ImgBed</strong></span></a><button class="legacy-shell-close" type="button" aria-label="关闭导航">${icon('close')}</button></div><nav>${buildNavigation(role)}</nav><section class="legacy-shell-utilities legacy-shell-preferences" aria-label="显示偏好"><p>显示</p><button type="button" data-legacy-command="theme">${icon('slider')}切换主题</button><button type="button" data-legacy-command="language">${icon('language')}切换语言</button></section><div class="legacy-shell-account"><button class="legacy-shell-account-button" type="button" aria-controls="legacyAccountMenu" aria-haspopup="true" aria-expanded="false"><span class="legacy-shell-avatar"${avatarStyle}></span><span><strong>${escapeHtml(identity.username || 'Discord 账户')}</strong><small>${labels[role] || labels.member}</small></span>${icon('chevron')}</button><div class="legacy-shell-account-menu" id="legacyAccountMenu" role="menu" hidden><a href="${accountHref('files')}" role="menuitem">我的文件</a><button type="button" role="menuitem" data-legacy-logout>${icon('logout')}退出登录</button></div></div></aside>`;
+  return `<button class="legacy-shell-toggle" type="button" aria-label="打开导航" aria-controls="legacyShell" aria-expanded="false">${icon('menu')}</button><div class="legacy-shell-backdrop" hidden></div><aside class="legacy-shell" id="legacyShell" aria-label="主导航"><div class="legacy-shell-brand"><a href="/" data-site-link aria-label="Charatopia 首页"><span class="site-brand-symbol" data-site-logo aria-hidden="true"><span class="site-wordmark" data-site-logo-fallback></span></span><span data-site-name data-site-brand-text hidden>Charatopia</span></a><button class="legacy-shell-close" type="button" aria-label="关闭导航">${icon('close')}</button></div><nav>${buildNavigation(role)}</nav><section class="legacy-shell-utilities legacy-shell-preferences" aria-label="显示偏好"><p>显示</p><button type="button" data-legacy-command="theme">${icon('slider')}切换主题</button><button type="button" data-legacy-command="language">${icon('language')}切换语言</button></section><div class="legacy-shell-account"><button class="legacy-shell-account-button" type="button" aria-controls="legacyAccountMenu" aria-haspopup="true" aria-expanded="false"><span class="legacy-shell-avatar"${avatarStyle}></span><span><strong>${escapeHtml(identity.username || 'Discord 账户')}</strong><small>${labels[role] || labels.member}</small></span>${icon('chevron')}</button><div class="legacy-shell-account-menu" id="legacyAccountMenu" role="menu" hidden><a href="${accountHref('files')}" role="menuitem">我的文件</a><button type="button" role="menuitem" data-legacy-logout>${icon('logout')}退出登录</button></div></div></aside>`;
 }
 
 function bindAccountMenu(shell) {
@@ -239,6 +240,7 @@ export function mountLegacyShell(identity) {
   shell.className = 'legacy-shell-root';
   shell.innerHTML = shellMarkup(identity);
   document.body.prepend(shell);
+  getSiteConfig().then(config => applySiteBranding(shell, config));
   document.documentElement.classList.add('legacy-shell-active');
   bindUtilities(shell);
   bindAccountMenu(shell);

@@ -1,6 +1,7 @@
 import { getDiscordIdentity } from '../../../utils/auth/discordIdentity.js';
 import { normalizeCharInfoCharacterName, validateCharInfoCharacterName } from '../../../utils/charInfoGallery.js';
-import { normalizeSlug } from './index.js';
+import { explicitSlug } from './index.js';
+import { normalizeTags } from '../../../utils/tagHelpers.js';
 
 export async function onRequest(context) {
     const identity = await getDiscordIdentity(context.env, context.request);
@@ -13,8 +14,14 @@ export async function onRequest(context) {
     if (!album) return json({ error: 'Album not found' }, 404);
     if (album.owner_id !== identity.id && identity.role !== 'owner') return json({ error: 'Only the owner can change this album' }, 403);
     if (context.request.method === 'GET') {
-        const items = await context.env.img_d1.prepare('SELECT f.id, f.file_name, f.file_type, f.file_size_bytes, f.timestamp, f.visibility, f.moderation_status, ai.position FROM album_items ai JOIN files f ON f.id = ai.file_id WHERE ai.album_id = ? ORDER BY ai.position, ai.created_at').bind(id).all();
-        return json({ album: presentAlbum(album), items: items.results || [] });
+        const items = await context.env.img_d1.prepare('SELECT f.id, f.file_name, f.file_type, f.file_size_bytes, f.timestamp, f.visibility, f.moderation_status, f.metadata, ai.position FROM album_items ai JOIN files f ON f.id = ai.file_id WHERE ai.album_id = ? ORDER BY ai.position, ai.created_at').bind(id).all();
+        return json({ album: presentAlbum(album), items: (items.results || []).map(({ metadata, ...file }) => {
+            let fileMetadata;
+            try {
+                fileMetadata = JSON.parse(metadata || '{}');
+            } catch {}
+            return { ...file, tags: normalizeTags(fileMetadata?.Tags), nsfw: fileMetadata?.NSFW === true };
+        }) });
     }
     if (context.request.method === 'DELETE') {
         await context.env.img_d1.batch([
@@ -27,13 +34,12 @@ export async function onRequest(context) {
     const payload = await context.request.json();
     const name = payload.name === undefined ? album.name : String(payload.name).trim();
     const description = payload.description === undefined ? album.description : String(payload.description).trim();
-    const slug = payload.slug === undefined ? album.slug : normalizeSlug(payload.slug);
-    const visibility = payload.visibility === undefined ? album.visibility : payload.visibility;
+    const slug = payload.slug === undefined ? album.slug : explicitSlug(payload.slug);
     const charInfoCharacterName = payload.charInfoCharacterName === undefined
         ? normalizeCharInfoCharacterName(album.char_info_character_name)
         : normalizeCharInfoCharacterName(payload.charInfoCharacterName);
     const charInfoCharacterNameError = validateCharInfoCharacterName(charInfoCharacterName);
-    if (!name || (description !== null && description.length > 1000) || !slug || !['public', 'unlisted'].includes(visibility)) return json({ error: 'Invalid album data' }, 400);
+    if (!name || (description !== null && description.length > 1000) || !slug) return json({ error: 'Invalid album data' }, 400);
     if (charInfoCharacterNameError) return json({ error: charInfoCharacterNameError }, 400);
     const coverUpdateRequested = payload.coverFileId !== undefined || payload.coverPositionX !== undefined || payload.coverPositionY !== undefined;
     let coverFileId = album.cover_file_id || null;
@@ -57,7 +63,7 @@ export async function onRequest(context) {
     }
     try {
         const now = Date.now();
-        const statements = [context.env.img_d1.prepare('UPDATE albums SET slug = ?, name = ?, description = ?, char_info_character_name = ?, visibility = ?, updated_at = ? WHERE id = ?').bind(slug, name, description, charInfoCharacterName, visibility, now, id)];
+        const statements = [context.env.img_d1.prepare('UPDATE albums SET slug = ?, name = ?, description = ?, char_info_character_name = ?, visibility = ?, updated_at = ? WHERE id = ?').bind(slug, name, description, charInfoCharacterName, 'public', now, id)];
         if (coverUpdateRequested) {
             statements.push(coverFileId
                 ? context.env.img_d1.prepare(`INSERT INTO album_covers (album_id, file_id, position_x, position_y, updated_at) VALUES (?, ?, ?, ?, ?)
@@ -72,12 +78,13 @@ export async function onRequest(context) {
         console.error('Album update failed', error);
         return json({ error: 'Unable to update album' }, 500);
     }
-    return json({ id, slug, name, description, charInfoCharacterName, visibility, coverFileId, coverPositionX, coverPositionY });
+    return json({ id, slug, name, description, charInfoCharacterName, coverFileId, coverPositionX, coverPositionY });
 }
 
 function presentAlbum(album) {
+    const { visibility, ...details } = album;
     return {
-        ...album,
+        ...details,
         charInfoCharacterName: normalizeCharInfoCharacterName(album.char_info_character_name),
         coverFileId: album.cover_file_id || null,
         coverPositionX: normalizeCoverPosition(album.cover_position_x, 50),

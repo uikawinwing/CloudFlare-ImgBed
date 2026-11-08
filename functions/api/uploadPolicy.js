@@ -6,7 +6,6 @@ const DEFAULT_POLICY = Object.freeze({
     compressBar: 5,
     compressQuality: 4,
     serverCompress: false,
-    autoRetry: true,
     uploadChannel: 'telegram',
     channelName: '',
 
@@ -83,10 +82,6 @@ function buildPolicy(pageConfig) {
             readConfigValue(pageConfig, 'defaultServerCompress', DEFAULT_POLICY.serverCompress),
             DEFAULT_POLICY.serverCompress,
         ),
-        autoRetry: toBoolean(
-            readConfigValue(pageConfig, 'defaultAutoRetry', DEFAULT_POLICY.autoRetry),
-            DEFAULT_POLICY.autoRetry,
-        ),
         uploadChannel: toStringValue(
             readConfigValue(pageConfig, 'defaultUploadChannel', DEFAULT_POLICY.uploadChannel),
             DEFAULT_POLICY.uploadChannel,
@@ -137,7 +132,6 @@ function buildBootstrapScript(policy) {
     };
     persistedState.storeUploadChannel = policy.uploadChannel;
     persistedState.storeChannelName = policy.channelName;
-    persistedState.storeAutoRetry = policy.autoRetry;
     delete persistedState.storeUploadNameType;
     delete persistedState.storeUploadFolder;
     localStorage.setItem('vuex', JSON.stringify(persistedState));

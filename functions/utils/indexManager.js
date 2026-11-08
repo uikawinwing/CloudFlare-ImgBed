@@ -38,6 +38,7 @@
  */
 
 import { getDatabase, checkDatabaseConfig } from './databaseAdapter.js';
+import { readD1FileIndex } from './files/d1FileIndex.js';
 
 const INDEX_KEY = 'manage@index';
 const INDEX_META_KEY = 'manage@index@meta'; // 索引元数据键
@@ -302,6 +303,9 @@ export async function batchMoveFilesInIndex(context, moveOperations) {
  * @returns {Object} 合并结果
  */
 export async function mergeOperationsToIndex(context, options = {}) {
+    if (context.env.img_d1) {
+        return { success: true, processedOperations: 0, message: 'D1 files are read directly' };
+    }
     const { request } = context;
     const { cleanupAfterMerge = true } = options;
     
@@ -512,6 +516,25 @@ export async function readIndex(context, options = {}) {
         const labelArr = Array.isArray(label) ? label : (label ? [label] : []);
         const fileTypeArr = Array.isArray(fileType) ? fileType : (fileType ? [fileType] : []);
         const channelNameArr = Array.isArray(channelName) ? channelName : (channelName ? [channelName] : []);
+
+        // Keep Unicode case-insensitive search/tag matching in the existing JS path.
+        // SQLite LOWER only folds ASCII, so SQL filtering would change these results.
+        // Bulk operations already need every metadata row; avoid an extra statistics pass.
+        if (context.env.img_d1 && (countOnly || count !== -1) && !search && !includeTags.length && !excludeTags.length) {
+            return await readD1FileIndex(context.env.img_d1, {
+                directory,
+                start,
+                count,
+                channel: channelArr,
+                listType: listTypeArr,
+                accessStatus: accessStatusArr,
+                label: labelArr,
+                fileType: fileTypeArr,
+                channelName: channelNameArr,
+                countOnly,
+                includeSubdirFiles
+            });
+        }
 
         // 处理目录满足无头有尾的格式，根目录为空
         const dirPrefix = directory === '' || directory.endsWith('/') ? directory : directory + '/';
@@ -770,6 +793,11 @@ export async function rebuildIndex(context, progressCallback = null) {
     const db = getDatabase(env);
 
     try {
+        if (env.img_d1) {
+            const index = await getIndex(context);
+            if (progressCallback) progressCallback(index.totalCount);
+            return { success: true, processedCount: index.totalCount, indexedCount: index.totalCount };
+        }
         console.log('Starting index rebuild...');
         
         let cursor = null;
@@ -1257,6 +1285,22 @@ export async function getIndexMeta(context) {
     const db = getDatabase(env);
 
     try {
+        if (env.img_d1) {
+            const { results } = await env.img_d1.prepare(`SELECT COALESCE(NULLIF(channel_name, ''), json_extract(metadata, '$.ChannelName')) AS channel_key, COUNT(*) AS file_count,
+                SUM(MAX(0, COALESCE(file_size_bytes / 1048576.0,
+                    json_extract(metadata, '$.FileSizeBytes') / 1048576.0,
+                    CAST(json_extract(metadata, '$.FileSize') AS REAL), 0))) AS size_mb
+                FROM files GROUP BY channel_key`).all();
+            const channelStats = {};
+            let totalCount = 0;
+            let totalSizeMB = 0;
+            for (const row of results) {
+                totalCount += row.file_count;
+                totalSizeMB += row.size_mb;
+                if (row.channel_key) channelStats[row.channel_key] = { usedMB: row.size_mb, fileCount: row.file_count };
+            }
+            return { success: true, totalCount, totalSizeMB, channelStats, lastUpdated: Date.now() };
+        }
         const metadataStr = await db.get(INDEX_META_KEY);
         if (!metadataStr) {
             return {
@@ -1305,6 +1349,7 @@ function generateOperationId() {
  */
 async function recordOperation(context, type, data) {
     const { env } = context;
+    if (env.img_d1) return null;
     const db = getDatabase(env);
 
     const operationId = generateOperationId();
@@ -1671,6 +1716,13 @@ export async function deleteAllOperations(context) {
  * @param {Object} context - 上下文对象
  */
 async function getIndex(context) {
+    if (context.env.img_d1) {
+        const { results } = await context.env.img_d1.prepare(
+            'SELECT id, metadata FROM files ORDER BY timestamp DESC, id DESC'
+        ).all();
+        const files = results.map(row => ({ id: row.id, metadata: JSON.parse(row.metadata || '{}') }));
+        return { files, lastUpdated: Date.now(), totalCount: files.length, lastOperationId: null, success: true };
+    }
     const { waitUntil } = context;
     try {
         // 首先尝试加载分块索引

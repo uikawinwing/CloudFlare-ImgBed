@@ -18,11 +18,12 @@ export async function onRequestGet({ request, env }) {
         const like = `%${query.replace(/[\\%_]/g, '\\$&')}%`;
         params.push(like, like, like);
     }
-    let sql = 'SELECT f.id, f.file_name, f.file_type, f.file_size_bytes, f.timestamp, f.moderation_status, f.quarantined_by, f.quarantined_at, f.owner_id, u.username AS owner_name FROM files f LEFT JOIN users u ON u.discord_id = f.owner_id';
+    let sql = `SELECT f.id, f.file_name, f.file_type, f.file_size_bytes, f.timestamp, f.moderation_status, f.quarantined_by, f.quarantined_at, f.owner_id, u.username AS owner_name,
+        json_type(f.metadata, '$.NSFW') = 'true' AS nsfw FROM files f LEFT JOIN users u ON u.discord_id = f.owner_id`;
     if (conditions.length) sql += ` WHERE ${conditions.join(' AND ')}`;
     sql += ' ORDER BY f.timestamp DESC LIMIT 200';
     const rows = await env.img_d1.prepare(sql).bind(...params).all();
-    return json({ files: rows.results || [] });
+    return json({ files: (rows.results || []).map(file => ({ ...file, nsfw: file.nsfw === 1 })) });
 }
 
 function json(body, status = 200) {

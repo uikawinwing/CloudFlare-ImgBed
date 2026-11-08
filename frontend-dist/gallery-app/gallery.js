@@ -1,3 +1,5 @@
+import { enableSpoilerPreviews, spoilerAction, spoilerBadge } from '../media-spoiler.js';
+
 const root = document.querySelector('#gallery-app');
 const owner = document.body.dataset.owner || '';
 const album = document.body.dataset.album || '';
@@ -7,7 +9,7 @@ const description = document.body.dataset.description || '';
 
 const brand = `<a class="brand" href="/" aria-label="返回 CloudFlare ImgBed 首页"><span class="brand-mark" aria-hidden="true">I</span><span>ImgBed <small>Community</small></span></a>`;
 const themeButton = `<button class="theme-button" type="button" data-theme-toggle aria-label="切换主题"><svg class="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><g class="theme-sun"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"/></g><g class="theme-moon"><path d="M20 15.2A8.3 8.3 0 0 1 8.8 4 8.4 8.4 0 1 0 20 15.2Z"/></g></svg></button>`;
-const topbar = `${brand}<div class="top-actions"><a href="/">发现</a><span class="top-label">分享图库</span>${themeButton}</div>`;
+const topbar = `${brand}<div class="top-actions"><a href="/discover/">发现</a><span class="top-label">分享图库</span>${themeButton}</div>`;
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
@@ -73,11 +75,11 @@ async function init() {
       <header class="gallery-topbar">${topbar}</header>
       <main class="gallery-main">
         <section class="gallery-head">
-          <div class="cover">${cover ? itemMedia(cover, true) : ''}</div>
+          <div class="cover"${cover?.nsfw ? ' data-media-spoiler' : ''}>${cover ? itemMedia(cover, true) : ''}${spoilerBadge(cover?.nsfw, true)}</div>
           <div class="gallery-copy"><h1>${escapeHtml(albumName)}</h1><p class="creator">由 <strong>${escapeHtml(creator)}</strong> 创建</p>${description ? `<p class="description">${escapeHtml(description)}</p>` : ''}<p class="item-count">${items.length} 个项目</p></div>
           <button class="copy-button" id="copyGallery" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 14.5 5-5m-7 8H6a4 4 0 0 1 0-8h3m6 0h3a4 4 0 0 1 0 8h-3"/></svg><span>复制图库链接</span></button>
         </section>
-        ${items.length ? `<section class="gallery-grid" aria-label="图库内容">${items.map((item, index) => `<button class="gallery-item" type="button" data-index="${index}" aria-label="查看 ${escapeHtml(item.title)}"><div class="item-media">${itemMedia(item)}</div><p class="item-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</p></button>`).join('')}</section>` : '<section class="empty"><h2>这个图库还是空的</h2><p>创作者加入内容后，会自动显示在这里。</p></section>'}
+        ${items.length ? `<section class="gallery-grid" aria-label="图库内容">${items.map((item, index) => `<button class="gallery-item" type="button" data-index="${index}" aria-label="查看 ${escapeHtml(item.title)}"${item.nsfw ? spoilerAction : ''}><div class="item-media"${item.nsfw ? ' data-media-spoiler' : ''}>${itemMedia(item)}${spoilerBadge(item.nsfw)}</div><p class="item-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</p></button>`).join('')}</section>` : '<section class="empty"><h2>这个图库还是空的</h2><p>创作者加入内容后，会自动显示在这里。</p></section>'}
         <p class="gallery-note">图库内容可通过此分享链接访问。</p>
       </main>
     </div>`;
@@ -94,4 +96,5 @@ async function init() {
   }
 }
 
+enableSpoilerPreviews();
 init();

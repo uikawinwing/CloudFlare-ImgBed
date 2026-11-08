@@ -3,6 +3,142 @@ import { onRequest as serveThumbnail } from '../functions/thumb/[[path]].js';
 import { returnWithCheck } from '../functions/file/fileTools.js';
 
 describe('thumbnail route visibility and cache contract', () => {
+    it('reads every R2 variant without Discord or image processing and gates cached reads after removal', async () => {
+        const originalFetch = globalThis.fetch;
+        const originalCaches = globalThis.caches;
+        const stored = new Map();
+        const reads = [];
+        let metadata = { Visibility: 'private', ModerationStatus: 'active', FileType: 'image/png', TimeStamp: 123,
+            Thumbnail: { Version: 2, Channel: 'CloudflareR2', CreatedAt: 456,
+                Variants: Object.fromEntries(['avatar', 'library', 'gallery'].map(name => [name, { Key: `random/${name}.webp` }])) } };
+        globalThis.fetch = async () => { throw new Error('R2 thumbnail must not fetch Discord or original'); };
+        globalThis.caches = { default: {
+            match: async key => stored.get(key.url)?.clone(),
+            put: async (key, value) => { stored.set(key.url, value.clone()); },
+        } };
+        const env = { img_url: { get: async () => null, getWithMetadata: async () => metadata ? { value: '', metadata } : null },
+            IMAGE_PROCESSOR: { transform: () => { throw new Error('R2 variants must not be transformed'); } },
+            THUMBNAILS: {
+                get: async key => { reads.push(key); return { body: new Blob([key]).stream(), size: key.length, httpEtag: '"stored"' }; },
+                head: async key => { reads.push(`HEAD:${key}`); return { size: key.length, httpEtag: '"stored"' }; },
+            } };
+        const request = (variant, method = 'GET') => serveThumbnail({ env, params: { path: 'private.png' },
+            request: new Request(`https://example.test/thumb/private.png?variant=${variant}&v=456`, { method }) });
+        try {
+            for (const name of ['avatar', 'library', 'gallery']) {
+                const head = await request(name, 'HEAD');
+                assert.equal(head.status, 200);
+                assert.equal(await head.text(), '');
+                assert.equal(await (await request(name)).text(), `random/${name}.webp`);
+            }
+            assert.equal(reads.length, 6);
+            assert.equal((await request('gallery')).status, 200);
+            assert.equal(reads.length, 6);
+            metadata = { ...metadata, ModerationStatus: 'quarantined' };
+            assert.equal((await request('gallery')).status, 404);
+            metadata = null;
+            assert.equal((await request('gallery')).status, 404);
+        } finally {
+            globalThis.fetch = originalFetch;
+            if (originalCaches === undefined) delete globalThis.caches;
+            else globalThis.caches = originalCaches;
+        }
+    });
+
+
+    it('serves an old album portrait at 1440px Q88 from original pixels and caches WebP separately', async () => {
+        const previousFetch = globalThis.fetch;
+        const previousCaches = globalThis.caches;
+        const stored = new Map();
+        let originalRequests = 0;
+        let transformed = 0;
+        const metadata = {
+            FileType: 'image/png', ModerationStatus: 'active', Width: 2160, TimeStamp: 123,
+            Thumbnail: { Version: 2, Channel: 'CloudflareR2', CreatedAt: 456,
+                Variants: Object.fromEntries(['avatar', 'library', 'gallery'].map(name => [name, { Key: 'old/' + name }])) },
+        };
+        globalThis.fetch = async url => {
+            originalRequests += 1;
+            assert.equal(String(url), 'https://example.test/file/portrait.png');
+            return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'image/png' } });
+        };
+        globalThis.caches = { default: {
+            match: async key => stored.get(key.url)?.clone(),
+            put: async (key, response) => stored.set(key.url, response.clone()),
+        } };
+        const env = {
+            img_url: { get: async () => null, getWithMetadata: async () => ({ value: '', metadata }) },
+            THUMBNAILS: { get: async () => { throw new Error('Do not upscale permanent 720px'); } },
+            IMAGE_PROCESSOR: { transform: async (stream, options) => {
+                transformed += 1;
+                assert.equal(options.width, 1440);
+                assert.equal(options.quality, 88);
+                assert.equal(options.outputFormat, 'image/webp');
+                assert.equal(options.fit, 'scale-down');
+                await new Response(stream).arrayBuffer();
+                return new Response(new Uint8Array([9, 8, 7]), { headers: { 'Content-Type': 'image/webp' } });
+            } },
+        };
+        const url = 'https://example.test/thumb/portrait.png?variant=portrait&v=456';
+        try {
+            const request = () => serveThumbnail({ env, params: { path: 'portrait.png' }, request: new Request(url) });
+            const first = await request();
+            assert.equal(first.status, 200);
+            assert.equal(first.headers.get('content-type'), 'image/webp');
+            assert.equal(first.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+            assert.deepEqual([...new Uint8Array(await first.arrayBuffer())], [9, 8, 7]);
+            const second = await request();
+            assert.equal(second.status, 200);
+            assert.equal(transformed, 1);
+            assert.equal(originalRequests, 1);
+            const missingVersion = await serveThumbnail({ env, params: { path: 'portrait.png' },
+                request: new Request('https://example.test/thumb/portrait.png?variant=portrait&v=123') });
+            assert.equal(missingVersion.status, 302);
+            assert.equal(missingVersion.headers.get('location'), url);
+            assert.equal(missingVersion.headers.get('cache-control'), 'no-store');
+        } finally {
+            globalThis.fetch = previousFetch;
+            if (previousCaches === undefined) delete globalThis.caches;
+            else globalThis.caches = previousCaches;
+        }
+    });
+
+    it('fails closed when a permanent R2 object is unavailable', async () => {
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = async () => { throw new Error('Must not replace versioned R2 bytes with an original'); };
+        const metadata = { FileType: 'image/png', TimeStamp: 123, Thumbnail: { Version: 2, Channel: 'CloudflareR2', CreatedAt: 456,
+            Variants: Object.fromEntries(['avatar', 'library', 'gallery'].map(name => [name, { Key: `${name}.webp` }])) } };
+        try {
+            for (const method of ['GET', 'HEAD']) {
+                const response = await serveThumbnail({ env: { img_url: { get: async () => null, getWithMetadata: async () => ({ metadata }) },
+                    THUMBNAILS: { get: async () => null, head: async () => null } }, params: { path: 'file.png' },
+                    request: new Request('https://example.test/thumb/file.png?v=456', { method }) });
+                assert.equal(response.status, 502);
+                assert.match(response.headers.get('Cache-Control'), /no-store/);
+            }
+        } finally { globalThis.fetch = originalFetch; }
+    });
+
+    it('checks legacy block, adult and whitelist rules before reading an edge-cached thumbnail', async () => {
+        const originalCaches = globalThis.caches;
+        globalThis.caches = { default: { match: async () => { throw new Error('Blocked thumbnail reached edge cache'); } } };
+        try {
+            for (const [extra, whiteListMode] of [[{ ListType: 'Block' }, false], [{ Label: 'adult' }, false], [{}, true]]) {
+                const metadata = { ModerationStatus: 'active', FileType: 'image/png', TimeStamp: 123, ...extra };
+                const env = { img_url: {
+                    get: async key => key === 'manage@sysConfig@security' ? JSON.stringify({ access: { whiteListMode } }) : null,
+                    getWithMetadata: async () => ({ value: '', metadata }),
+                } };
+                const response = await serveThumbnail({ env, request: new Request('https://example.test/thumb/file.png?v=123'), params: { path: 'file.png' } });
+                assert.equal(response.status, 404);
+                assert.match(response.headers.get('cache-control'), /\bno-store\b/);
+            }
+        } finally {
+            if (originalCaches === undefined) delete globalThis.caches;
+            else globalThis.caches = originalCaches;
+        }
+    });
+
     it('does not treat private visibility as thumbnail authorization', async () => {
         const metadata = {
             Visibility: 'private',
@@ -121,7 +257,7 @@ describe('thumbnail route visibility and cache contract', () => {
         }
     });
 
-    it('redirects a legacy URL to the current version and rejects stale versions', async () => {
+    it('redirects legacy and stale public image URLs to the current version without caching obsolete redirects', async () => {
         const metadata = {
             ModerationStatus: 'active',
             FileType: 'image/png',
@@ -148,8 +284,27 @@ describe('thumbnail route visibility and cache contract', () => {
             env,
             params: { path: 'users,master,private.png' },
         });
-        assert.strictEqual(stale.status, 404);
-        assert.match(await stale.text(), /version not found/);
+        assert.strictEqual(stale.status, 302);
+        assert.strictEqual(stale.headers.get('location'), 'https://example.test/thumb/users/master/private.png?variant=library&v=456');
+        assert.strictEqual(stale.headers.get('cache-control'), 'no-store');
+        assert.strictEqual(stale.headers.get('access-control-allow-origin'), '*');
+        assert.strictEqual(await stale.text(), '');
+
+        const rejected = await serveThumbnail({
+            request: new Request('https://example.test/thumb/users/master/private.png?variant=library&v=455'),
+            env: {
+                ...env,
+                img_url: {
+                    get: async () => null,
+                    getWithMetadata: async () => ({
+                        value: '', metadata: { ...metadata, ModerationStatus: 'quarantined' },
+                    }),
+                },
+            },
+            params: { path: 'users,master,private.png' },
+        });
+        assert.strictEqual(rejected.status, 404, 'unavailable images must not redirect');
+        assert.strictEqual(rejected.headers.get('cache-control'), 'private, no-store, max-age=0');
     });
 
     it('derives compact variants from an existing permanent 720px WebP', async () => {

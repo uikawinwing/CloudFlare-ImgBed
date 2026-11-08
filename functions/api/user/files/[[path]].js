@@ -7,6 +7,7 @@ import {
     absoluteThumbnailUrl,
     ensurePermanentThumbnail,
     hasPermanentThumbnail,
+    persistThumbnailResult,
     thumbnailContentVersion,
 } from '../../../utils/thumbnail.js';
 
@@ -38,21 +39,30 @@ export async function onRequestPatch(context) {
     if (!publication) return json({ error: 'Visibility must be private or public' }, 400);
     const { visibility } = publication;
     const discoverEligible = visibility === 'public' ? 1 : 0;
-    let metadata = { ...file.metadata, Visibility: visibility, DiscoverEligible: discoverEligible };
+    const updated = await context.env.img_d1.prepare(`
+        UPDATE files
+        SET metadata = json_set(metadata, '$.Visibility', ?, '$.DiscoverEligible', ?),
+            visibility = ?, discover_eligible = ?
+        WHERE id = ?
+          AND COALESCE(owner_id, json_extract(metadata, '$.OwnerId')) = ?
+          AND COALESCE(NULLIF(moderation_status, ''), json_extract(metadata, '$.ModerationStatus'), 'active') = ?
+        RETURNING metadata
+    `).bind(visibility, discoverEligible, visibility, discoverEligible, fileId, identity.id, file.metadata.ModerationStatus || 'active').first();
+    if (!updated) return json({ error: 'File changed or was removed; reload before trying again' }, 409);
+    let metadata = JSON.parse(updated.metadata);
 
     let thumbnailReady = hasPermanentThumbnail(metadata);
     let thumbnailCreated = false;
     let thumbnailReason = null;
     if (String(metadata.FileType || '').startsWith('image/')) {
-        const thumbnailResult = await ensurePermanentThumbnail(context, fileId, metadata);
+        const generated = await ensurePermanentThumbnail(context, fileId, metadata);
+        const thumbnailResult = await persistThumbnailResult(context, fileId, metadata, generated);
+        if (!thumbnailResult.metadata) return json({ error: 'File was removed while the thumbnail was being generated' }, 409);
         metadata = thumbnailResult.metadata;
         thumbnailReady = thumbnailResult.ready;
         thumbnailCreated = thumbnailResult.created;
         thumbnailReason = thumbnailResult.reason || null;
     }
-
-    await db.put(fileId, file.value || '', { metadata });
-    await context.env.img_d1.prepare('UPDATE files SET metadata = ?, visibility = ?, discover_eligible = ? WHERE id = ?').bind(JSON.stringify(metadata), visibility, discoverEligible, fileId).run();
 
     const thumbnailUrl = String(metadata.FileType || '').startsWith('image/')
         ? absoluteThumbnailUrl(context.request.url, fileId, 'gallery', thumbnailContentVersion(metadata))
@@ -61,7 +71,7 @@ export async function onRequestPatch(context) {
     return json({
         success: true,
         fileId,
-        visibility,
+        visibility: metadata.Visibility,
         thumbnailUrl,
         thumbnailReady,
         thumbnailCreated,

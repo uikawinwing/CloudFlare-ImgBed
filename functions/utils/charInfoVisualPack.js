@@ -30,9 +30,60 @@ export function createCharInfoVisualPack({ album, files, storedVisualConfig, req
         packId: identity.packId,
         profileId: identity.profileId,
         characterName: identity.characterName,
+        galleryUrl: album.slug
+            ? new URL(`/api/public/gallery/${encodeURIComponent(identity.packId)}/${encodeURIComponent(album.slug)}`, requestUrl).href
+            : null,
         visual: visualConfig ? buildVisualPayload(visualConfig, fileById, requestUrl) : null,
         gallery: orderedFiles.map(file => buildGalleryItem(file, visualConfig, requestUrl)),
     };
+}
+
+// The dedicated Album URL uses UUID identity and member order. The legacy
+// gallery view keeps its existing handle identity and selected main portrait.
+export function createCharInfoGalleryPack({ album, files, storedVisualConfig, requestUrl, stableIdentity = false }) {
+    const identity = requireCharInfoAlbumIdentity(stableIdentity ? { ...album, public_handle: album.id } : album);
+    const visualConfig = parsePublicVisualConfig(storedVisualConfig);
+    const sharedFiles = Array.isArray(files) ? files : [];
+    const orderedFiles = stableIdentity ? sharedFiles : orderGalleryFiles(sharedFiles, visualConfig?.mainFileId);
+    const gallery = orderedFiles.map(file => buildGalleryItem(file, visualConfig, requestUrl))
+        .filter(item => isViewerMediaUrl(item.sources[0]));
+    if (stableIdentity) {
+        // Historical filenames may contain characters forbidden by the v1
+        // parser. Normalize only the displayed title at this protocol boundary.
+        gallery.forEach((item, index) => {
+            item.title = String(item.title).replace(/[\x00-\x1f\x7f]/gu, ' ').trim() || `Media ${index + 1}`;
+        });
+    }
+    const visual = visualConfig ? buildVisualPayload(visualConfig, new Map(sharedFiles.map(file => [String(file.id), file])), requestUrl) : null;
+    const fallbackImage = gallery.map(item => item.sources[0]).find(source => isViewerMediaUrl(source, true)) || null;
+    let avatarThumbnail = isViewerMediaUrl(visual?.avatarUrl, true) ? visual.avatarUrl : fallbackImage;
+    let libraryThumbnail = isViewerMediaUrl(visual?.coverUrl, true) ? visual.coverUrl : fallbackImage;
+    if (stableIdentity) {
+        const avatarFile = sharedFiles.find(file => displaySourcesFor(file, requestUrl)[0] === avatarThumbnail);
+        const libraryFile = sharedFiles.find(file => displaySourcesFor(file, requestUrl)[0] === libraryThumbnail);
+        avatarThumbnail = avatarFile ? absoluteThumbnailUrl(requestUrl, avatarFile.id, 'avatar', thumbnailContentVersion(avatarFile)) : null;
+        libraryThumbnail = libraryFile ? absoluteThumbnailUrl(requestUrl, libraryFile.id, 'library', thumbnailContentVersion(libraryFile)) : null;
+    }
+    return {
+        format: 'char-info-gallery-pack',
+        version: 1,
+        ...identity,
+        avatarThumbnail,
+        libraryThumbnail,
+        gallery,
+    };
+}
+
+function isViewerMediaUrl(value, imageOnly = false) {
+    if (typeof value !== 'string') return false;
+    try {
+        const url = new URL(value);
+        if (url.protocol !== 'https:' || url.username || url.password) return false;
+        return /\.(png|jpe?g|gif|apng|webp|avif)$/iu.test(url.pathname)
+            || (!imageOnly && /\.(mp4|webm)$/iu.test(url.pathname));
+    } catch {
+        return false;
+    }
 }
 
 function orderGalleryFiles(files, mainFileId) {
@@ -47,12 +98,28 @@ function buildGalleryItem(file, visualConfig, requestUrl) {
     const hidden = visualConfig?.viewerHiddenFileIds?.includes(id) || false;
     return {
         title: file.file_name || file.id,
-        sources: [absoluteFileUrl(requestUrl, file.id)],
+        sources: displaySourcesFor(file, requestUrl),
         thumbnail: String(file.file_type || '').startsWith('image/')
             ? absoluteThumbnailUrl(requestUrl, file.id, 'gallery', thumbnailContentVersion(file))
             : null,
         ...(hidden ? { viewerVisible: false } : {}),
     };
+}
+
+// ST receives only WebP display URLs for static raster images; the original
+// /file/ URL remains available in the ImgBed website for archive/download.
+// Animated formats and video keep their original URLs to preserve motion.
+export function displaySourcesFor(file, requestUrl) {
+    const mime = String(file.file_type || '').toLowerCase();
+    const fileId = String(file.id || '').toLowerCase();
+    const isStaticRaster = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/avif'].includes(mime)
+        && !/\.(?:apng|gif)$/iu.test(fileId);
+    if (!isStaticRaster) return [absoluteFileUrl(requestUrl, file.id, file.timestamp)];
+    const version = thumbnailContentVersion(file);
+    return [
+        absoluteThumbnailUrl(requestUrl, file.id, 'portrait', version),
+        absoluteThumbnailUrl(requestUrl, file.id, 'gallery', version),
+    ];
 }
 
 function buildVisualPayload(config, fileById, requestUrl) {
@@ -77,7 +144,7 @@ function buildVisualPayload(config, fileById, requestUrl) {
 
 function firstImageUrl(fileById, requestUrl) {
     for (const file of fileById.values()) {
-        if (String(file.file_type || '').startsWith('image/')) return absoluteFileUrl(requestUrl, file.id);
+        if (String(file.file_type || '').startsWith('image/')) return displaySourcesFor(file, requestUrl)[0];
     }
     return null;
 }
@@ -86,5 +153,5 @@ function imageUrlFor(fileId, fileById, requestUrl) {
     if (!fileId) return null;
     const file = fileById.get(fileId);
     if (!file || !String(file.file_type || '').startsWith('image/')) return null;
-    return absoluteFileUrl(requestUrl, file.id);
+    return displaySourcesFor(file, requestUrl)[0];
 }

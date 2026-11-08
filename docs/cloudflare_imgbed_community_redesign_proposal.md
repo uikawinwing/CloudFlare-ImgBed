@@ -2,7 +2,7 @@
 
 > 面向 Codex 的产品、设计与实现 Brief  
 > 目标分支基线：`staging`  
-> 参考原型：`cloudflare_imgbed_community_preview.html`
+> Discover 参考原型：`cloudflare_imgbed_community_preview.html`（对应 `/discover/`，不是默认首页）
 
 ---
 
@@ -10,25 +10,25 @@
 
 这不是一次单纯的「换首页 UI」或「把上传页改漂亮」的任务。
 
-CloudFlare ImgBed 的产品方向现在准备从：
+CloudFlare ImgBed 的产品方向是从：
 
 > **以上传工具为中心的图床**
 
 逐步转成：
 
-> **公开作品发现页 + Creator Profile + 登录后的个人媒体管理空间**
+> **受控的 Featured 欢迎页 + 独立公开发现页 + Creator Profile + 登录后的个人媒体管理空间**
 
 核心体验应当是：
 
-- 未登录访客首先看到一个可以浏览的公共作品社区
-- 用户可以像逛 Pinterest / ArtStation 的轻量版本一样浏览公开图片和视频
-- 上传和个人管理仍然是核心能力，但不再是所有访客看到的首页
+- 未登录访客首先看到轻量欢迎页，以及一个由站点运营者控制的 Featured 作品
+- 用户主动进入 Discover 后，可以像逛 Pinterest / ArtStation 的轻量版本一样浏览公开图片和视频
+- 上传和个人管理仍然是核心能力，并从欢迎页提供直接入口
 - 上传需要登录
 - 登录后进入自己的 Creator / Personal Space
 - 用户可以管理自己的文件、图库、公开主页，以及决定哪些内容可以公开展示
 - 管理员审核与普通用户的个人管理必须明确分开
 
-参考 HTML 是**产品体验和设计方向原型**，不是生产代码模板。
+参考 HTML 是 `/discover/` 的**产品体验和设计方向原型**，不是默认首页或生产代码模板。
 
 Codex 不应直接复制原型结构塞进现有项目，而应：
 
@@ -99,6 +99,7 @@ Codex 不应直接复制原型结构塞进现有项目，而应：
 
 ```text
 Public
+├─ Welcome / Featured landing
 ├─ Discover
 │  ├─ Featured
 │  ├─ Explore
@@ -137,13 +138,11 @@ Admin only
 
 ---
 
-# 3. 首页必须改变
+# 3. 公共入口
 
-新的默认首页 `/` 应优先成为 **Discover / Public Gallery**。
+默认首页 `/` 是轻量的 **Welcome / Featured landing**。它提供上传、Discover 与 CharInfo Creator 入口，并只展示一项由站点运营者控制的 Featured 作品。
 
-首页不应该再首先出现一个大上传框。
-
-访客打开网站时，应该马上看到作品。
+完整的公共目录位于 `/discover/`。Recent Feed、公开图库、筛选与无限滚动只在访客主动进入 Discover 后加载。
 
 ## 3.1 Header
 
@@ -151,9 +150,9 @@ Admin only
 
 ```text
 ImgBed
+首页
 Discover
-Featured
-Recent
+CharInfo Creator
 
 Login
 Upload
@@ -163,9 +162,9 @@ Upload
 
 ```text
 ImgBed
+首页
 Discover
-Featured
-Recent
+CharInfo Creator
 
 My Studio / Avatar
 Upload
@@ -173,31 +172,26 @@ Upload
 
 手机端应使用适合单手操作的简化导航。
 
-## 3.2 Hero / Featured
+## 3.2 Welcome / Featured
 
-首页第一屏可以有一个较强的 Featured 内容作为视觉焦点。
+首页第一屏以一项 Featured 内容作为视觉焦点，同时提供明确的上传与 Discover 操作。
 
-例如：
+页面每次只渲染一项媒体；有多项候选内容时，访问者可以在候选集合内切换。Featured 视频不自动播放，也不在用户播放前预加载。没有可用 Featured 内容时显示空状态，不加载 Recent Feed 作为回退。
 
-- 本周精选作品
-- 一个公开 Album
-- 一张视觉冲击力较强的图片
+欢迎页保持内容导向，不加入 “Why choose us”、Pricing、企业式 KPI 或大规模功能 icon grid。
 
-但避免把它做成典型 SaaS landing page。
+## 3.3 请求边界
 
-不要加入：
+```text
+/           身份状态 + 最多 12 项 Featured 清单；页面渲染其中 1 项
+/discover/  Featured + Recent Feed + 公开图库 + 筛选与分页
+```
 
-- 三个功能介绍卡
-- “Why choose us”
-- 功能 icon grid
-- Pricing
-- 企业式 KPI dashboard
+Featured API 响应的浏览器缓存时间为 60 秒、Cache API 边缘缓存时间为 5 分钟；欢迎页把 Featured 清单缓存 10 分钟，并可在请求失败时复用 24 小时内的旧清单。默认入口不得加载公开图库、Recent Feed 或无限滚动，也不得在 Featured 为空或读取失败时自动请求完整 Discover 数据。
 
-公开首页的内容本身就是产品展示。
+## 3.4 Featured
 
-## 3.3 Featured
-
-显示少量人工或规则挑选的优秀公开作品。
+Featured 显示少量人工或规则挑选的优秀公开作品。
 
 v1 不需要复杂算法。
 
@@ -224,7 +218,7 @@ Public
 
 这些都不是当前目标。
 
-## 3.4 Explore
+## 3.5 Explore
 
 使用图片优先的瀑布流。
 
@@ -744,7 +738,7 @@ Motion
 - Bento dashboard
 - 每一段都包在 card
 - 巨大空白 SaaS hero
-- 首页首先宣传功能
+- 首页堆叠大段功能营销内容
 - 过多 gradient
 - 过多 glow
 - 过度动画
@@ -934,7 +928,7 @@ transformed preview
 MP4：
 
 - 必须有合理 preview
-- 不要因为 `<video preload>` 导致首页一次加载几十个完整视频
+- 不要因为 `<video preload>` 导致 Discover 一次加载几十个完整视频
 - 推荐 poster / lazy playback
 - 只在 viewport / hover / tap 后播放
 
@@ -952,8 +946,8 @@ GIF：
 概念上建议：
 
 ```text
-/                     Discover
-/explore              Explore
+/                     Welcome / Featured landing
+/discover/            Discover：Featured、公开图库与 Recent Feed
 /gallery/:owner       Creator Profile 或现有 creator gallery
 /gallery/:owner/:album Public Album
 /media/:id            Public Media Detail
@@ -1005,11 +999,12 @@ Codex 先输出：
 
 Audit 完成后再进入实现。
 
-## Phase 1 — Public Discover MVP
+## Phase 1 — Public Entry 与 Discover MVP
 
 目标：
 
-- `/` 变成公开 Discover
+- `/` 使用轻量 Welcome / Featured landing
+- `/discover/` 提供完整公开 Discover
 - 从现有公开数据读取
 - Featured section
 - Explore masonry
@@ -1022,6 +1017,7 @@ Audit 完成后再进入实现。
 Acceptance：
 
 - 未登录可完整浏览
+- 打开 `/` 不加载 Recent Feed、公开图库或无限滚动
 - 手机正常
 - 视频不造成灾难性流量
 - 私有文件绝不出现在 feed
@@ -1475,7 +1471,7 @@ Audit 需要明确告诉我：
 
 最终目标是把 CloudFlare ImgBed 从“上传工具首页”推进到：
 
-> **Public Discovery + Creator Profiles + Personal Media Studio**
+> **Curated Featured Welcome + Public Discovery + Creator Profiles + Personal Media Studio**
 
 同时保留它作为图床最重要的能力：
 

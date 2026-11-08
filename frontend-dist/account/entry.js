@@ -8,6 +8,33 @@ const loginPath = window.location.pathname === '/login' || window.location.pathn
 const legacyAdminLoginPath = window.location.pathname === '/adminLogin';
 let loginObserver;
 
+// Route old bookmarks and Vue's hash navigation to the maintained settings pages.
+function redirectNativeSettings() {
+  if (location.pathname !== '/systemConfig') return;
+  const tool = ({ '#upload': 'system-upload', '#others': 'system-others' })[location.hash];
+  if (!tool) return;
+  let target = new URL('/account/?view=files', location.origin);
+  if (embedded) {
+    try {
+      const parent = new URL(window.top.location.href);
+      if (parent.origin === location.origin && /^\/account\/?$/.test(parent.pathname)) target = parent;
+    } catch {}
+  }
+  target.searchParams.set('tool', tool);
+  (embedded ? window.top : window).location.replace(target.href);
+}
+
+redirectNativeSettings();
+window.addEventListener('hashchange', redirectNativeSettings);
+for (const method of ['pushState', 'replaceState']) {
+  const original = history[method].bind(history);
+  history[method] = (...args) => {
+    const result = original(...args);
+    redirectNativeSettings();
+    return result;
+  };
+}
+
 function localReturnTo(fallback = '/account/?view=files') {
   const value = new URLSearchParams(window.location.search).get('returnTo');
   return value && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') ? value : fallback;

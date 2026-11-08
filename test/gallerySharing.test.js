@@ -42,7 +42,7 @@ describe('direct album sharing', () => {
         const privateEtag = privateResponse.headers.get('etag');
         const privatePack = await privateResponse.json();
         assert.strictEqual(privatePack.gallery.length, 1);
-        assert.strictEqual(privatePack.gallery[0].sources[0], 'https://example.test/file/old-private.png');
+        assert.strictEqual(privatePack.gallery[0].sources[0], 'https://example.test/file/old-private.png?v=2');
         assert.strictEqual(privatePack.gallery[0].thumbnail, 'https://example.test/thumb/old-private.png?v=2');
         assert.strictEqual(privatePack.avatarThumbnail, 'https://example.test/thumb/old-private.png?variant=avatar&v=2');
         assert.strictEqual(privatePack.libraryThumbnail, 'https://example.test/thumb/old-private.png?variant=library&v=2');
@@ -89,9 +89,9 @@ describe('direct album sharing', () => {
         assert.strictEqual(pack.libraryThumbnail, 'https://example.test/thumb/folder/portrait%20one.png?variant=library&v=20');
         assert.deepStrictEqual(pack.gallery.map(item => item.title), ['Intro.webm', 'Portrait.png', 'Second.png']);
         assert.deepStrictEqual(pack.gallery.map(item => item.sources[0]), [
-            'https://example.test/file/intro.webm',
-            'https://example.test/file/folder/portrait%20one.png',
-            'https://example.test/file/second.png',
+            'https://example.test/file/intro.webm?v=1',
+            'https://example.test/file/folder/portrait%20one.png?v=2',
+            'https://example.test/file/second.png?v=3',
         ]);
         assert.strictEqual(pack.gallery[0].thumbnail, null);
         assert.strictEqual(pack.gallery[1].thumbnail, 'https://example.test/thumb/folder/portrait%20one.png?v=20');

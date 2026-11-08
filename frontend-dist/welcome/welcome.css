@@ -1,0 +1,168 @@
+/* LXGW WenKai v1.530, web subset. Source: https://github.com/lxgw/LxgwWenKai
+   Copyright and SIL Open Font License: ./fonts/OFL.txt */
+@font-face {
+  font-family: "Welcome WenKai";
+  src: url("./fonts/welcome-wenkai.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+html { min-height: 100%; }
+body { position: relative; isolation: isolate; min-width: 320px; min-height: 100dvh; display: flex; flex-direction: column; }
+body::before {
+  content: "";
+  position: fixed;
+  z-index: -2;
+  inset: 0;
+  pointer-events: none;
+  background-image: var(--welcome-wallpaper-image, url("./wallpaper.jpg"));
+  background-size: cover;
+  background-position: var(--welcome-wallpaper-x, 50%) var(--welcome-wallpaper-y, 50%);
+  opacity: var(--welcome-wallpaper-opacity, 1);
+}
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background: var(--welcome-wallpaper-overlay, linear-gradient(180deg, color-mix(in srgb, var(--app-bg) 25%, transparent), transparent 22%, transparent 46%, color-mix(in srgb, var(--app-bg) 82%, transparent) 70%, var(--app-bg) 94%), linear-gradient(90deg, color-mix(in srgb, var(--app-bg) 92%, transparent), color-mix(in srgb, var(--app-bg) 68%, transparent) 38%, color-mix(in srgb, var(--app-bg) 12%, transparent) 68%, transparent));
+}
+
+.public-nav {
+  position: fixed;
+  inset: 0 0 auto;
+  height: 64px;
+  grid-template-columns: auto 1fr auto;
+  gap: 40px;
+  padding: 0 clamp(24px, 3.6vw, 48px);
+  background: color-mix(in srgb, var(--app-bg) 54%, transparent);
+  backdrop-filter: blur(6px);
+}
+.public-nav .brand { min-width: 0; gap: 8px; font-weight: 400; }
+.public-nav .site-brand-symbol { width: 128px; }
+.public-nav .site-brand-symbol[data-custom-logo="true"] { width: 30px; height: 30px; }
+.public-nav [data-site-brand-text] { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.public-links { justify-content: flex-start; gap: 32px; font-weight: 400; letter-spacing: .08em; }
+.public-links a { padding-block: 22px; }
+.public-links .is-active::after { display: none; }
+.welcome-mobile-discover { display: none; }
+.nav-actions { gap: 22px; font-size: 13px; letter-spacing: .06em; }
+.nav-actions .text-button, .nav-actions .primary-button, .theme-button {
+  min-height: 36px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--app-text);
+  font-weight: 400;
+}
+.nav-actions .text-button { padding-inline: 0; border-color: transparent; }
+.nav-actions .primary-button { min-height: 32px; padding-inline: 13px; border-color: var(--app-border-strong); font-size: 12px; letter-spacing: .1em; }
+.theme-button { width: 36px; border-color: transparent; }
+.nav-actions .text-button:hover, .nav-actions .primary-button:hover, .theme-button:hover { color: var(--app-text-strong); background: color-mix(in srgb, var(--app-text) 6%, transparent); }
+.nav-actions .primary-button:hover { border-color: var(--app-text); }
+
+.welcome-wrap {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  width: min(1360px, 100%);
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: 128px clamp(24px, 3.6vw, 48px) 64px;
+}
+.welcome-checking .welcome-wrap { visibility: hidden; }
+.welcome-hero { width: 100%; text-align: left; }
+.welcome-copy { position: relative; isolation: isolate; width: min(460px, 100%); }
+.welcome-copy::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -24px -16px;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--app-bg) 80%, transparent);
+  filter: blur(24px);
+  pointer-events: none;
+}
+.welcome-heading { filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--app-bg) 85%, transparent)); }
+.welcome-copy h1, .welcome-greeting, .welcome-lead {
+  text-shadow: 0 1px 3px color-mix(in srgb, var(--app-bg) 90%, transparent), 0 0 12px color-mix(in srgb, var(--app-bg) 65%, transparent);
+}
+.welcome-copy h1 {
+  margin: 0;
+  color: var(--app-text-strong);
+  font-size: clamp(44px, 5.6vw, 76px);
+  font-weight: 400;
+  letter-spacing: .01em;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+.welcome-copy .site-wordmark { width: min(100%, 360px); font-size: 0; line-height: 0; }
+.welcome-greeting {
+  margin: 16px 0 28px;
+  color: var(--app-text-strong);
+  font-family: "Welcome WenKai", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+  font-size: clamp(15px, 1.35vw, 18px);
+  font-weight: 400;
+  letter-spacing: .18em;
+  line-height: 1.7;
+}
+.welcome-poem { padding-left: 20px; border-left: 1px solid var(--app-border-strong); }
+.welcome-lead {
+  margin: 0;
+  color: var(--app-text-strong);
+  font-family: "Welcome WenKai", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: .06em;
+  line-height: 2.15;
+}
+.welcome-lead + .welcome-lead { margin-top: 14px; }
+.welcome-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; margin-top: 36px; }
+.welcome-primary, .welcome-secondary { min-height: 42px; border-radius: 0; box-shadow: none; font-size: 13px; font-weight: 400; letter-spacing: .12em; }
+.welcome-primary { padding-inline: 24px; border-color: var(--app-text); background: var(--app-text); color: var(--app-bg); }
+.welcome-primary:hover { border-color: var(--app-text-strong); background: var(--app-text-strong); }
+.welcome-secondary { padding: 0; border-width: 0 0 1px; border-color: var(--app-border-strong); background: transparent; color: var(--app-muted-strong); }
+.welcome-secondary:hover { border-color: var(--app-text); background: transparent; color: var(--app-text-strong); }
+.public-footer { min-height: 64px; padding: 24px clamp(24px, 3.6vw, 48px); gap: 16px; background: color-mix(in srgb, var(--app-bg) 92%, transparent); font-weight: 400; letter-spacing: .08em; }
+
+@media (max-width: 760px) {
+  .public-nav { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding-inline: 24px; }
+  .public-nav .site-brand-symbol { width: 108px; }
+  .public-nav [data-site-brand-text] { max-width: 80px; }
+  .nav-actions { gap: 10px; }
+  .welcome-mobile-discover { display: inline-flex; align-items: center; min-height: 36px; color: var(--app-muted-strong); }
+  .welcome-mobile-discover:hover { color: var(--app-text-strong); }
+  .nav-actions .text-button { display: inline-flex; }
+  body::before {
+    background-position: var(--welcome-wallpaper-mobile-x, 60%) var(--welcome-wallpaper-mobile-y, 0%);
+  }
+  body::after { background: var(--welcome-wallpaper-overlay, linear-gradient(180deg, color-mix(in srgb, var(--app-bg) 25%, transparent), transparent 22%, transparent 46%, color-mix(in srgb, var(--app-bg) 82%, transparent) 70%, var(--app-bg) 94%)); }
+  .welcome-wrap { padding: max(240px, 46svh) 24px 48px; }
+  .welcome-copy .site-wordmark { width: min(100%, 280px); }
+  .welcome-greeting { margin-block: 16px 24px; }
+  .welcome-poem { padding-left: 18px; }
+  .welcome-lead { font-size: 13px; }
+  .welcome-actions { gap: 22px; margin-top: 30px; }
+  .public-footer { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 24px; font-size: 10px; }
+}
+
+@media (max-width: 399px) {
+  .public-nav .site-brand-symbol { width: 96px; }
+  .public-nav [data-site-brand-text] { max-width: 64px; }
+  .nav-actions { gap: 8px; }
+}
+
+@media (max-width: 359px) {
+  .public-nav { padding-inline: 18px; gap: 10px; }
+  .public-nav .site-brand-symbol { width: 84px; }
+  .public-nav [data-site-brand-text] { max-width: 40px; }
+  .nav-actions { gap: 6px; }
+  .nav-actions .primary-button { padding-inline: 10px; }
+  .welcome-mobile-discover { font-size: 12px; }
+  .welcome-wrap { padding-inline: 20px; }
+  .welcome-greeting { letter-spacing: .12em; }
+  .welcome-lead { letter-spacing: .03em; }
+  .welcome-actions { gap: 18px; }
+}

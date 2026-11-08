@@ -13,7 +13,6 @@ import * as mw_api_admin from '../../functions/api/admin/_middleware.js';
 import * as mw_api_manage from '../../functions/api/manage/_middleware.js';
 import * as mw_api_moderation from '../../functions/api/moderation/_middleware.js';
 import * as mw_api_user from '../../functions/api/user/_middleware.js';
-import * as mw_dav from '../../functions/dav/_middleware.js';
 import * as mw_file from '../../functions/file/_middleware.js';
 import * as mw_random from '../../functions/random/_middleware.js';
 import * as mw_upload from '../../functions/upload/_middleware.js';
@@ -41,8 +40,11 @@ import * as apiManageSysConfigSecurity from '../../functions/api/manage/sysConfi
 import * as apiManageSysConfigUpload from '../../functions/api/manage/sysConfig/upload.js';
 import * as apiManageTagsAutocomplete from '../../functions/api/manage/tags/autocomplete.js';
 import * as apiManageTagsBatch from '../../functions/api/manage/tags/batch.js';
+import * as apiManageThumbnailsBackfill from '../../functions/api/manage/thumbnails/backfill.js';
+import * as apiPublicAlbumGalleryParamAlbumId from '../../functions/api/public/album-gallery/[albumId].js';
 import * as apiPublicCharinfoParamAlbumId from '../../functions/api/public/charinfo/[albumId].js';
 import * as apiUserAlbumsParamId from '../../functions/api/user/albums/[id].js';
+import * as apiUserCharinfoComplete from '../../functions/api/user/charinfo/complete.js';
 import * as apiAdminMigrateKvFiles from '../../functions/api/admin/migrate-kv-files.js';
 import * as apiAdminUsers_index from '../../functions/api/admin/users/index.js';
 import * as apiAuthAdminLogin from '../../functions/api/auth/adminLogin.js';
@@ -53,6 +55,11 @@ import * as apiAuthMe from '../../functions/api/auth/me.js';
 import * as apiAuthResetAuth from '../../functions/api/auth/resetAuth.js';
 import * as apiAuthSessionCheck from '../../functions/api/auth/sessionCheck.js';
 import * as apiBingWallpaper_index from '../../functions/api/bing/wallpaper/index.js';
+import * as apiCharinfoUploadAuth from '../../functions/api/charinfo-upload/auth.js';
+import * as apiCharinfoUploadFile from '../../functions/api/charinfo-upload/file.js';
+import * as apiCharinfoUploadGallery from '../../functions/api/charinfo-upload/gallery.js';
+import * as apiCharinfoUploadLaunch from '../../functions/api/charinfo-upload/launch.js';
+import * as apiCharinfoUploadPair from '../../functions/api/charinfo-upload/pair.js';
 import * as apiManageApiTokens from '../../functions/api/manage/apiTokens.js';
 import * as apiManageList from '../../functions/api/manage/list.js';
 import * as apiManageQuota from '../../functions/api/manage/quota.js';
@@ -63,6 +70,7 @@ import * as apiPublicList from '../../functions/api/public/list.js';
 import * as apiUserAlbums_index from '../../functions/api/user/albums/index.js';
 import * as apiUserFiles_index from '../../functions/api/user/files/index.js';
 import * as apiUserHandle from '../../functions/api/user/handle.js';
+import * as apiUserMe from '../../functions/api/user/me.js';
 import * as galleryParamOwnerSlugParamAlbumSlug from '../../functions/gallery/[ownerSlug]/[albumSlug].js';
 import * as uploadHuggingfaceCommitUpload from '../../functions/upload/huggingface/commitUpload.js';
 import * as uploadHuggingfaceCompleteMultipart from '../../functions/upload/huggingface/completeMultipart.js';
@@ -76,6 +84,7 @@ import * as myAlbums from '../../functions/my-albums.js';
 import * as myFiles from '../../functions/my-files.js';
 import * as random_index from '../../functions/random/index.js';
 import * as upload_index from '../../functions/upload/index.js';
+import * as apiPublicGalleryCatchAllOwnerSlugCatchAllAlbumSlug from '../../functions/api/public/gallery/[[ownerSlug]]/[[albumSlug]].js';
 import * as apiAdminUsersCatchAllDiscordId from '../../functions/api/admin/users/[[discordId]].js';
 import * as apiManageBlockCatchAllPath from '../../functions/api/manage/block/[[path]].js';
 import * as apiManageDeleteCatchAllPath from '../../functions/api/manage/delete/[[path]].js';
@@ -88,6 +97,7 @@ import * as apiModerationDeleteCatchAllPath from '../../functions/api/moderation
 import * as apiModerationQuarantineCatchAllPath from '../../functions/api/moderation/quarantine/[[path]].js';
 import * as apiModerationRestoreCatchAllPath from '../../functions/api/moderation/restore/[[path]].js';
 import * as apiUserFilesCatchAllPath from '../../functions/api/user/files/[[path]].js';
+import * as galleryCatchAllOwnerSlugCatchAllAlbumSlug from '../../functions/gallery/[[ownerSlug]]/[[albumSlug]].js';
 import * as davCatchAllPath from '../../functions/dav/[[path]].js';
 import * as fileCatchAllPath from '../../functions/file/[[path]].js';
 import * as thumbCatchAllPath from '../../functions/thumb/[[path]].js';
@@ -118,8 +128,11 @@ const routes = [
     { path: '/api/manage/sysConfig/upload', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"sysConfig"},{"type":"static","value":"upload"}], module: apiManageSysConfigUpload, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/tags/autocomplete', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"tags"},{"type":"static","value":"autocomplete"}], module: apiManageTagsAutocomplete, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/tags/batch', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"tags"},{"type":"static","value":"batch"}], module: apiManageTagsBatch, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/thumbnails/backfill', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"thumbnails"},{"type":"static","value":"backfill"}], module: apiManageThumbnailsBackfill, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/public/album-gallery/:albumId', segments: [{"type":"static","value":"api"},{"type":"static","value":"public"},{"type":"static","value":"album-gallery"},{"type":"dynamic","name":"albumId","array":false}], module: apiPublicAlbumGalleryParamAlbumId, middlewares: [mw_api] },
     { path: '/api/public/charinfo/:albumId', segments: [{"type":"static","value":"api"},{"type":"static","value":"public"},{"type":"static","value":"charinfo"},{"type":"dynamic","name":"albumId","array":false}], module: apiPublicCharinfoParamAlbumId, middlewares: [mw_api] },
     { path: '/api/user/albums/:id', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"albums"},{"type":"dynamic","name":"id","array":false}], module: apiUserAlbumsParamId, middlewares: [mw_api, mw_api_user] },
+    { path: '/api/user/charinfo/complete', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"charinfo"},{"type":"static","value":"complete"}], module: apiUserCharinfoComplete, middlewares: [mw_api, mw_api_user] },
     { path: '/api/admin/migrate-kv-files', segments: [{"type":"static","value":"api"},{"type":"static","value":"admin"},{"type":"static","value":"migrate-kv-files"}], module: apiAdminMigrateKvFiles, middlewares: [mw_api, mw_api_admin] },
     { path: '/api/admin/users', segments: [{"type":"static","value":"api"},{"type":"static","value":"admin"},{"type":"static","value":"users"}], module: apiAdminUsers_index, middlewares: [mw_api, mw_api_admin] },
     { path: '/api/auth/adminLogin', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"adminLogin"}], module: apiAuthAdminLogin, middlewares: [mw_api] },
@@ -130,6 +143,11 @@ const routes = [
     { path: '/api/auth/resetAuth', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"resetAuth"}], module: apiAuthResetAuth, middlewares: [mw_api] },
     { path: '/api/auth/sessionCheck', segments: [{"type":"static","value":"api"},{"type":"static","value":"auth"},{"type":"static","value":"sessionCheck"}], module: apiAuthSessionCheck, middlewares: [mw_api] },
     { path: '/api/bing/wallpaper', segments: [{"type":"static","value":"api"},{"type":"static","value":"bing"},{"type":"static","value":"wallpaper"}], module: apiBingWallpaper_index, middlewares: [mw_api] },
+    { path: '/api/charinfo-upload/auth', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"auth"}], module: apiCharinfoUploadAuth, middlewares: [mw_api] },
+    { path: '/api/charinfo-upload/file', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"file"}], module: apiCharinfoUploadFile, middlewares: [mw_api] },
+    { path: '/api/charinfo-upload/gallery', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"gallery"}], module: apiCharinfoUploadGallery, middlewares: [mw_api] },
+    { path: '/api/charinfo-upload/launch', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"launch"}], module: apiCharinfoUploadLaunch, middlewares: [mw_api] },
+    { path: '/api/charinfo-upload/pair', segments: [{"type":"static","value":"api"},{"type":"static","value":"charinfo-upload"},{"type":"static","value":"pair"}], module: apiCharinfoUploadPair, middlewares: [mw_api] },
     { path: '/api/manage/apiTokens', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"apiTokens"}], module: apiManageApiTokens, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/list', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"list"}], module: apiManageList, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/quota', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"quota"}], module: apiManageQuota, middlewares: [mw_api, mw_api_manage] },
@@ -140,6 +158,7 @@ const routes = [
     { path: '/api/user/albums', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"albums"}], module: apiUserAlbums_index, middlewares: [mw_api, mw_api_user] },
     { path: '/api/user/files', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"files"}], module: apiUserFiles_index, middlewares: [mw_api, mw_api_user] },
     { path: '/api/user/handle', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"handle"}], module: apiUserHandle, middlewares: [mw_api, mw_api_user] },
+    { path: '/api/user/me', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"me"}], module: apiUserMe, middlewares: [mw_api, mw_api_user] },
     { path: '/gallery/:ownerSlug/:albumSlug', segments: [{"type":"static","value":"gallery"},{"type":"dynamic","name":"ownerSlug","array":false},{"type":"dynamic","name":"albumSlug","array":false}], module: galleryParamOwnerSlugParamAlbumSlug, middlewares: [] },
     { path: '/upload/huggingface/commitUpload', segments: [{"type":"static","value":"upload"},{"type":"static","value":"huggingface"},{"type":"static","value":"commitUpload"}], module: uploadHuggingfaceCommitUpload, middlewares: [mw_upload] },
     { path: '/upload/huggingface/completeMultipart', segments: [{"type":"static","value":"upload"},{"type":"static","value":"huggingface"},{"type":"static","value":"completeMultipart"}], module: uploadHuggingfaceCompleteMultipart, middlewares: [mw_upload] },
@@ -153,6 +172,7 @@ const routes = [
     { path: '/my-files', segments: [{"type":"static","value":"my-files"}], module: myFiles, middlewares: [] },
     { path: '/random', segments: [{"type":"static","value":"random"}], module: random_index, middlewares: [mw_random] },
     { path: '/upload', segments: [{"type":"static","value":"upload"}], module: upload_index, middlewares: [mw_upload] },
+    { path: '/api/public/gallery/:ownerSlug/*albumSlug', segments: [{"type":"static","value":"api"},{"type":"static","value":"public"},{"type":"static","value":"gallery"},{"type":"dynamic","name":"ownerSlug","array":true},{"type":"catchAll","name":"albumSlug","array":true}], module: apiPublicGalleryCatchAllOwnerSlugCatchAllAlbumSlug, middlewares: [mw_api], catchAll: true },
     { path: '/api/admin/users/*discordId', segments: [{"type":"static","value":"api"},{"type":"static","value":"admin"},{"type":"static","value":"users"},{"type":"catchAll","name":"discordId","array":true}], module: apiAdminUsersCatchAllDiscordId, middlewares: [mw_api, mw_api_admin], catchAll: true },
     { path: '/api/manage/block/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"block"},{"type":"catchAll","name":"path","array":true}], module: apiManageBlockCatchAllPath, middlewares: [mw_api, mw_api_manage], catchAll: true },
     { path: '/api/manage/delete/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"manage"},{"type":"static","value":"delete"},{"type":"catchAll","name":"path","array":true}], module: apiManageDeleteCatchAllPath, middlewares: [mw_api, mw_api_manage], catchAll: true },
@@ -165,7 +185,8 @@ const routes = [
     { path: '/api/moderation/quarantine/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"moderation"},{"type":"static","value":"quarantine"},{"type":"catchAll","name":"path","array":true}], module: apiModerationQuarantineCatchAllPath, middlewares: [mw_api, mw_api_moderation], catchAll: true },
     { path: '/api/moderation/restore/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"moderation"},{"type":"static","value":"restore"},{"type":"catchAll","name":"path","array":true}], module: apiModerationRestoreCatchAllPath, middlewares: [mw_api, mw_api_moderation], catchAll: true },
     { path: '/api/user/files/*path', segments: [{"type":"static","value":"api"},{"type":"static","value":"user"},{"type":"static","value":"files"},{"type":"catchAll","name":"path","array":true}], module: apiUserFilesCatchAllPath, middlewares: [mw_api, mw_api_user], catchAll: true },
-    { path: '/dav/*path', segments: [{"type":"static","value":"dav"},{"type":"catchAll","name":"path","array":true}], module: davCatchAllPath, middlewares: [mw_dav], catchAll: true },
+    { path: '/gallery/:ownerSlug/*albumSlug', segments: [{"type":"static","value":"gallery"},{"type":"dynamic","name":"ownerSlug","array":true},{"type":"catchAll","name":"albumSlug","array":true}], module: galleryCatchAllOwnerSlugCatchAllAlbumSlug, middlewares: [], catchAll: true },
+    { path: '/dav/*path', segments: [{"type":"static","value":"dav"},{"type":"catchAll","name":"path","array":true}], module: davCatchAllPath, middlewares: [], catchAll: true },
     { path: '/file/*path', segments: [{"type":"static","value":"file"},{"type":"catchAll","name":"path","array":true}], module: fileCatchAllPath, middlewares: [mw_file], catchAll: true },
     { path: '/thumb/*path', segments: [{"type":"static","value":"thumb"},{"type":"catchAll","name":"path","array":true}], module: thumbCatchAllPath, middlewares: [], catchAll: true },
 ];
@@ -412,6 +433,7 @@ export default {
         const routeHandlesRevalidation = pathname.startsWith('/file/')
             || pathname.startsWith('/thumb/')
             || pathname.startsWith('/api/public/gallery/')
+            || pathname.startsWith('/api/public/album-gallery/')
             || pathname.startsWith('/api/public/charinfo/');
         if (routeHandlesRevalidation) return await executeRoute();
         return await maybeServeFromCache(request, ctx, executeRoute);

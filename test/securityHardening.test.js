@@ -10,7 +10,7 @@ import {
     validateImageDimensions,
 } from '../functions/utils/fileSignature.js';
 import { DiscordAPI } from '../functions/utils/storage/discordAPI.js';
-import { setCommonHeaders } from '../functions/file/fileTools.js';
+import { FILE_CACHE_CONTROL, returnWithCheck, setCommonHeaders } from '../functions/file/fileTools.js';
 
 function mediaBlob(bytes, type) {
     return new Blob([Uint8Array.from(bytes)], { type });
@@ -27,6 +27,33 @@ function ftypBox(majorBrand, compatibleBrand = majorBrand) {
 }
 
 describe('media security hardening', () => {
+    it('only client-caches the current version of an active public owned file', async () => {
+        const record = { metadata: { OwnerId: 'owner-id', Visibility: 'public', ModerationStatus: 'active', TimeStamp: 123 } };
+        const contextFor = url => ({
+            url: new URL(url),
+            securityConfig: { access: { whiteListMode: false } },
+            fileAccess: {},
+        });
+
+        const current = contextFor('https://example.test/file/image.png?v=123');
+        assert.strictEqual((await returnWithCheck(current, record)).status, 200);
+        assert.strictEqual(current.fileAccess.cacheControl, FILE_CACHE_CONTROL.CLIENT_VERSIONED);
+
+        const unversioned = contextFor('https://example.test/file/image.png');
+        assert.strictEqual((await returnWithCheck(unversioned, record)).status, 200);
+        assert.strictEqual(unversioned.fileAccess.cacheControl, FILE_CACHE_CONTROL.NO_STORE);
+
+        const stale = contextFor('https://example.test/file/image.png?v=122');
+        const staleResponse = await returnWithCheck(stale, record);
+        assert.strictEqual(staleResponse.status, 404);
+        assert.strictEqual(staleResponse.headers.get('Cache-Control'), FILE_CACHE_CONTROL.NO_STORE);
+
+        const privateRecord = { metadata: { ...record.metadata, Visibility: 'private' } };
+        const privateContext = contextFor('https://example.test/file/image.png?v=123');
+        assert.strictEqual((await returnWithCheck(privateContext, privateRecord)).status, 200);
+        assert.strictEqual(privateContext.fileAccess.cacheControl, FILE_CACHE_CONTROL.NO_STORE);
+    });
+
     it('keeps the upload allowlist media-only with validated WebM support', () => {
         assert.strictEqual(ALLOWED_UPLOAD_TYPES.has('image/svg+xml'), false);
         assert.strictEqual(ALLOWED_UPLOAD_TYPES.has('text/html'), false);

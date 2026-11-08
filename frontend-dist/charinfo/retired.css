@@ -1,0 +1,11 @@
+.retirement { width: min(720px, calc(100% - 40px)); margin: 72px auto; color: var(--app-text); }
+.retirement h1 { margin: 0 0 20px; font-size: clamp(28px, 5vw, 40px); line-height: 1.25; }
+.retirement p { color: var(--app-muted); line-height: 1.8; }
+.retirement .primary-button { display: inline-flex; margin-top: 12px; }
+.draft-recovery { margin-top: 48px; padding-top: 28px; border-top: 1px solid var(--app-border); }
+.draft-recovery h2 { margin: 0 0 16px; font-size: 20px; }
+.draft-recovery button { cursor: pointer; min-height: 44px; }
+.draft-recovery button:disabled { cursor: wait; opacity: .6; }
+.draft-recovery button:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 4px; }
+.draft-status { min-height: 3.6em; }
+@media (max-width: 520px) { .retirement { margin-block: 40px; } }

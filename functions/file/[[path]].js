@@ -1,9 +1,7 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { fetchSecurityConfig } from "../utils/sysConfig";
 import { TelegramAPI } from "../utils/storage/telegramAPI";
 import { DiscordAPI } from "../utils/storage/discordAPI";
 import { HuggingFaceAPI } from "../utils/storage/huggingfaceAPI";
-import { buildWebDAVUrl, WebDAVAPI } from "../utils/storage/webdavAPI";
 import {
     setCommonHeaders, setRangeHeaders, handleHeadRequest, getFileContent, isTgChannel,
     returnWithCheck, return404, returnBlockImg, isDomainAllowed, FILE_CACHE_CONTROL
@@ -13,11 +11,8 @@ import { authenticate, AUTH_SCOPE } from '../utils/auth/authCore.js';
 import {
     resolveDiscordCredentials,
     resolveHuggingFaceCredentials,
-    resolveS3Credentials,
     resolveTelegramCredentials,
-    resolveWebDAVCredentials,
 } from '../utils/metadata/channelCredentials.js';
-import { buildCdnFileUrl } from '../utils/metadata/metadataView.js';
 import {
     parseImageTransform,
     transformImageRequestViaUrl,
@@ -95,6 +90,13 @@ export async function onRequest(context) {  // Contents of context object
         return accessRes; // 如果不可访问，直接返回
     }
 
+    if (imgRecord.metadata.Channel === 'S3' || imgRecord.metadata.Channel === 'WebDAV') {
+        return new Response('Storage backend has been retired', {
+            status: 410,
+            headers: { 'Cache-Control': 'no-store' },
+        });
+    }
+
     const imageSourceValidation = validateImageTransformSource(context.imageTransform, env, fileType, fileName);
     if (imageSourceValidation?.response) {
         return imageSourceValidation.response;
@@ -116,12 +118,6 @@ export async function onRequest(context) {  // Contents of context object
         return await transformImageResponse(context, response);
     }
 
-    /* S3渠道 */
-    if (imgRecord.metadata?.Channel === "S3") {
-        const response = await handleS3File(context, imgRecord.metadata, encodedFileName, fileType);
-        return await transformImageResponse(context, response);
-    }
-
     /* Discord 渠道 */
     if (imgRecord.metadata?.Channel === 'Discord') {
         // 检查是否为分片文件
@@ -136,12 +132,6 @@ export async function onRequest(context) {  // Contents of context object
     /* HuggingFace 渠道 */
     if (imgRecord.metadata?.Channel === 'HuggingFace') {
         const response = await handleHuggingFaceFile(context, imgRecord.metadata, encodedFileName, fileType);
-        return await transformImageResponse(context, response);
-    }
-
-    /* WebDAV 渠道 */
-    if (imgRecord.metadata?.Channel === 'WebDAV') {
-        const response = await handleWebDAVFile(context, imgRecord.metadata, encodedFileName, fileType);
         return await transformImageResponse(context, response);
     }
 
@@ -262,8 +252,6 @@ function getChunkedFileCacheControl(context) {
         ? FILE_CACHE_CONTROL.NO_STORE
         : FILE_CACHE_CONTROL.PRIVATE;
 }
-
-
 // 处理 Telegram 渠道分片文件读取
 async function handleTelegramChunkedFile(context, imgRecord, encodedFileName, fileType) {
     const { env, request, url, Referer } = context;
@@ -736,149 +724,6 @@ async function handleR2File(context, fileId, encodedFileName, fileType) {
     }
 }
 
-// 处理S3文件读取
-async function handleS3File(context, metadata, encodedFileName, fileType) {
-    const { Referer, url, request } = context;
-
-    // 检查是否配置了 CDN 文件完整路径
-    const cdnFileUrl = await getS3CdnFileUrl(context.env, metadata);
-
-    // 如果配置了 CDN 文件路径，通过 CDN 读取文件
-    if (cdnFileUrl) {
-        try {
-            // 处理 HEAD 请求
-            if (request.method === 'HEAD') {
-                const headers = new Headers();
-                setCommonHeaders(headers, encodedFileName, fileType, getFileCacheControl(context));
-                return handleHeadRequest(headers);
-            }
-
-            // 构建请求头
-            const fetchHeaders = {};
-
-            // 支持 Range 请求
-            const range = request.headers.get('Range');
-            if (range) {
-                fetchHeaders['Range'] = range;
-            }
-
-            // 通过 CDN 获取文件（直接使用完整路径，无需拼接）
-            const response = await fetch(cdnFileUrl, {
-                method: 'GET',
-                headers: fetchHeaders
-            });
-
-            if (!response.ok && response.status !== 206) {
-                // CDN 读取失败，回退到 S3 API
-                console.warn(`CDN fetch failed (${response.status}), falling back to S3 API`);
-                return await handleS3FileViaAPI(context, metadata, encodedFileName, fileType);
-            }
-
-            // 构建响应头
-            const headers = new Headers();
-            setCommonHeaders(headers, encodedFileName, fileType, getFileCacheControl(context));
-
-            // 复制相关头部
-            if (response.headers.get('Content-Length')) {
-                headers.set('Content-Length', response.headers.get('Content-Length'));
-            }
-            if (response.headers.get('Content-Range')) {
-                headers.set('Content-Range', response.headers.get('Content-Range'));
-            }
-
-            return new Response(response.body, {
-                status: response.status,
-                headers
-            });
-
-        } catch (error) {
-            // CDN 读取出错，回退到 S3 API
-            console.error(`CDN fetch error: ${error.message}, falling back to S3 API`);
-            return await handleS3FileViaAPI(context, metadata, encodedFileName, fileType);
-        }
-    }
-
-    // 没有配置 CDN 文件路径，使用 S3 API
-    return await handleS3FileViaAPI(context, metadata, encodedFileName, fileType);
-}
-
-async function getS3CdnFileUrl(env, metadata) {
-    try {
-        const db = getDatabase(env);
-        const s3Credentials = await resolveS3Credentials(db, env, metadata);
-        return buildCdnFileUrl(s3Credentials.cdnDomain, s3Credentials.key);
-    } catch (error) {
-        console.warn('Failed to build S3 CDN file URL:', error.message);
-        return '';
-    }
-}
-
-// 通过 S3 API 读取文件
-async function handleS3FileViaAPI(context, metadata, encodedFileName, fileType) {
-    const { Referer, url, request, env } = context;
-    const db = getDatabase(env);
-    const s3Credentials = await resolveS3Credentials(db, env, metadata);
-
-    const s3Client = new S3Client({
-        region: s3Credentials.region || "auto",
-        endpoint: s3Credentials.endpoint,
-        credentials: {
-            accessKeyId: s3Credentials.accessKeyId,
-            secretAccessKey: s3Credentials.secretAccessKey
-        },
-        forcePathStyle: s3Credentials.pathStyle || false
-    });
-
-    const bucketName = s3Credentials.bucketName;
-    const key = s3Credentials.key;
-
-    try {
-        // 检查Range请求头
-        const range = request.headers.get('Range');
-        const commandParams = {
-            Bucket: bucketName,
-            Key: key
-        };
-
-        if (range) {
-            // 添加Range参数用于部分内容请求
-            commandParams.Range = range;
-        }
-
-        const command = new GetObjectCommand(commandParams);
-        const response = await s3Client.send(command);
-
-        // 设置响应头
-        const headers = new Headers();
-        setCommonHeaders(headers, encodedFileName, fileType, getFileCacheControl(context));
-
-        // 设置Content-Length和Content-Range头
-        if (response.ContentLength) {
-            headers.set('Content-Length', response.ContentLength.toString());
-        }
-
-        if (response.ContentRange) {
-            headers.set('Content-Range', response.ContentRange);
-        }
-
-        // 处理HEAD请求
-        if (request.method === 'HEAD') {
-            return handleHeadRequest(headers);
-        }
-
-        // 返回响应，支持流式传输
-        const statusCode = range ? 206 : 200; // Range请求返回206 Partial Content
-        return new Response(response.Body, {
-            status: statusCode,
-            headers
-        });
-
-    } catch (error) {
-        return new Response(`Error: Failed to fetch from S3 - ${error.message}`, { status: 500 });
-    }
-}
-
-
 // 处理 Discord 文件读取
 async function handleDiscordFile(context, metadata, encodedFileName, fileType) {
     const { env, request, url, Referer } = context;
@@ -946,8 +791,6 @@ async function handleDiscordFile(context, metadata, encodedFileName, fileType) {
         return new Response(`Error: Failed to fetch from Discord - ${error.message}`, { status: 500 });
     }
 }
-
-
 // 处理 HuggingFace 文件读取
 async function handleHuggingFaceFile(context, metadata, encodedFileName, fileType) {
     const { env, request, url, Referer } = context;
@@ -1021,100 +864,4 @@ async function handleHuggingFaceFile(context, metadata, encodedFileName, fileTyp
     } catch (error) {
         return new Response(`Error: Failed to fetch from HuggingFace - ${error.message}`, { status: 500 });
     }
-}
-
-
-// 处理 WebDAV 文件读取
-async function handleWebDAVFile(context, metadata, encodedFileName, fileType) {
-    const { request, url, Referer } = context;
-
-    try {
-        const db = getDatabase(context.env);
-        const webdavCredentials = await resolveWebDAVCredentials(db, context.env, metadata);
-        const filePath = webdavCredentials.filePath;
-        const publicUrl = getWebDAVPublicFileUrl(webdavCredentials, filePath);
-
-        if (!filePath && !publicUrl) {
-            return new Response('Error: WebDAV file info not found', { status: 500 });
-        }
-
-        const headers = new Headers();
-        setCommonHeaders(headers, encodedFileName, fileType, getFileCacheControl(context));
-
-        const fetchHeaders = {};
-        const range = request.headers.get('Range');
-        if (range) {
-            fetchHeaders['Range'] = range;
-        }
-
-        let response;
-        if (publicUrl) {
-            response = await fetch(publicUrl, {
-                method: request.method === 'HEAD' ? 'HEAD' : 'GET',
-                headers: fetchHeaders,
-            });
-
-            if (!response.ok && response.status !== 206 && response.status !== 304 && webdavCredentials.baseUrl && filePath) {
-                try {
-                    const webdavAPI = new WebDAVAPI(webdavCredentials);
-                    response = await webdavAPI.getFile(filePath, {
-                        method: request.method === 'HEAD' ? 'HEAD' : 'GET',
-                        headers: fetchHeaders,
-                    });
-                } catch (fallbackError) {
-                    console.warn('WebDAV public URL fallback failed:', fallbackError.message);
-                }
-            }
-        } else {
-            if (!webdavCredentials.baseUrl || !filePath) {
-                return new Response('Error: WebDAV channel config not found', { status: 500 });
-            }
-
-            const webdavAPI = new WebDAVAPI(webdavCredentials);
-            response = await webdavAPI.getFile(filePath, {
-                method: request.method === 'HEAD' ? 'HEAD' : 'GET',
-                headers: fetchHeaders,
-            });
-        }
-
-        if (!response.ok && response.status !== 206 && response.status !== 304) {
-            return new Response(`Error: Failed to fetch from WebDAV - ${response.status}`, { status: response.status });
-        }
-
-        if (response.headers.get('Content-Length')) {
-            headers.set('Content-Length', response.headers.get('Content-Length'));
-        }
-        if (response.headers.get('Content-Range')) {
-            headers.set('Content-Range', response.headers.get('Content-Range'));
-        }
-        if (response.headers.get('ETag')) {
-            headers.set('ETag', response.headers.get('ETag'));
-        }
-        if (response.status === 304) {
-            return new Response(null, { status: 304, headers });
-        }
-        if (request.method === 'HEAD') {
-            return handleHeadRequest(headers, response.headers.get('ETag'));
-        }
-
-        return new Response(response.body, {
-            status: response.status,
-            headers
-        });
-
-    } catch (error) {
-        return new Response(`Error: Failed to fetch from WebDAV - ${error.message}`, { status: 500 });
-    }
-}
-
-function getWebDAVPublicFileUrl(webdavCredentials, filePath) {
-    if (webdavCredentials.publicUrl && filePath) {
-        try {
-            return buildWebDAVUrl(webdavCredentials.publicUrl, filePath);
-        } catch (error) {
-            console.warn('Invalid WebDAV public URL config:', error.message);
-        }
-    }
-
-    return '';
 }

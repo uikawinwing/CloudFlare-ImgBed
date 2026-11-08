@@ -1,4 +1,4 @@
-.wrangler/*
+.wrangler/
 data/*
 node_modules
 /wrangler.toml
@@ -12,3 +12,8 @@ node_modules
 .vscode/
 .claude/
 .agents/
+.codegraph/
+/frontend-dist/account/vendor/
+/frontend-dist/charinfo/profile-core.js
+/frontend-dist/charinfo/CharInfo-Manager.LICENSE
+/frontend-dist/charinfo/json5.LICENSE

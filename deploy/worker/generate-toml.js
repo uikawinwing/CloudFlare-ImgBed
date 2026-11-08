@@ -8,6 +8,8 @@
  *   D1_DATABASE_NAME - D1 数据库名称（默认 img_d1）
  *   KV_NAMESPACE_ID  - KV 命名空间 ID
  *   R2_BUCKET_NAME   - R2 存储桶名称
+ *   THUMBNAILS_R2_BUCKET_NAME - 私有缩略图存储桶名称
+ *   CHARINFO_UPLOAD_STAGING_BUCKET_NAME - 私有上传暂存桶名称
  *   WORKER_VARS      - JSON 格式的业务环境变量
  *   WORKER_CUSTOM_DOMAIN - Worker 自定义域名
  *   DISCORD_CLIENT_ID    - Discord OAuth Client ID
@@ -27,6 +29,8 @@ const databaseId = requiredEnv('D1_DATABASE_ID');
 const databaseName = env.D1_DATABASE_NAME?.trim() || 'img_d1';
 const kvNamespaceId = requiredEnv('KV_NAMESPACE_ID');
 const r2BucketName = requiredEnv('R2_BUCKET_NAME');
+const thumbnailsBucketName = requiredEnv('THUMBNAILS_R2_BUCKET_NAME');
+const uploadStagingBucketName = requiredEnv('CHARINFO_UPLOAD_STAGING_BUCKET_NAME');
 const customDomain = normalizeCustomDomain(requiredEnv('WORKER_CUSTOM_DOMAIN'));
 
 let toml = `name = "${name}"
@@ -66,21 +70,26 @@ toml += `
 binding = "img_d1"
 database_name = "${databaseName}"
 database_id = "${databaseId}"
-remote = true
 `;
 
 toml += `
 [[kv_namespaces]]
 binding = "img_url"
 id = "${kvNamespaceId}"
-remote = true
 `;
 
 toml += `
 [[r2_buckets]]
 binding = "img_r2"
 bucket_name = "${r2BucketName}"
-remote = true
+
+[[r2_buckets]]
+binding = "THUMBNAILS"
+bucket_name = "${thumbnailsBucketName}"
+
+[[r2_buckets]]
+binding = "CHARINFO_UPLOAD_STAGING"
+bucket_name = "${uploadStagingBucketName}"
 `;
 
 const workerVars = {};

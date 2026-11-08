@@ -2,6 +2,58 @@ import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { hashPassword, isHashed } from '../../../utils/auth/passwordHash.js';
 import { destroySessionsByAuthType } from '../../../utils/auth/sessionManager.js';
 import { normalizeSessionMaxAgeDays } from '../../../utils/auth/sessionConfig.js';
+import { rejectCrossSiteMutation } from '../../../utils/auth/mutationSecurity.js';
+
+const securityValueTypes = {
+    'upload.moderate.enabled': 'boolean',
+    'upload.moderate.channel': 'moderationChannel',
+    'upload.moderate.moderateContentApiKey': 'string',
+    'upload.moderate.nsfwApiPath': 'url',
+    'upload.ipQuery.enabled': 'boolean',
+    'upload.ipQuery.channel': 'ipChannel',
+    'upload.ipQuery.customApi.url': 'url',
+    'upload.ipQuery.customApi.params': 'params',
+    'upload.ipQuery.customApi.responseFields': 'fields',
+    'access.allowedDomains': 'string',
+    'access.whiteListMode': 'boolean',
+    'access.imageTransformEnabled': 'boolean',
+    'access.imageTransformAllowedSizes': 'sizes',
+};
+
+function modernSecurityConfig(settings) {
+    const { allowedDomains, whiteListMode, imageTransformEnabled, imageTransformAllowedSizes } = settings.access;
+    return { upload: settings.upload, access: { allowedDomains, whiteListMode, imageTransformEnabled, imageTransformAllowedSizes } };
+}
+
+function normalizeSecurityValue(key, value) {
+    const type = securityValueTypes[key];
+    if (type === 'boolean') {
+        if (typeof value !== 'boolean') throw new Error('请填写有效的开关值。');
+        return value;
+    }
+    if (type === 'params') {
+        if (!Array.isArray(value) || value.length > 50 || value.some(item => !item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).some(key => !['key', 'value'].includes(key)) || typeof item.key !== 'string' || typeof item.value !== 'string' || item.key.length > 256 || item.value.length > 4096)) throw new Error('查询参数须为有效的名称和值列表，最多 50 项。');
+        return value;
+    }
+    if (type === 'fields') {
+        if (!Array.isArray(value) || value.length > 50 || value.some(item => typeof item !== 'string' || !item.trim() || item.length > 256)) throw new Error('返回字段须为有效的字段路径列表，最多 50 项。');
+        return value.map(item => item.trim());
+    }
+    if (typeof value !== 'string' || value.length > 8192) throw new Error('请填写有效的文本。');
+    if (type === 'moderationChannel' && !['moderatecontent.com', 'nsfwjs'].includes(value)) throw new Error('请选择有效的图像审查渠道。');
+    if (type === 'ipChannel' && value !== 'customApi') throw new Error('请选择有效的 IP 查询渠道。');
+    if (type === 'url' && value !== '') {
+        let url;
+        try { url = new URL(value); } catch { throw new Error('接口地址须以 http:// 或 https:// 开头。'); }
+        if (!/^https?:\/\//i.test(value) || !['http:', 'https:'].includes(url.protocol) || url.username || url.password || /[\\\u0000-\u001f\u007f]/.test(value)) throw new Error('接口地址须以 http:// 或 https:// 开头，不能包含登录凭据。');
+    }
+    if (type === 'sizes') {
+        const result = normalizeImageTransformAllowedSizes(value);
+        if (result.error) throw new Error(result.error);
+        return result.value;
+    }
+    return value;
+}
 
 export async function onRequest(context) {
     // 安全设置相关，GET方法读取设置，POST方法保存设置
@@ -20,6 +72,10 @@ export async function onRequest(context) {
     if (request.method === 'GET') {
         const settings = await getSecurityConfig(db, env)
 
+        if (new URL(request.url).searchParams.get('view') === 'modern') {
+            return Response.json(modernSecurityConfig(settings), { headers: { 'Cache-Control': 'private, no-store' } });
+        }
+
         // 对前端隐藏实际密码值，返回占位符
         // 前端只有在用户修改密码时才会发送新密码
         const maskedSettings = JSON.parse(JSON.stringify(settings));
@@ -37,6 +93,38 @@ export async function onRequest(context) {
                 'content-type': 'application/json',
             },
         })
+    }
+
+    if (request.method === 'PATCH') {
+        const rejected = rejectCrossSiteMutation(request);
+        if (rejected) return rejected;
+        let body;
+        try { body = await request.json(); }
+        catch { return Response.json({ error: '设置格式无效。' }, { status: 400 }); }
+        if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 || !Object.hasOwn(body, 'securityValues') || !body.securityValues || typeof body.securityValues !== 'object' || Array.isArray(body.securityValues) || !Object.keys(body.securityValues).length) {
+            return Response.json({ error: '请仅提交需要修改的安全设置。' }, { status: 400 });
+        }
+        const values = {};
+        for (const [key, value] of Object.entries(body.securityValues)) {
+            try {
+                if (!Object.hasOwn(securityValueTypes, key)) throw new Error('此设置不属于新版安全设置。');
+                values[key] = normalizeSecurityValue(key, value);
+            } catch (error) {
+                return Response.json({ error: error.message, field: `securityValues.${key}` }, { status: 400 });
+            }
+        }
+        const settings = JSON.parse(await db.get('manage@sysConfig@security') || '{}');
+        for (const [key, value] of Object.entries(values)) {
+            const path = key.split('.');
+            let target = settings;
+            for (const part of path.slice(0, -1)) {
+                if (!target[part] || typeof target[part] !== 'object' || Array.isArray(target[part])) target[part] = {};
+                target = target[part];
+            }
+            target[path.at(-1)] = value;
+        }
+        await db.put('manage@sysConfig@security', JSON.stringify(settings));
+        return Response.json(modernSecurityConfig(await getSecurityConfig(db, env)), { headers: { 'Cache-Control': 'private, no-store' } });
     }
 
     // POST保存设置
@@ -231,7 +319,7 @@ function normalizeImageTransformAllowedSizes(value) {
 }
 
 function normalizeIpQueryParams(params) {
-    if (!Array.isArray(params) || params.length === 0) {
+    if (!Array.isArray(params)) {
         return [{ key: 'ip', value: '{ip}' }];
     }
 
