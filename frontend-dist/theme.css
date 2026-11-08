@@ -8,7 +8,7 @@
   --app-surface-translucent: rgba(255, 255, 255, .94);
   --app-text: #111111;
   --app-text-strong: #0a0a0a;
-  --app-muted: #767676;
+  --app-muted: #636363;
   --app-muted-strong: #4f4f4f;
   --app-border: rgba(0, 0, 0, .08);
   --app-border-strong: rgba(0, 0, 0, .16);
@@ -16,8 +16,8 @@
   --app-accent-hover: #465e50;
   --app-accent-soft: rgba(88, 116, 99, .12);
   --app-on-accent: #ffffff;
-  --app-danger: #d92d3d;
-  --app-success: #2ca875;
+  --app-danger: #bd2534;
+  --app-success: #206f4c;
   --app-shadow-sm: 0 2px 10px rgba(0, 0, 0, .04);
   --app-shadow-md: 0 12px 36px rgba(0, 0, 0, .08);
   --app-radius-sm: 8px;

@@ -219,7 +219,7 @@
 
 .integrated-upload-status .upload-compressed {
   background: var(--accent);
-  color: #fff;
+  color: var(--app-on-accent);
   border-color: var(--accent);
 }
 
