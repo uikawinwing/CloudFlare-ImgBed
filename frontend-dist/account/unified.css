@@ -90,8 +90,10 @@ body::before { background-image: var(--account-wallpaper-image, radial-gradient(
 .legacy-upload-destination, .legacy-image-processing-button { border-color: var(--app-border) !important; background: var(--app-surface-translucent) !important; color: var(--app-text) !important; }
 .legacy-destination-change { border-color: color-mix(in srgb, var(--app-accent) 35%, transparent) !important; background: var(--app-accent-soft) !important; color: var(--app-accent) !important; }
 
-:root[data-theme="light"] .legacy-shell { background: rgba(248, 247, 243, .96) !important; }
-:root[data-theme="light"] .legacy-shell-account-menu { background: #ffffff !important; }
+:root:not([data-theme="dark"]) .legacy-shell { background: var(--app-bg-deep) !important; }
+:root:not([data-theme="dark"]) .role-hint { background: var(--app-surface); }
+:root:not([data-theme="dark"]) :is(.field input, .field textarea) { border-color: var(--app-control-border); background: var(--app-surface); }
+:root:not([data-theme="dark"]) .search-control input::placeholder { color: var(--app-muted); }
 :root[data-theme="light"] .legacy-shell-backdrop { background: rgba(20, 22, 28, .28) !important; }
 
 @media (max-width: 720px) {

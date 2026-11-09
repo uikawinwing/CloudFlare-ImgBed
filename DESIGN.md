@@ -1,13 +1,14 @@
 ---
 version: alpha
 colors:
-  background: "#ffffff"
+  background: "#f1f5f1"
+  sidebar: "#e8eee8"
   surface: "rgba(255, 255, 255, .94)"
-  text: "#111111"
-  muted: "#636363"
-  accent: "#587463"
-  success: "#206f4c"
-  danger: "#bd2534"
+  text: "#1d2b24"
+  muted: "#526359"
+  accent: "#3d6952"
+  success: "#216547"
+  danger: "#a52f3e"
 typography:
   body:
     fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif"
@@ -26,11 +27,11 @@ CloudFlare ImgBed is a Chinese administration workspace for managing files and s
 
 ## Colors
 
-Use a muted sage accent for primary actions, green for confirmed success, and the danger token for destructive operations. Light mode uses #587463 for the accent, #465e50 on hover, and white text on accent fills. Dark mode uses #a3bfa9 for the accent, #b9d0be on hover, and #18271e text on accent fills. Light mode uses white surfaces and dark text; dark mode uses a #121212 background, #1a1a1a surfaces, and #f5f5f5 text. Keep explanatory text muted and form labels readable. Use theme variables rather than fixed dark backgrounds on shared controls.
+Light mode uses a pale sage canvas, a slightly deeper sidebar, and white panels. Nested channel cards and empty states use a soft sage fill. Use deep green for primary actions and white for text on those actions. Current navigation and tabs use a pale green fill, dark green text, and an accent line. Green success text and rose danger text mark outcomes and destructive actions. Dark mode uses a #121212 background, #1a1a1a surfaces, and #f5f5f5 text. Its accent is #a3bfa9, with #b9d0be on hover and #18271e text on accent fills.
 
-`frontend-dist/theme.css` owns the runtime palette through `--app-accent`, `--app-accent-hover`, `--app-accent-soft`, and `--app-on-accent`. Public pages consume these directly; `frontend-dist/account/unified.css` maps the same palette to the workspace controls. This document records the accepted palette; it does not generate CSS.
+`frontend-dist/theme.css` owns the runtime palette, including the surfaces, accent states, current-item colors, and `--app-control-border`. Public pages consume the palette directly. `frontend-dist/account/unified.css` maps it to shared workspace variables, `frontend-dist/preview-style.css` applies it to workspace navigation, and `frontend-dist/account/storage-settings.css` applies it to native settings. This document records the palette used by these stylesheets.
 
-Use `--app-on-accent` for text and icons on accent fills, including hover states. Keep normal-size helper and status text at 4.5:1 or higher on its surface. Use the opaque accent for keyboard focus outlines.
+Use `--app-on-accent` for text and icons on accent fills, including hover states. Keep normal-size helper and status text at 4.5:1 or higher on its surface. In light mode, use the stronger control border where a field boundary identifies the input. Keep panel dividers quieter. Use the opaque accent for keyboard focus outlines, and let native controls follow the active theme’s color scheme.
 
 ## Typography
 
@@ -55,6 +56,8 @@ The CharInfo retirement notice uses flat sections and shared public buttons, wit
 ## Components
 
 Sensitive values are masked by default and use a local reveal control. Save uses server-confirmed feedback; unsaved settings use the existing app dialog treatment before navigation.
+
+The sidebar and settings tabs list the same native settings in the same order. Maintenance tools remain a separate sidebar destination. After an administrator opens settings, load sibling configuration in the background and reuse recent server responses while the settings area is open. Website settings and welcome wallpapers share a response. Loading and error states keep the tabs available. Load the management token list on entry to Security & Automation, since the endpoint also removes expired tokens.
 
 On narrow screens, ordinary action buttons keep their content width and wrap as a group instead of expanding to fill spare space. Keep the established touch height. Equal-width navigation segments and paired dialog confirmation actions retain their existing layout.
 

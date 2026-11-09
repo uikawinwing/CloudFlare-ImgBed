@@ -1,16 +1,16 @@
 import { setSitePageTitle } from '../site-config.js';
+import { settingsNavigation } from './settings-navigation.js';
+import './storage-settings.js';
 
 const TOOL_ROUTES = {
   access: { key: 'access', frameKey: 'access', path: '/customerConfig', hash: '', title: '上传访问' },
-  'system-upload': { key: 'system-upload', native: 'storage-settings', path: '/systemConfig', hash: '#upload', title: '存储渠道' },
-  'system-others': { key: 'system-others', native: 'storage-settings', path: '/systemConfig', hash: '#others', title: '其他设置', navKey: 'system-upload' },
-  'system-wallpaper': { key: 'system-wallpaper', native: 'storage-settings', path: '/systemConfig', hash: '#wallpaper', title: '欢迎页壁纸' },
-  'system-page': { key: 'system-page', native: 'storage-settings', path: '/systemConfig', hash: '#page', title: '网站设置' },
-  'system-security': { key: 'system-security', native: 'storage-settings', path: '/systemConfig', hash: '#security', title: '安全与自动化' },
+  ...Object.fromEntries(settingsNavigation.map(({ key, title }) => [key, {
+    key, title, native: 'storage-settings', path: '/systemConfig', hash: key.replace('system-', '#'),
+  }])),
   'system-status': { key: 'system-status', frameKey: 'system-status', path: '/systemConfig', hash: '#status', title: '维护工具' },
 };
 
-const TOOL_PREWARM_ORDER = ['access', 'system-upload', 'system-page', 'system-security', 'system-status'];
+const TOOL_PREWARM_ORDER = ['access', 'system-status'];
 const main = document.querySelector('#mainContent');
 const appShell = document.querySelector('.app-shell');
 const frames = new Map();
@@ -160,7 +160,7 @@ function accountTitleFromUrl(url = new URL(location.href)) {
 }
 
 function applyToolChrome(tool) {
-  setActiveNav(tool.navKey || tool.key);
+  setActiveNav(tool.key);
   setSitePageTitle(tool.title);
 }
 
@@ -197,6 +197,7 @@ function showTool(tool, { historyMode = 'push' } = {}) {
       return;
     }
   }
+  const wasNative = activeTool?.native;
   activeTool = tool;
   if (main) main.hidden = true;
   if (tool.native) {
@@ -207,6 +208,7 @@ function showTool(tool, { historyMode = 'push' } = {}) {
     window.dispatchEvent(new CustomEvent('imgbed:native-tool-show', { detail: { tool, host: currentNativeHost } }));
   } else {
     if (nativeHost) nativeHost.hidden = true;
+    if (wasNative) window.dispatchEvent(new CustomEvent('imgbed:native-tool-hide'));
     const currentHost = ensureHost();
     const entry = ensureFrame(tool);
     frames.forEach(frame => { frame.wrapper.hidden = frame !== entry; });
@@ -280,8 +282,7 @@ window.addEventListener('popstate', () => {
   else if (activeTool) hideTool(url);
 });
 
-window.addEventListener('storage', event => {
-  if (event.key !== 'imgbed-theme') return;
+window.addEventListener('imgbed-theme-change', () => {
   frames.forEach(({ iframe }) => syncThemeIntoFrame(iframe));
 });
 

@@ -412,15 +412,14 @@ body::after {
 }
 
 .legacy-shell-nav-item.is-active {
-  background: var(--app-text) !important;
-  color: var(--app-bg) !important;
+  background: var(--app-current-bg) !important;
+  color: var(--app-current-text) !important;
   box-shadow: none !important;
   font-weight: 650;
 }
 
 .legacy-shell-nav-item.is-active small {
-  color: var(--app-bg) !important;
-  opacity: .72;
+  color: inherit;
 }
 
 .legacy-shell-utilities {
@@ -515,13 +514,14 @@ body::after {
 
 .search-control {
   min-height: 36px;
-  border-color: var(--app-border) !important;
+  border-color: var(--app-control-border) !important;
   border-radius: var(--preview-pill-radius);
   background: var(--app-surface) !important;
 }
 
 .select-control {
   min-height: 36px;
+  border-color: var(--app-control-border) !important;
   border-radius: var(--preview-pill-radius);
   background: var(--app-surface) !important;
 }
@@ -538,9 +538,32 @@ body::after {
 }
 
 .segmented button.active {
-  background: var(--app-text) !important;
-  color: var(--app-bg) !important;
+  background: var(--app-current-bg) !important;
+  color: var(--app-current-text) !important;
   box-shadow: none !important;
+}
+
+:root:not([data-theme="dark"]) {
+  scrollbar-color: var(--app-control-border) var(--app-bg);
+}
+
+:root:not([data-theme="dark"]) .legacy-shell-nav-item.is-active {
+  box-shadow: inset 3px 0 var(--app-accent) !important;
+}
+
+:root:not([data-theme="dark"]) .segmented button.active {
+  box-shadow: inset 0 -2px var(--app-accent) !important;
+}
+
+:root:not([data-theme="dark"]) .button.danger:hover {
+  border-color: var(--app-danger) !important;
+  background: color-mix(in srgb, var(--app-danger) 8%, var(--app-surface)) !important;
+}
+
+@media (forced-colors: active) {
+  :is(.legacy-shell-nav-item.is-active, .segmented button.active, .native-settings-tabs a.active) {
+    text-decoration: underline;
+  }
 }
 
 .selection-bar,

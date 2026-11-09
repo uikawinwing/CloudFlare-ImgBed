@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { settingsNavigation } from '../frontend-dist/account/settings-navigation.js';
 
 const source = readFileSync(new URL('../frontend-dist/account/storage-settings.js', import.meta.url), 'utf8');
 
 function editor() {
   return runInNewContext(`${source.replace(/^import .*;\r?\n/gm, '')}\n({ state, pageMarkup, validateSiteSettings })`, {
     location: new URL('https://example.test/account/?view=albums&album=summer'),
-    URL,
+    URL, settingsNavigation,
     document: { querySelector: () => null },
     window: { addEventListener() {} },
   });

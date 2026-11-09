@@ -51,7 +51,15 @@ function currentWorkspaceReturnTo() {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
 
-if (embedded) root.classList.add('legacy-embedded');
+if (embedded) {
+  root.classList.add('legacy-embedded');
+  const syncLegacyTheme = () => {
+    root.classList.toggle('dark', root.dataset.theme === 'dark');
+  };
+  // The legacy bundle writes html.dark after loading its own saved preference.
+  new MutationObserver(syncLegacyTheme).observe(root, { attributeFilter: ['class', 'data-theme'] });
+  syncLegacyTheme();
+}
 root.classList.add('discord-auth-pending');
 entry.hidden = true;
 

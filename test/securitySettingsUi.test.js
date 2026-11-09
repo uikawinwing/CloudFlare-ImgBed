@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { settingsNavigation } from '../frontend-dist/account/settings-navigation.js';
 
 const source = readFileSync(new URL('../frontend-dist/account/storage-settings.js', import.meta.url), 'utf8');
-const routes = readFileSync(new URL('../frontend-dist/account/legacy-tools.js', import.meta.url), 'utf8');
 
 function editor() {
   const app = runInNewContext(`${source.replace(/^import .*;\r?\n/gm, '')}\n({ state, securityMarkup, validateSecuritySettings })`, {
-    location: new URL('https://example.test/account/?view=files'), URL,
+    location: new URL('https://example.test/account/?view=files'), URL, settingsNavigation,
     document: { querySelector: () => null }, window: { addEventListener() {} },
   });
   app.state.activeKey = 'system-security';
@@ -21,8 +21,8 @@ function editor() {
 
 describe('native security settings', () => {
   it('uses the native settings route and removes obsolete authentication and session controls', () => {
-    assert.match(routes, /'system-security': \{ key: 'system-security', native: 'storage-settings'/);
     const markup = editor().securityMarkup();
+    assert.match(markup, /href="\/account\/\?view=files&tool=system-security" class="active" aria-current="page"/);
     assert.doesNotMatch(markup, /hidden-old|authCode|adminPassword|adminUsername|SessionMaxAge|sessionSecure|上传密码|管理端认证/);
     for (const label of ['图像审查', '上传地点记录', '文件访问', '管理 API Token']) assert.ok(markup.includes(label));
     assert.match(markup, /尚未创建管理令牌/);

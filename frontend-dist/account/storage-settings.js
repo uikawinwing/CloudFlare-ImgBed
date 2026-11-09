@@ -1,13 +1,19 @@
 import { refreshSiteConfig } from '../site-config.js';
+import { settingsNavigation } from './settings-navigation.js';
 
 const allowedRoles = new Set(['admin', 'owner']);
-const panels = {
-  'system-upload': { title: '存储渠道', description: '管理 Telegram、Discord、R2 与 Hugging Face 的保存渠道。' },
-  'system-others': { title: '其他设置', description: '管理站点功能与缓存清理。' },
-  'system-wallpaper': { title: '欢迎页壁纸', description: '设置欢迎页的壁纸、播放顺序和裁切位置。' },
-  'system-page': { title: '网站设置', description: '管理站点品牌、公开链接和工作区壁纸。' },
-  'system-security': { title: '安全与自动化', description: '管理内容审查、文件访问与管理接口令牌。' },
+const settingsPaths = {
+  'system-upload': '/api/manage/sysConfig/upload',
+  'system-page': '/api/manage/sysConfig/page',
+  'system-wallpaper': '/api/manage/sysConfig/page',
+  'system-security': '/api/manage/sysConfig/security',
+  'system-others': '/api/manage/sysConfig/others',
 };
+const tokenPath = '/api/manage/apiTokens';
+const settingsCache = new Map();
+const settingsCacheTtl = 30_000;
+let settingsPrewarmed = false;
+let userRequest;
 const channelTypes = {
   telegram: { label: 'Telegram', fields: [['name', '渠道名称', 'text'], ['botToken', 'Bot Token', 'secret'], ['chatId', '聊天 ID', 'text'], ['proxyUrl', '代理域名（可选）', 'text']] },
   cfr2: { label: 'Cloudflare R2', fields: [['name', '渠道名称', 'text'], ['publicUrl', '公开访问地址', 'url'], ['quota', '容量限制', 'quota']] },
@@ -98,7 +104,7 @@ async function changeToken(options) {
   saveButton(true);
   const loadId = state.loadId;
   try {
-    const result = await api('/api/manage/apiTokens' + (options.id ? `?id=${encodeURIComponent(options.id)}` : ''), { method: options.method, ...(options.body ? { body: JSON.stringify(options.body) } : {}) });
+    const result = await api(tokenPath + (options.id ? `?id=${encodeURIComponent(options.id)}` : ''), { method: options.method, ...(options.body ? { body: JSON.stringify(options.body) } : {}) });
     if (result.error) throw new Error(result.error);
     if (loadId !== state.loadId) return;
     if (options.method === 'POST') {
@@ -110,6 +116,7 @@ async function changeToken(options) {
     } else {
       Object.assign(state.tokens.find(token => token.id === options.id), options.body);
     }
+    rememberSettings(tokenPath, { tokens: structuredClone(state.tokens) });
     delete state.tokenDrafts[options.id || 'new'];
     render();
     setStatus('令牌已更新。', 'success');
@@ -242,6 +249,32 @@ async function api(path, options = {}) {
   return body;
 }
 
+function cachedSettings(path) {
+  const entry = settingsCache.get(path);
+  if (entry && Date.now() - entry.loadedAt < settingsCacheTtl) return entry.data;
+}
+
+function rememberSettings(path, data) {
+  settingsCache.set(path, { data, loadedAt: Date.now() });
+}
+
+function loadSettings(path) {
+  const cached = cachedSettings(path);
+  if (cached) return Promise.resolve(cached);
+  const pending = settingsCache.get(path)?.pending;
+  if (pending) return pending;
+  const url = path === settingsPaths['system-security'] ? `${path}?view=modern` : path;
+  const request = api(url, { cache: 'no-store' }).then(data => {
+    if (settingsCache.get(path)?.pending === request) rememberSettings(path, data);
+    return data;
+  }, error => {
+    if (settingsCache.get(path)?.pending === request) settingsCache.delete(path);
+    throw error;
+  });
+  settingsCache.set(path, { pending: request });
+  return request;
+}
+
 function notify(message, type = '') {
   const region = document.querySelector('#toastRegion');
   if (!region) return;
@@ -263,17 +296,34 @@ function currentToolUrl(key) {
   return url.pathname + url.search;
 }
 
+function renderPanel(markup) {
+  const focusedTab = state.host.querySelector('.native-settings-tabs a:focus');
+  state.host.innerHTML = markup;
+  if (focusedTab) {
+    const tabs = [...state.host.querySelectorAll('.native-settings-tabs a')];
+    tabs.find(tab => tab.href === focusedTab.href)?.focus({ preventScroll: true });
+  }
+}
+
+function renderReadState(content) {
+  const { title } = settingsNavigation.find(tab => tab.key === state.activeKey);
+  renderPanel(`<main class="native-settings-main"><section class="page-section native-settings-page"><header class="page-head"><div class="page-title"><h1>${title}</h1></div></header>${renderTabNav()}${content}</section></main>`);
+}
+
 function renderLoading() {
-  state.host.innerHTML = '<main class="native-settings-main"><div class="loading-state"><span class="spinner" aria-hidden="true"></span><p>正在读取设置…</p></div></main>';
+  renderReadState('<div class="loading-state" role="status"><span class="spinner" aria-hidden="true"></span><p>正在读取设置…</p></div>');
 }
 
 function renderError(message, retry = true) {
-  state.host.innerHTML = `<main class="native-settings-main"><div class="error-state"><h2>无法读取设置</h2><p>${escapeHtml(message || '请求失败，请稍后重试。')}</p>${retry ? '<button type="button" class="button primary" data-settings-retry>重新加载</button>' : ''}</div></main>`;
-  state.host.querySelector('[data-settings-retry]')?.addEventListener('click', () => show({ key: state.activeKey, host: state.host }));
+  renderReadState(`<div class="error-state"><h2>无法读取设置</h2><p>${escapeHtml(message || '请求失败，请稍后重试。')}</p>${retry ? '<button type="button" class="button primary" data-settings-retry>重新加载</button>' : ''}</div>`);
+  state.host.querySelector('[data-settings-retry]')?.addEventListener('click', () => {
+    settingsCache.delete(settingsPaths[state.activeKey]);
+    show({ key: state.activeKey, host: state.host });
+  });
 }
 
 function renderTabNav() {
-  return `<nav class="native-settings-tabs" aria-label="系统设置">${Object.entries(panels).map(([key, panel]) => `<a href="${currentToolUrl(key)}" class="${state.activeKey === key ? 'active' : ''}"${state.activeKey === key ? ' aria-current="page"' : ''}>${panel.title}</a>`).join('')}</nav>`;
+  return `<nav class="native-settings-tabs" aria-label="系统设置">${settingsNavigation.map(({ key, title }) => `<a href="${currentToolUrl(key)}" class="${state.activeKey === key ? 'active' : ''}"${state.activeKey === key ? ' aria-current="page"' : ''}>${title}</a>`).join('')}</nav>`;
 }
 
 function wallpaperUrl(value) {
@@ -540,13 +590,14 @@ async function save() {
   saveButton(true);
   setStatus('正在保存…', 'pending');
   try {
-    const path = security ? '/api/manage/sysConfig/security' : wallpaper || page ? '/api/manage/sysConfig/page' : upload ? '/api/manage/sysConfig/upload' : '/api/manage/sysConfig/others';
+    const path = settingsPaths[state.activeKey];
     const result = await api(path, { method: security || wallpaper || page ? 'PATCH' : 'POST', body: JSON.stringify(security ? { securityValues: state.securityChanges } : page ? { pageValues: state.pageChanges } : wallpaper ? { welcomeWallpaper: state.wallpaper } : upload ? state.upload : state.others) });
     if (upload) state.upload = result;
     else if (wallpaper) state.wallpaper = readWallpaper(result);
     else if (page) { state.page = result; state.pageChanges = {}; }
     else if (security) { state.security = result; state.securityChanges = {}; }
     else state.others = result;
+    rememberSettings(path, structuredClone(result));
     state.dirty = false;
     render();
     setStatus('设置已保存。', 'success');
@@ -574,7 +625,7 @@ function setOtherField(path, value) {
 
 function render() {
   if (!state.host || !state.user || !allowedRoles.has(state.user.role)) return;
-  state.host.innerHTML = state.activeKey === 'system-security' ? securityMarkup() : state.activeKey === 'system-page' ? pageMarkup() : state.activeKey === 'system-wallpaper' ? wallpaperMarkup() : state.activeKey === 'system-others' ? othersMarkup() : uploadMarkup();
+  renderPanel(state.activeKey === 'system-security' ? securityMarkup() : state.activeKey === 'system-page' ? pageMarkup() : state.activeKey === 'system-wallpaper' ? wallpaperMarkup() : state.activeKey === 'system-others' ? othersMarkup() : uploadMarkup());
   bindPageEvents();
 }
 
@@ -688,24 +739,43 @@ function requestLeave(continueAction) {
 }
 
 async function show(detail) {
-  const key = detail?.tool?.key || detail?.key || new URL(location.href).searchParams.get('tool');
-  state.activeKey = panels[key] ? key : 'system-upload';
+  const key = detail?.tool?.key || detail?.key;
+  if (state.activeKey !== key) state.createdToken = '';
+  state.activeKey = key;
   state.host = detail?.host || state.host || document.querySelector('#nativeToolHost');
-  if (!state.host) return;
   const loadId = ++state.loadId;
-  renderLoading();
+  const checkingIdentity = !state.user;
   try {
-    const userResponse = state.user ? { user: state.user } : await api('/api/user/me');
-    state.user = userResponse.user || userResponse.identity || userResponse;
+    if (checkingIdentity) {
+      renderLoading();
+      userRequest ||= api('/api/user/me').then(response => response.user || response.identity || response).finally(() => { userRequest = null; });
+      const user = await userRequest;
+      if (loadId !== state.loadId) return;
+      state.user = user;
+    }
     if (!allowedRoles.has(state.user?.role)) {
       state.host.innerHTML = '<main class="native-settings-main"><div class="error-state"><h2>无权访问系统设置</h2><p>只有站点管理员和所有者可以读取或修改这些设置。</p></div></main>';
       return;
     }
-    const path = ['system-wallpaper', 'system-page'].includes(state.activeKey) ? '/api/manage/sysConfig/page' : state.activeKey === 'system-others' ? '/api/manage/sysConfig/others' : '/api/manage/sysConfig/upload';
-    const security = state.activeKey === 'system-security';
-    const [data, tokenData] = await Promise.all([api(security ? '/api/manage/sysConfig/security?view=modern' : path), security ? api('/api/manage/apiTokens') : Promise.resolve(null)]);
-    if (loadId !== state.loadId) return;
-    if (security) { state.security = data; state.securityChanges = {}; state.tokens = tokenData.tokens || []; state.tokenDrafts = {}; }
+    const path = settingsPaths[key];
+    const security = key === 'system-security';
+    let data = cachedSettings(path);
+    let tokenData = security ? cachedSettings(tokenPath) : null;
+    const loading = data && (!security || tokenData) ? null : Promise.all([loadSettings(path), security ? loadSettings(tokenPath) : null]);
+    if (!settingsPrewarmed) {
+      settingsPrewarmed = true;
+      // The token-list endpoint also purges expired tokens, so load it only when visiting its page.
+      for (const sibling of new Set(Object.values(settingsPaths))) {
+        if (sibling !== path) loadSettings(sibling).catch(() => {});
+      }
+    }
+    if (loading) {
+      if (!checkingIdentity) renderLoading();
+      [data, tokenData] = await loading;
+      if (loadId !== state.loadId) return;
+    }
+    data = structuredClone(data);
+    if (security) { state.security = data; state.securityChanges = {}; state.tokens = structuredClone(tokenData.tokens || []); state.tokenDrafts = {}; }
     else if (state.activeKey === 'system-others') state.others = data;
     else if (state.activeKey === 'system-wallpaper') {
       state.wallpaper = readWallpaper(data);
@@ -715,18 +785,26 @@ async function show(detail) {
     render();
   } catch (error) {
     if (loadId !== state.loadId) return;
-    if (error.status === 401 || error.status === 403) renderError('当前账户没有读取系统设置的权限。', false);
-    else renderError(error.message || '网络请求失败。');
+    if (error.status === 401 || error.status === 403) {
+      settingsCache.clear();
+      state.user = null;
+      settingsPrewarmed = false;
+      renderError('当前账户没有读取系统设置的权限。', false);
+    } else renderError(error.message || '网络请求失败。');
   }
 }
 
 window.ImgBedStorageSettings = { requestLeave, show };
 window.addEventListener('imgbed:native-tool-show', event => show(event.detail));
+window.addEventListener('imgbed:native-tool-hide', () => {
+  state.loadId++;
+  state.createdToken = '';
+  settingsCache.clear();
+  settingsPrewarmed = false;
+  state.host?.replaceChildren();
+});
 window.addEventListener('beforeunload', event => {
   if (!state.dirty && !state.saving && !Object.keys(state.tokenDrafts).length) return;
   event.preventDefault();
   event.returnValue = '';
 });
-
-const initialTool = new URL(location.href).searchParams.get('tool');
-if (panels[initialTool]) show({ key: initialTool });

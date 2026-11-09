@@ -1,4 +1,5 @@
 import { applySiteBranding, getSiteConfig, setSitePageTitle } from '../site-config.js';
+import { settingsNavigation } from './settings-navigation.js';
 
 const icon = (name) => ({
   upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>',
@@ -17,7 +18,6 @@ const icon = (name) => ({
   slider: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="17" r="2"/></svg>',
   link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 14.5 5-5m-7 8H6a4 4 0 0 1 0-8h3m6 0h3a4 4 0 0 1 0 8h-3"/></svg>',
   history: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6M3.5 5.5v4h4"/><path d="M12 7v5l3.5 2"/></svg>',
-  language: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.2 2.5 3.3 5.5 3.3 9s-1.1 6.5-3.3 9c-2.2-2.5-3.3-5.5-3.3-9S9.8 5.5 12 3Z"/></svg>',
   bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 22h4"/></svg>',
 })[name] || '';
 
@@ -58,29 +58,11 @@ function buildNavigation(role) {
     ...(role === 'owner' ? [{ key: 'users', label: '成员管理', href: accountHref('admin', 'users'), icon: 'users' }] : []),
     ...(isAdmin(role) ? [
       { key: 'access', label: '上传访问', href: '/customerConfig', icon: 'activity' },
-      { key: 'system-upload', label: '存储渠道', href: '/systemConfig#upload', icon: 'storage' },
-      { key: 'system-page', label: '网站设置', href: '/systemConfig#page', icon: 'settings' },
-      { key: 'system-wallpaper', label: '欢迎页壁纸', href: '/account/?tool=system-wallpaper', icon: 'settings' },
-      { key: 'system-security', label: '安全与自动化', href: '/systemConfig#security', icon: 'shield' },
+      ...settingsNavigation.map(({ key, title, icon }) => ({ key, label: title, href: `/account/?tool=${key}`, icon })),
       { key: 'system-status', label: '维护工具', href: '/systemConfig#status', icon: 'tools' },
     ] : []),
   ];
   return `<section class="legacy-shell-group"><p>工作区</p>${member.map(item => navItem(item, active === item.key)).join('')}</section>${isStaff(role) ? `<section class="legacy-shell-group legacy-shell-group-management"><p>管理</p>${staff.map(item => navItem(item, active === item.key)).join('')}</section>` : ''}`;
-}
-
-function activateLegacyControl(command) {
-  const click = selector => document.querySelector(selector)?.click();
-  const menuCommand = labels => {
-    click('.more-dropdown .el-button');
-    window.setTimeout(() => [...document.querySelectorAll('.el-dropdown-menu__item, [role="menuitem"]')]
-      .find(node => labels.some(label => node.textContent.replace(/\s+/g, '').includes(label)))?.click(), 80);
-  };
-  if (command === 'language') {
-    const languageSwitcher = document.querySelector('.language-switcher');
-    if (languageSwitcher) languageSwitcher.click();
-    else menuCommand(['English', '简体中文']);
-  }
-  if (command === 'theme') click('#themeToggle, .toggle-dark-button');
 }
 
 function openLocalImageOptions() {
@@ -176,12 +158,6 @@ function mountUploadFlow() {
   if (!controls.contains(imageProcessing)) controls.append(imageProcessing);
 }
 
-function bindUtilities(shell) {
-  shell.querySelectorAll('[data-legacy-command]').forEach(button => {
-    button.addEventListener('click', () => activateLegacyControl(button.dataset.legacyCommand));
-  });
-}
-
 function syncLegacyPresentation() {
   if (!['/studio', '/studio/'].includes(window.location.pathname)) return;
   setSitePageTitle('上传');
@@ -202,7 +178,7 @@ function syncActiveNavigation(shell) {
 function shellMarkup(identity) {
   const role = identity.role || 'member';
   const avatarStyle = identity.avatar ? ` style="background-image:url('${String(identity.avatar).replace(/["\\]/g, '')}')"` : '';
-  return `<button class="legacy-shell-toggle" type="button" aria-label="打开导航" aria-controls="legacyShell" aria-expanded="false">${icon('menu')}</button><div class="legacy-shell-backdrop" hidden></div><aside class="legacy-shell" id="legacyShell" aria-label="主导航"><div class="legacy-shell-brand"><a href="/" data-site-link aria-label="Charatopia 首页"><span class="site-brand-symbol" data-site-logo aria-hidden="true"><span class="site-wordmark" data-site-logo-fallback></span></span><span data-site-name data-site-brand-text hidden>Charatopia</span></a><button class="legacy-shell-close" type="button" aria-label="关闭导航">${icon('close')}</button></div><nav>${buildNavigation(role)}</nav><section class="legacy-shell-utilities legacy-shell-preferences" aria-label="显示偏好"><p>显示</p><button type="button" data-legacy-command="theme">${icon('slider')}切换主题</button><button type="button" data-legacy-command="language">${icon('language')}切换语言</button></section><div class="legacy-shell-account"><button class="legacy-shell-account-button" type="button" aria-controls="legacyAccountMenu" aria-haspopup="true" aria-expanded="false"><span class="legacy-shell-avatar"${avatarStyle}></span><span><strong>${escapeHtml(identity.username || 'Discord 账户')}</strong><small>${labels[role] || labels.member}</small></span>${icon('chevron')}</button><div class="legacy-shell-account-menu" id="legacyAccountMenu" role="menu" hidden><a href="${accountHref('files')}" role="menuitem">我的文件</a><button type="button" role="menuitem" data-legacy-logout>${icon('logout')}退出登录</button></div></div></aside>`;
+  return `<button class="legacy-shell-toggle" type="button" aria-label="打开导航" aria-controls="legacyShell" aria-expanded="false">${icon('menu')}</button><div class="legacy-shell-backdrop" hidden></div><aside class="legacy-shell" id="legacyShell" aria-label="主导航"><div class="legacy-shell-brand"><a href="/" data-site-link aria-label="Charatopia 首页"><span class="site-brand-symbol" data-site-logo aria-hidden="true"><span class="site-wordmark" data-site-logo-fallback></span></span><span data-site-name data-site-brand-text hidden>Charatopia</span></a><button class="legacy-shell-close" type="button" aria-label="关闭导航">${icon('close')}</button></div><nav>${buildNavigation(role)}</nav><section class="legacy-shell-utilities legacy-shell-preferences" aria-label="显示偏好"><p>显示</p><button type="button" data-legacy-command="theme">${icon('slider')}切换主题</button></section><div class="legacy-shell-account"><button class="legacy-shell-account-button" type="button" aria-controls="legacyAccountMenu" aria-haspopup="true" aria-expanded="false"><span class="legacy-shell-avatar"${avatarStyle}></span><span><strong>${escapeHtml(identity.username || 'Discord 账户')}</strong><small>${labels[role] || labels.member}</small></span>${icon('chevron')}</button><div class="legacy-shell-account-menu" id="legacyAccountMenu" role="menu" hidden><a href="${accountHref('files')}" role="menuitem">我的文件</a><button type="button" role="menuitem" data-legacy-logout>${icon('logout')}退出登录</button></div></div></aside>`;
 }
 
 function bindAccountMenu(shell) {
@@ -242,7 +218,7 @@ export function mountLegacyShell(identity) {
   document.body.prepend(shell);
   getSiteConfig().then(config => applySiteBranding(shell, config));
   document.documentElement.classList.add('legacy-shell-active');
-  bindUtilities(shell);
+  shell.querySelector('[data-legacy-command="theme"]').addEventListener('click', () => document.querySelector('#themeToggle, .toggle-dark-button')?.click());
   bindAccountMenu(shell);
   bindDrawer(shell);
   syncActiveNavigation(shell);
